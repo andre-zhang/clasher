@@ -30,10 +30,18 @@ Open [http://localhost:3000](http://localhost:3000). Create a squad, then open `
 
 ## Deploy (e.g. Vercel)
 
-1. Create a Vercel project from this repo.
+**Live app:** [https://clasher-three.vercel.app](https://clasher-three.vercel.app) (production alias for this project).
+
+1. Create a Vercel project from this repo (or use the existing **clasher** project under your team).
 2. Set environment variables: `DATABASE_URL`, and optionally `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `VISION_PROVIDER`, `ANTHROPIC_MODEL`.
 3. Build command: `npm run build` (runs `prisma generate` then `next build`).
 4. After first deploy, run `npx prisma db push` (or migrations) against production DB from your machine, or use a CI migrate step.
+
+### Automatic deploys on every push
+
+**Option A (recommended):** In [Vercel](https://vercel.com) → **clasher** → **Settings** → **Git** → **Connect Git Repository**. Every push to the connected branch triggers a production or preview deployment (choose **Production Branch** = `main`).
+
+**Option B (GitHub Actions):** This repo includes [`.github/workflows/vercel-production.yml`](.github/workflows/vercel-production.yml). Add a repository secret **`VERCEL_TOKEN`** ([create a token](https://vercel.com/account/tokens)). Each push to **`main`** runs `vercel deploy --prod`.
 
 ## Project layout
 
