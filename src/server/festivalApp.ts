@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 
 import { prisma } from "@/lib/prisma";
 
+import { dbErrorHttpResponse } from "./dbErrors";
 import {
   DEMO_ARTIST_NAMES,
   DEMO_SEED_ARTIST_NAMES,
@@ -60,6 +61,12 @@ async function visionJsonFromForm(
  */
 export function createFestivalApp(apiBasePath: string): Hono {
   const app = apiBasePath ? new Hono().basePath(apiBasePath) : new Hono();
+
+  app.onError((err, c) => {
+    console.error("[clasher]", c.req.path, err);
+    const { status, body } = dbErrorHttpResponse(err);
+    return c.json(body, status);
+  });
 
   app.use(
     "*",
