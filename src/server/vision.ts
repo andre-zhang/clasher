@@ -9,8 +9,9 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null;
 
+/** Default must be a model your Anthropic key can access (3.5 Sonnet 20241022 was retired). */
 const CLAUDE_MODEL =
-  process.env.ANTHROPIC_MODEL?.trim() || "claude-3-5-sonnet-20241022";
+  process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-20250514";
 
 type VisionProvider = "auto" | "openai" | "claude";
 
@@ -153,14 +154,23 @@ export async function runVisionJson(
         "Set ANTHROPIC_API_KEY and/or OPENAI_API_KEY on the server. With both set, Claude is tried first (VISION_PROVIDER=openai to skip Claude).",
     };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg === "empty_model") {
+    const raw = e instanceof Error ? e.message : String(e);
+    if (raw === "empty_model") {
       return {
         ok: false,
         message:
           "The vision model returned no usable output for this image. Try a sharper photo, better lighting, or a crop that shows the lineup or timetable clearly.",
       };
     }
-    return { ok: false, message: msg };
+    if (
+      raw.includes("not_found_error") ||
+      raw.includes("not_found") && raw.includes("model")
+    ) {
+      return {
+        ok: false,
+        message: `Claude model is unavailable or not allowed for this API key (configured: ${CLAUDE_MODEL}). Set ANTHROPIC_MODEL in Vercel to a current vision-capable id (e.g. claude-sonnet-4-20250514) and redeploy. Details: ${raw.slice(0, 400)}`,
+      };
+    }
+    return { ok: false, message: raw };
   }
 }
