@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Squad {
+  id            String   @id @default(uuid())
+  festivalName  String
+  inviteToken   String   @unique
+  phase         String   @default("prefestival")
+  festivalDate  DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  members       Member[]
+  artists       Artist[]
+  comments      Comment[]
+  scheduleSlots ScheduleSlot[]
+  conflicts     ConflictResolution[]
+  slotIntents   MemberSlotIntent[]
+}
+
+model Member {
+  id          String   @id @default(uuid())
+  squadId     String
+  squad       Squad    @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  displayName String
+  secret      String   @unique @default(uuid())
+  createdAt   DateTime @default(now())
+  ratings     Rating[]
+  conflicts   ConflictResolution[]
+  slotIntents MemberSlotIntent[]
+}
+
+model Artist {
+  id        String   @id @default(uuid())
+  squadId   String
+  squad     Squad    @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int      @default(0)
+  ratings   Rating[]
+  slots     ScheduleSlot[]
+}
+
+model Rating {
+  id       String @id @default(uuid())
+  memberId String
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  tier     String
+
+  @@unique([memberId, artistId])
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  squadId   String
+  squad     Squad    @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  artistId  String
+  memberId  String
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model ScheduleSlot {
+  id        String @id @default(uuid())
+  squadId   String
+  squad     Squad  @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  dayLabel  String
+  stageName String
+  start     String
+  end       String
+  artistId  String
+  artist    Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+}
+
+model ConflictResolution {
+  id             String  @id @default(uuid())
+  squadId        String
+  squad          Squad   @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  memberId       String
+  member         Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  slotAId        String
+  slotBId        String
+  choice         String?
+  planNote       String?
+  individualOnly Boolean @default(false)
+
+  @@unique([squadId, memberId, slotAId, slotBId])
+}
+
+model MemberSlotIntent {
+  id        String @id @default(uuid())
+  squadId   String
+  squad     Squad  @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  slotId    String
+  wants     Boolean @default(true)
+  planFrom  String?
+  planTo    String?
+
+  @@unique([memberId, slotId])
+}

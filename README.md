@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Festival Squad (Clasher)
 
-## Getting Started
+Cloud-first web app: **Next.js** UI and **`/api`** on the same origin, **PostgreSQL** (e.g. Neon) as source of truth. No passwords—each browser stores a **member secret**; squads are joined with a normal **`https://…/join/{token}`** link.
 
-First, run the development server:
+## Prerequisites
+
+- Node 20+
+- A Postgres `DATABASE_URL`
+- Optional: `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` for poster/timetable scanning
+
+## Setup
 
 ```bash
+cp .env.example .env
+# Edit .env — set DATABASE_URL (and optional vision keys)
+
+npx prisma db push
+# or: npx prisma migrate dev
+
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). Create a squad, then open `/api/health` — you should see `{"ok":true}`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Production checks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **HTTPS same-origin** — In DevTools → Network, confirm API calls go to `https://<your-domain>/api/...` (not a stale absolute URL).
+2. **`GET /api/health`** returns JSON `{ "ok": true }`.
+3. **`POST /api/squads`** and **`POST /api/parse/lineup`** return JSON bodies or explicit API errors (e.g. `vision_unconfigured` with a message)—not an HTML 404 page mistaken for a scan failure.
 
-## Learn More
+## Deploy (e.g. Vercel)
 
-To learn more about Next.js, take a look at the following resources:
+1. Create a Vercel project from this repo.
+2. Set environment variables: `DATABASE_URL`, and optionally `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `VISION_PROVIDER`, `ANTHROPIC_MODEL`.
+3. Build command: `npm run build` (runs `prisma generate` then `next build`).
+4. After first deploy, run `npx prisma db push` (or migrations) against production DB from your machine, or use a CI migrate step.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project layout
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Path | Role |
+|------|------|
+| `prisma/schema.prisma` | Squad, Member, Artist, Rating, Comment, ScheduleSlot, ConflictResolution, MemberSlotIntent |
+| `src/server/festivalApp.ts` | Hono app mounted at `/api` |
+| `src/app/api/[[...route]]/route.ts` | Catch-all forwarding to Hono |
+| `src/app/api/health/route.ts` | Explicit health check |
+| `src/app/api/parse/*/route.ts` | Explicit POST routes for vision |
+| `src/context/ClasherContext.tsx` | Client session + snapshot |
+| `src/lib/api.ts` | Fetch helpers (HTML 404 detection for routing issues) |
 
-## Deploy on Vercel
+## Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `npm run dev` — Next dev server (Turbopack)
+- `npm run build` — `prisma generate` + production build
+- `npm run db:generate` / `npm run db:push` / `npm run db:migrate` — Prisma
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Leaving a squad
+
+**Leave** clears the browser session only; server data is unchanged (no squad delete in v1).
