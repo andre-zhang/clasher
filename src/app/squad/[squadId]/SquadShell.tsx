@@ -10,7 +10,8 @@ const tabs = [
   { href: "lineup", label: "Lineup" },
   { href: "schedule", label: "Schedule" },
   { href: "clashes", label: "Clashes" },
-  { href: "invite", label: "Invite" },
+  { href: "plans", label: "Plans" },
+  { href: "options", label: "Options" },
 ] as const;
 
 export function SquadShell({
@@ -33,7 +34,7 @@ export function SquadShell({
 
   if (loading || !session || session.squadId !== squadId) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-zinc-400">
+      <div className="flex min-h-screen items-center justify-center text-zinc-500">
         Loading…
       </div>
     );
@@ -43,9 +44,12 @@ export function SquadShell({
 
   return (
     <div className="min-h-screen pb-20">
-      <header className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
+      <header className="sticky top-0 z-10 border-b-2 border-zinc-900 bg-zinc-100">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-3">
-          <Link href="/" className="text-sm font-semibold text-violet-400">
+          <Link
+            href="/"
+            className="text-sm font-bold tracking-tight text-zinc-900"
+          >
             Clasher
           </Link>
           <nav className="flex flex-wrap gap-1">
@@ -56,10 +60,10 @@ export function SquadShell({
                 <Link
                   key={t.href}
                   href={href}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+                  className={`border-2 px-2 py-1 text-xs font-semibold ${
                     active
-                      ? "bg-violet-600 text-white"
-                      : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                      ? "border-zinc-900 bg-zinc-900 text-white"
+                      : "border-transparent bg-white text-zinc-800 hover:border-zinc-900"
                   }`}
                 >
                   {t.label}
@@ -71,14 +75,14 @@ export function SquadShell({
             <button
               type="button"
               onClick={() => void refresh()}
-              className="text-xs text-zinc-500 hover:text-zinc-300"
+              className="text-xs text-zinc-600 underline"
             >
               Sync
             </button>
             <button
               type="button"
               onClick={() => leave()}
-              className="text-xs text-red-400 hover:text-red-300"
+              className="border-2 border-red-800 bg-white px-2 py-0.5 text-xs font-semibold text-red-800"
             >
               Leave
             </button>
@@ -87,7 +91,7 @@ export function SquadShell({
       </header>
       {error ? (
         <div className="mx-auto max-w-3xl px-4 pt-4">
-          <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+          <p className="border-2 border-amber-800 bg-amber-50 px-3 py-2 text-sm text-amber-950">
             {error}
           </p>
         </div>

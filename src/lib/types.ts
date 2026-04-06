@@ -32,12 +32,29 @@ export interface FestivalSnapshot {
     choice: string | null;
     planNote: string | null;
     individualOnly: boolean;
+    planMode: string | null;
+    splitFirstSlotId: string | null;
+    splitSecondSlotId: string | null;
+    groupLeanSlotId: string | null;
   }[];
   memberSlotIntents: {
     slotId: string;
     wants: boolean;
     planFrom: string | null;
     planTo: string | null;
+  }[];
+  allMemberSlotIntents: {
+    memberId: string;
+    slotId: string;
+    wants: boolean;
+    planFrom: string | null;
+    planTo: string | null;
+  }[];
+  squadClashDefaults: {
+    slotAId: string;
+    slotBId: string;
+    choiceSlotId: string;
+    setByMemberId: string;
   }[];
 }
 

@@ -36,7 +36,7 @@ export default function JoinTokenPage() {
     setErr(null);
     const name = displayName.trim();
     if (!name) {
-      setErr("Enter the name your squad will see.");
+      setErr("Enter a name.");
       return;
     }
     setBusy(true);
@@ -65,41 +65,37 @@ export default function JoinTokenPage() {
 
   return (
     <main className="mx-auto max-w-lg px-6 py-12">
-      <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
+      <Link href="/" className="text-sm text-zinc-600 underline">
         ← Back
       </Link>
-      <h1 className="mt-6 text-2xl font-bold">Join squad</h1>
+      <h1 className="mt-6 text-2xl font-bold text-zinc-900">Join squad</h1>
       {peekName ? (
-        <p className="mt-2 text-sm text-zinc-300">
-          Festival:{" "}
-          <span className="font-semibold text-white">{peekName}</span>
+        <p className="mt-2 text-sm text-zinc-700">
+          <span className="font-semibold">{peekName}</span>
         </p>
       ) : (
-        <p className="mt-2 text-sm text-zinc-500">
-          Token: <code className="text-zinc-300">{token || "—"}</code>
-        </p>
+        <p className="mt-2 font-mono text-xs text-zinc-500">{token || "—"}</p>
       )}
       <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-4">
         <label className="block">
-          <span className="text-sm font-medium text-zinc-300">Your name</span>
+          <span className="text-sm font-medium text-zinc-800">Your name</span>
           <input
-            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-violet-500"
+            className="mt-1 w-full border-2 border-zinc-900 bg-white px-3 py-2 text-zinc-900 outline-none"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Name shown to the group"
           />
         </label>
         {err ? (
-          <p className="rounded-lg border border-red-900/50 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+          <p className="border-2 border-red-800 bg-red-50 px-3 py-2 text-sm text-red-900">
             {err}
           </p>
         ) : null}
         <button
           type="submit"
           disabled={busy}
-          className="rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+          className="border-2 border-zinc-900 bg-indigo-600 py-3 text-sm font-semibold text-white shadow-[3px_3px_0_0_#18181b] disabled:opacity-50"
         >
-          {busy ? "Joining…" : "Join squad"}
+          {busy ? "Joining…" : "Join"}
         </button>
       </form>
     </main>

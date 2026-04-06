@@ -110,6 +110,14 @@ export async function apiJoinSquad(
   return r.json();
 }
 
+export async function apiDeleteSquad(session: ClasherSession): Promise<void> {
+  const r = await fetch(apiUrl(`/squads/${session.squadId}`), {
+    method: "DELETE",
+    headers: bearer(session.memberSecret),
+  });
+  await ensureOk(r);
+}
+
 export async function apiSnapshot(
   session: ClasherSession
 ): Promise<FestivalSnapshot> {
@@ -187,24 +195,30 @@ export async function apiReplaceSchedule(
   return j.group as FestivalSnapshot;
 }
 
+export type ConflictPlanPayload = {
+  slotAId: string;
+  slotBId: string;
+  planMode: "group" | "pick" | "split_seq" | "custom" | null;
+  choice?: string | null;
+  planNote?: string | null;
+  individualOnly?: boolean;
+  splitOrderSlotIds?: [string, string];
+  customWindows?: { slotId: string; planFrom: string; planTo: string }[];
+  /** If planMode is group: optional preference if the squad splits. */
+  groupLeanSlotId?: string | null;
+  /** With planMode group: set squad-wide default pick (shows confirm on client). */
+  squadDefaultChoiceSlotId?: string | null;
+  clearSquadDefault?: boolean;
+};
+
 export async function apiSetConflict(
   session: ClasherSession,
-  slotAId: string,
-  slotBId: string,
-  choice: string | null,
-  planNote: string | null,
-  individualOnly: boolean
+  payload: ConflictPlanPayload
 ): Promise<FestivalSnapshot> {
   const r = await fetch(apiUrl(`/squads/${session.squadId}/conflicts`), {
     method: "PUT",
     headers: { ...bearer(session.memberSecret), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      slotAId,
-      slotBId,
-      choice,
-      planNote,
-      individualOnly,
-    }),
+    body: JSON.stringify(payload),
   });
   await ensureOk(r);
   const j = await r.json();
@@ -246,6 +260,19 @@ export async function apiDemoSchedule(
   session: ClasherSession
 ): Promise<FestivalSnapshot> {
   const r = await fetch(apiUrl(`/squads/${session.squadId}/demo-schedule`), {
+    method: "POST",
+    headers: bearer(session.memberSecret),
+  });
+  await ensureOk(r);
+  const j = await r.json();
+  return j.group as FestivalSnapshot;
+}
+
+/** Demo lineup + schedule in one request. */
+export async function apiDemoFull(
+  session: ClasherSession
+): Promise<FestivalSnapshot> {
+  const r = await fetch(apiUrl(`/squads/${session.squadId}/demo-full`), {
     method: "POST",
     headers: bearer(session.memberSecret),
   });

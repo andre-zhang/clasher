@@ -5,11 +5,8 @@ import { cors } from "hono/cors";
 import { prisma } from "@/lib/prisma";
 
 import { dbErrorHttpResponse } from "./dbErrors";
-import {
-  DEMO_ARTIST_NAMES,
-  DEMO_SEED_ARTIST_NAMES,
-  DEMO_SLOT_ROWS,
-} from "./demoFestivalData";
+import { DEMO_ARTIST_NAMES, DEMO_SLOT_ROWS } from "./demoFestivalData";
+import { patchIntentsForConflict } from "./applyConflictIntents";
 import { wantsDeltaFromChoice } from "./memberSlotIntentPatch";
 import { buildSnapshot } from "./snapshot";
 import { runVisionJson } from "./vision";
@@ -112,14 +109,6 @@ export function createFestivalApp(apiBasePath: string): Hono {
         festivalName,
         inviteToken,
         members: { create: { displayName } },
-        artists: {
-          createMany: {
-            data: DEMO_SEED_ARTIST_NAMES.map((name, sortOrder) => ({
-              name,
-              sortOrder,
-            })),
-          },
-        },
       },
       include: { members: true },
     });
@@ -304,6 +293,15 @@ export function createFestivalApp(apiBasePath: string): Hono {
       return c.json({ error: "invalid_json" }, 400);
     }
     const slots = body.slots ?? [];
+    await prisma.squadClashDefault.deleteMany({
+      where: { squadId: member.squadId },
+    });
+    await prisma.conflictResolution.deleteMany({
+      where: { squadId: member.squadId },
+    });
+    await prisma.memberSlotIntent.deleteMany({
+      where: { squadId: member.squadId },
+    });
     await prisma.scheduleSlot.deleteMany({
       where: { squadId: member.squadId },
     });
@@ -547,6 +545,12 @@ export function createFestivalApp(apiBasePath: string): Hono {
           OR: [{ slotAId: remove }, { slotBId: remove }],
         },
       });
+      await tx.squadClashDefault.deleteMany({
+        where: {
+          squadId: sid,
+          OR: [{ slotAId: remove }, { slotBId: remove }],
+        },
+      });
       await tx.scheduleSlot.delete({ where: { id: remove } });
     });
 
@@ -561,6 +565,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
     const sid = member.squadId;
 
     await prisma.$transaction(async (tx) => {
+      await tx.squadClashDefault.deleteMany({ where: { squadId: sid } });
       await tx.conflictResolution.deleteMany({ where: { squadId: sid } });
       await tx.scheduleSlot.deleteMany({ where: { squadId: sid } });
       await tx.memberSlotIntent.deleteMany({ where: { squadId: sid } });
@@ -613,6 +618,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
     }
 
     await prisma.$transaction(async (tx) => {
+      await tx.squadClashDefault.deleteMany({ where: { squadId: sid } });
       await tx.conflictResolution.deleteMany({ where: { squadId: sid } });
       await tx.memberSlotIntent.deleteMany({ where: { squadId: sid } });
       await tx.scheduleSlot.deleteMany({ where: { squadId: sid } });
@@ -638,6 +644,71 @@ export function createFestivalApp(apiBasePath: string): Hono {
     return c.json({ group: snap });
   });
 
+  /** Demo lineup + timetable in one step (for Invite page). */
+  app.post("/squads/:squadId/demo-full", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    const sid = member.squadId;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.squadClashDefault.deleteMany({ where: { squadId: sid } });
+      await tx.conflictResolution.deleteMany({ where: { squadId: sid } });
+      await tx.scheduleSlot.deleteMany({ where: { squadId: sid } });
+      await tx.memberSlotIntent.deleteMany({ where: { squadId: sid } });
+      await tx.rating.deleteMany({
+        where: { artist: { squadId: sid } },
+      });
+      await tx.comment.deleteMany({ where: { squadId: sid } });
+      await tx.artist.deleteMany({ where: { squadId: sid } });
+
+      for (let i = 0; i < DEMO_ARTIST_NAMES.length; i++) {
+        const name = DEMO_ARTIST_NAMES[i]!;
+        await tx.artist.create({
+          data: { squadId: sid, name, sortOrder: i },
+        });
+      }
+
+      const artists = await tx.artist.findMany({
+        where: { squadId: sid },
+        orderBy: { sortOrder: "asc" },
+      });
+      const byName = new Map(
+        artists.map((a) => [a.name.trim().toLowerCase(), a.id] as const)
+      );
+
+      await tx.scheduleSlot.createMany({
+        data: DEMO_SLOT_ROWS.map((row) => ({
+          squadId: sid,
+          dayLabel: row.dayLabel,
+          stageName: row.stageName,
+          start: row.start,
+          end: row.end,
+          artistId: byName.get(
+            DEMO_ARTIST_NAMES[row.artistIndex]!.toLowerCase()
+          )!,
+        })),
+      });
+
+      await tx.squad.update({
+        where: { id: sid },
+        data: { phase: "scheduled" },
+      });
+    });
+
+    const snap = await buildSnapshot(prisma, sid, member.id);
+    return c.json({ group: snap });
+  });
+
+  app.delete("/squads/:squadId", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    if (member.squadId !== squadId) return c.json({ error: "forbidden" }, 403);
+    await prisma.squad.delete({ where: { id: squadId } });
+    return c.json({ ok: true });
+  });
+
   app.put("/squads/:squadId/conflicts", async (c) => {
     const squadId = c.req.param("squadId");
     const member = await authMember(c, squadId);
@@ -648,6 +719,12 @@ export function createFestivalApp(apiBasePath: string): Hono {
       choice?: string | null;
       planNote?: string | null;
       individualOnly?: boolean;
+      planMode?: string | null;
+      splitOrderSlotIds?: [string, string];
+      customWindows?: { slotId: string; planFrom: string; planTo: string }[];
+      groupLeanSlotId?: string | null;
+      squadDefaultChoiceSlotId?: string | null;
+      clearSquadDefault?: boolean;
     };
     try {
       body = await c.req.json();
@@ -663,50 +740,186 @@ export function createFestivalApp(apiBasePath: string): Hono {
         : body.planNote === null
           ? null
           : String(body.planNote).trim().slice(0, 500) || null;
-    const indiv = Boolean(body.individualOnly);
-    await prisma.conflictResolution.upsert({
-      where: {
-        squadId_memberId_slotAId_slotBId: {
+
+    let planMode: string | null =
+      typeof body.planMode === "string" ? body.planMode.trim() : null;
+    if (!planMode && body.choice != null && String(body.choice).length > 0) {
+      planMode = "pick";
+    }
+
+    const pickChoice =
+      body.choice != null && String(body.choice).length > 0
+        ? String(body.choice)
+        : null;
+
+    if (planMode === "pick") {
+      if (!pickChoice || (pickChoice !== slotAId && pickChoice !== slotBId)) {
+        return c.json({ error: "bad_choice" }, 400);
+      }
+    }
+
+    let splitFirst: string | null = null;
+    let splitSecond: string | null = null;
+    if (planMode === "split_seq") {
+      const o = body.splitOrderSlotIds;
+      const pair = new Set([slotAId, slotBId]);
+      if (
+        !o ||
+        o.length !== 2 ||
+        o[0] === o[1] ||
+        !pair.has(o[0]!) ||
+        !pair.has(o[1]!)
+      ) {
+        return c.json({ error: "bad_split_order" }, 400);
+      }
+      splitFirst = o[0]!;
+      splitSecond = o[1]!;
+    }
+
+    if (planMode === "custom") {
+      const wins = body.customWindows;
+      const pair = new Set([slotAId, slotBId]);
+      if (!Array.isArray(wins) || wins.length !== 2) {
+        return c.json({ error: "bad_custom_windows" }, 400);
+      }
+      const seen = new Set<string>();
+      for (const w of wins) {
+        if (!w?.slotId || !pair.has(w.slotId) || seen.has(w.slotId)) {
+          return c.json({ error: "bad_custom_windows" }, 400);
+        }
+        seen.add(w.slotId);
+      }
+    }
+
+    const pairIds = new Set([slotAId, slotBId]);
+    let groupLeanSlotId: string | null = null;
+    if (planMode === "group") {
+      const raw = body.groupLeanSlotId;
+      if (raw != null && String(raw).length > 0) {
+        const id = String(raw);
+        if (!pairIds.has(id)) {
+          return c.json({ error: "bad_group_lean" }, 400);
+        }
+        groupLeanSlotId = id;
+      }
+    }
+
+    let individualOnly: boolean;
+    if (planMode === "group") {
+      individualOnly = false;
+    } else if (planMode === "pick" || planMode === "split_seq" || planMode === "custom") {
+      individualOnly = true;
+    } else {
+      individualOnly = Boolean(body.individualOnly);
+    }
+
+    let squadDefaultChoice: string | null = null;
+    if (
+      planMode === "group" &&
+      body.squadDefaultChoiceSlotId != null &&
+      String(body.squadDefaultChoiceSlotId).length > 0
+    ) {
+      squadDefaultChoice = String(body.squadDefaultChoiceSlotId);
+      if (squadDefaultChoice !== slotAId && squadDefaultChoice !== slotBId) {
+        return c.json({ error: "bad_squad_default" }, 400);
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.conflictResolution.upsert({
+        where: {
+          squadId_memberId_slotAId_slotBId: {
+            squadId: member.squadId,
+            memberId: member.id,
+            slotAId,
+            slotBId,
+          },
+        },
+        create: {
           squadId: member.squadId,
           memberId: member.id,
           slotAId,
           slotBId,
+          choice: planMode === "pick" ? pickChoice : null,
+          planNote: normalizedNote === undefined ? null : normalizedNote,
+          individualOnly,
+          planMode,
+          splitFirstSlotId: planMode === "split_seq" ? splitFirst : null,
+          splitSecondSlotId: planMode === "split_seq" ? splitSecond : null,
+          groupLeanSlotId: planMode === "group" ? groupLeanSlotId : null,
         },
-      },
-      create: {
-        squadId: member.squadId,
-        memberId: member.id,
-        slotAId,
-        slotBId,
-        choice: body.choice ?? null,
-        planNote: normalizedNote === undefined ? null : normalizedNote,
-        individualOnly: indiv,
-      },
-      update: {
-        choice: body.choice ?? null,
-        ...(normalizedNote !== undefined ? { planNote: normalizedNote } : {}),
-        individualOnly: indiv,
-      },
-    });
-    if (body.choice != null && typeof body.choice === "string") {
-      const delta = wantsDeltaFromChoice(slotAId, slotBId, body.choice);
-      for (const [slotId, wants] of Object.entries(delta)) {
-        await prisma.memberSlotIntent.upsert({
+        update: {
+          choice: planMode === "pick" ? pickChoice : null,
+          ...(normalizedNote !== undefined ? { planNote: normalizedNote } : {}),
+          individualOnly,
+          planMode,
+          splitFirstSlotId: planMode === "split_seq" ? splitFirst : null,
+          splitSecondSlotId: planMode === "split_seq" ? splitSecond : null,
+          groupLeanSlotId: planMode === "group" ? groupLeanSlotId : null,
+        },
+      });
+
+      await patchIntentsForConflict(tx, member.squadId, member.id, slotAId, slotBId, {
+        planMode,
+        choice: pickChoice,
+        splitOrderSlotIds:
+          planMode === "split_seq" && splitFirst && splitSecond
+            ? [splitFirst, splitSecond]
+            : null,
+        customWindows: planMode === "custom" ? body.customWindows ?? null : null,
+      });
+
+      if (planMode === "group" && body.clearSquadDefault) {
+        await tx.squadClashDefault.deleteMany({
           where: {
-            memberId_slotId: { memberId: member.id, slotId },
+            squadId: member.squadId,
+            slotAId,
+            slotBId,
+          },
+        });
+      }
+
+      if (planMode === "group" && squadDefaultChoice) {
+        await tx.squadClashDefault.upsert({
+          where: {
+            squadId_slotAId_slotBId: {
+              squadId: member.squadId,
+              slotAId,
+              slotBId,
+            },
           },
           create: {
             squadId: member.squadId,
-            memberId: member.id,
-            slotId,
-            wants,
-            planFrom: null,
-            planTo: null,
+            slotAId,
+            slotBId,
+            choiceSlotId: squadDefaultChoice,
+            setByMemberId: member.id,
           },
-          update: { wants, planFrom: null, planTo: null },
+          update: {
+            choiceSlotId: squadDefaultChoice,
+            setByMemberId: member.id,
+          },
         });
+        const delta = wantsDeltaFromChoice(slotAId, slotBId, squadDefaultChoice);
+        for (const [sid, wants] of Object.entries(delta)) {
+          await tx.memberSlotIntent.upsert({
+            where: {
+              memberId_slotId: { memberId: member.id, slotId: sid },
+            },
+            create: {
+              squadId: member.squadId,
+              memberId: member.id,
+              slotId: sid,
+              wants,
+              planFrom: null,
+              planTo: null,
+            },
+            update: { wants, planFrom: null, planTo: null },
+          });
+        }
       }
-    }
+    });
+
     const snap = await buildSnapshot(prisma, member.squadId, member.id);
     return c.json({ group: snap });
   });

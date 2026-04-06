@@ -13,14 +13,15 @@ import { useRouter } from "next/navigation";
 import {
   apiAddComment,
   apiBulkArtists,
-  apiDemoLineup,
-  apiDemoSchedule,
+  apiDeleteSquad,
+  apiDemoFull,
   apiParseLineupImage,
   apiParseScheduleImage,
   apiPeekInvite,
   apiPutSlotIntents,
   apiReplaceSchedule,
   apiSetConflict,
+  type ConflictPlanPayload,
   apiSetRating,
   apiSnapshot,
   type ScheduleDraftSlot,
@@ -78,13 +79,7 @@ type ClasherContextValue = {
   addComment: (artistId: string, body: string) => Promise<void>;
   commitLineupNames: (names: string[]) => Promise<void>;
   replaceSchedule: (slots: ScheduleDraftSlot[]) => Promise<void>;
-  setConflict: (
-    slotAId: string,
-    slotBId: string,
-    choice: string | null,
-    planNote: string | null,
-    individualOnly: boolean
-  ) => Promise<void>;
+  setConflict: (payload: ConflictPlanPayload) => Promise<void>;
   putSlotIntents: (
     intents: {
       slotId: string;
@@ -93,8 +88,8 @@ type ClasherContextValue = {
       planTo?: string | null;
     }[]
   ) => Promise<void>;
-  loadDemoLineup: () => Promise<void>;
-  loadDemoSchedule: () => Promise<void>;
+  loadDemoFull: () => Promise<void>;
+  deleteSquad: () => Promise<void>;
   parseLineupFile: (file: File) => Promise<string[]>;
   parseScheduleFile: (file: File) => Promise<ScheduleDraftSlot[]>;
 };
@@ -206,22 +201,9 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setConflict = useCallback(
-    async (
-      slotAId: string,
-      slotBId: string,
-      choice: string | null,
-      planNote: string | null,
-      individualOnly: boolean
-    ) => {
+    async (payload: ConflictPlanPayload) => {
       const s = requireSession();
-      const g = await apiSetConflict(
-        s,
-        slotAId,
-        slotBId,
-        choice,
-        planNote,
-        individualOnly
-      );
+      const g = await apiSetConflict(s, payload);
       setGroup(g);
     },
     [requireSession]
@@ -243,17 +225,21 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
     [requireSession]
   );
 
-  const loadDemoLineup = useCallback(async () => {
+  const loadDemoFull = useCallback(async () => {
     const s = requireSession();
-    const g = await apiDemoLineup(s);
+    const g = await apiDemoFull(s);
     setGroup(g);
   }, [requireSession]);
 
-  const loadDemoSchedule = useCallback(async () => {
+  const deleteSquad = useCallback(async () => {
     const s = requireSession();
-    const g = await apiDemoSchedule(s);
-    setGroup(g);
-  }, [requireSession]);
+    await apiDeleteSquad(s);
+    saveSession(null);
+    setSession(null);
+    setGroup(null);
+    setError(null);
+    router.push("/");
+  }, [requireSession, router]);
 
   const parseLineupFile = useCallback(async (file: File) => {
     return apiParseLineupImage(file);
@@ -279,8 +265,8 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       replaceSchedule,
       setConflict,
       putSlotIntents,
-      loadDemoLineup,
-      loadDemoSchedule,
+      loadDemoFull,
+      deleteSquad,
       parseLineupFile,
       parseScheduleFile,
     }),
@@ -299,8 +285,8 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       replaceSchedule,
       setConflict,
       putSlotIntents,
-      loadDemoLineup,
-      loadDemoSchedule,
+      loadDemoFull,
+      deleteSquad,
       parseLineupFile,
       parseScheduleFile,
     ]

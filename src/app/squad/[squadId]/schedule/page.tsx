@@ -2,36 +2,68 @@
 
 import { useRef, useState } from "react";
 
+import { ScanningOverlay } from "@/components/ScanningOverlay";
+import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { useClasher } from "@/context/ClasherContext";
+import { normalizeImportedScheduleSlots } from "@/lib/importNormalize";
 import type { ScheduleDraftSlot } from "@/lib/api";
 
 export default function SchedulePage() {
-  const {
-    group,
-    replaceSchedule,
-    loadDemoLineup,
-    loadDemoSchedule,
-    parseScheduleFile,
-  } = useClasher();
+  const { session, group, replaceSchedule, parseScheduleFile } = useClasher();
   const [draft, setDraft] = useState<ScheduleDraftSlot[] | null>(null);
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [calendarMode, setCalendarMode] = useState<"mine" | "all">("mine");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  if (!group) return null;
+  if (!group || !session) return null;
+
+  function patchDraftSlot(
+    index: number,
+    patch: Partial<ScheduleDraftSlot>
+  ) {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const next = [...prev];
+      const row = next[index];
+      if (!row) return prev;
+      next[index] = { ...row, ...patch };
+      return next;
+    });
+  }
+
+  function removeDraftRow(index: number) {
+    setDraft((prev) => (prev ? prev.filter((_, i) => i !== index) : prev));
+  }
+
+  function addDraftRow() {
+    setDraft((prev) => [
+      ...(prev ?? []),
+      {
+        dayLabel: "",
+        stageName: "",
+        start: "",
+        end: "",
+        artistName: "",
+      },
+    ]);
+  }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
     setParseErr(null);
+    setScanning(true);
     setBusy(true);
     try {
       const slots = await parseScheduleFile(f);
-      setDraft(slots);
+      setDraft(normalizeImportedScheduleSlots(slots));
     } catch (err) {
       setParseErr(err instanceof Error ? err.message : String(err));
     } finally {
+      setScanning(false);
       setBusy(false);
     }
   }
@@ -72,37 +104,19 @@ export default function SchedulePage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-xl font-bold">Schedule</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Timetable lives on the server. Scan a screenshot or load the demo
-          (demo lineup first).
-        </p>
-      </div>
+    <div className="space-y-6">
+      {scanning ? <ScanningOverlay label="Scanning timetable…" /> : null}
+
+      <h1 className="text-xl font-bold text-zinc-900">Schedule</h1>
 
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => void loadDemoLineup()}
-          className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
-        >
-          Demo lineup
-        </button>
-        <button
-          type="button"
-          onClick={() => void loadDemoSchedule()}
-          className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
-        >
-          Demo timetable
-        </button>
-        <button
-          type="button"
           onClick={() => fileRef.current?.click()}
           disabled={busy}
-          className="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+          className="border-2 border-zinc-900 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-50"
         >
-          Scan timetable image
+          Scan timetable
         </button>
         <input
           ref={fileRef}
@@ -114,57 +128,110 @@ export default function SchedulePage() {
       </div>
 
       {parseErr ? (
-        <p className="rounded-lg border border-red-900/50 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+        <p className="border-2 border-red-800 bg-red-50 px-3 py-2 text-sm text-red-900">
           {parseErr}
         </p>
       ) : null}
 
       {draft && draft.length > 0 ? (
-        <div className="rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
-          <p className="text-sm font-medium text-violet-200">
-            Review scanned slots ({draft.length})
+        <div className="border-2 border-zinc-900 bg-indigo-50 p-4 shadow-[3px_3px_0_0_#18181b]">
+          <p className="text-sm font-semibold text-zinc-900">
+            Edit before commit ({draft.length})
           </p>
-          <p className="mt-1 text-xs text-zinc-500">
-            Committing replaces the whole squad schedule with these rows (server
-            creates missing artists).
-          </p>
-          <div className="mt-3 max-h-48 overflow-auto text-xs">
-            <table className="w-full text-left text-zinc-300">
+          <div className="mt-2 max-h-72 overflow-auto text-xs">
+            <table className="w-full border-collapse border border-zinc-900 text-left">
               <thead>
-                <tr className="border-b border-zinc-700 text-zinc-500">
-                  <th className="py-1 pr-2">Day</th>
-                  <th className="py-1 pr-2">Stage</th>
-                  <th className="py-1 pr-2">Start</th>
-                  <th className="py-1 pr-2">End</th>
-                  <th className="py-1">Artist</th>
+                <tr className="bg-zinc-100">
+                  <th className="border border-zinc-700 px-1 py-0.5">Day</th>
+                  <th className="border border-zinc-700 px-1 py-0.5">Stage</th>
+                  <th className="border border-zinc-700 px-1 py-0.5">Start</th>
+                  <th className="border border-zinc-700 px-1 py-0.5">End</th>
+                  <th className="border border-zinc-700 px-1 py-0.5">Artist</th>
+                  <th className="border border-zinc-700 px-1 py-0.5" />
                 </tr>
               </thead>
               <tbody>
-                {draft.slice(0, 30).map((s, i) => (
-                  <tr key={i} className="border-b border-zinc-800">
-                    <td className="py-1 pr-2">{s.dayLabel}</td>
-                    <td className="py-1 pr-2">{s.stageName}</td>
-                    <td className="py-1 pr-2">{s.start}</td>
-                    <td className="py-1 pr-2">{s.end}</td>
-                    <td className="py-1">{s.artistName}</td>
+                {draft.map((s, i) => (
+                  <tr key={i}>
+                    <td className="border border-zinc-300 p-0">
+                      <input
+                        className="w-full min-w-[3rem] bg-white px-1 py-0.5"
+                        value={s.dayLabel}
+                        onChange={(e) =>
+                          patchDraftSlot(i, { dayLabel: e.target.value })
+                        }
+                      />
+                    </td>
+                    <td className="border border-zinc-300 p-0">
+                      <input
+                        className="w-full min-w-[4rem] bg-white px-1 py-0.5"
+                        value={s.stageName}
+                        onChange={(e) =>
+                          patchDraftSlot(i, { stageName: e.target.value })
+                        }
+                      />
+                    </td>
+                    <td className="border border-zinc-300 p-0">
+                      <input
+                        className="w-full min-w-[3rem] bg-white px-1 py-0.5 font-mono"
+                        value={s.start}
+                        onChange={(e) =>
+                          patchDraftSlot(i, { start: e.target.value })
+                        }
+                      />
+                    </td>
+                    <td className="border border-zinc-300 p-0">
+                      <input
+                        className="w-full min-w-[3rem] bg-white px-1 py-0.5 font-mono"
+                        value={s.end}
+                        onChange={(e) =>
+                          patchDraftSlot(i, { end: e.target.value })
+                        }
+                      />
+                    </td>
+                    <td className="border border-zinc-300 p-0">
+                      <input
+                        className="w-full min-w-[6rem] bg-white px-1 py-0.5"
+                        value={s.artistName}
+                        onChange={(e) =>
+                          patchDraftSlot(i, { artistName: e.target.value })
+                        }
+                      />
+                    </td>
+                    <td className="border border-zinc-300 px-1">
+                      <button
+                        type="button"
+                        className="text-red-800 underline"
+                        onClick={() => removeDraftRow(i)}
+                      >
+                        ×
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={addDraftRow}
+              className="border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium"
+            >
+              Add row
+            </button>
             <button
               type="button"
               onClick={() => void commitDraft()}
               disabled={busy}
-              className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+              className="border-2 border-zinc-900 bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-50"
             >
-              Commit schedule
+              Commit
             </button>
             <button
               type="button"
               onClick={() => setDraft(null)}
-              className="text-xs text-zinc-500 hover:text-zinc-300"
+              className="text-xs text-zinc-600 underline"
             >
               Discard
             </button>
@@ -172,49 +239,53 @@ export default function SchedulePage() {
         </div>
       ) : null}
 
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-          Current server schedule
-        </h2>
-        {group.schedule.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-500">No slots yet.</p>
-        ) : (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-left text-sm text-zinc-300">
-              <thead>
-                <tr className="border-b border-zinc-700 text-zinc-500">
-                  <th className="py-2 pr-3">Day</th>
-                  <th className="py-2 pr-3">Stage</th>
-                  <th className="py-2 pr-3">Start</th>
-                  <th className="py-2 pr-3">End</th>
-                  <th className="py-2">Artist</th>
-                </tr>
-              </thead>
-              <tbody>
-                {group.schedule.map((s) => (
-                  <tr key={s.id} className="border-b border-zinc-800">
-                    <td className="py-2 pr-3">{s.dayLabel}</td>
-                    <td className="py-2 pr-3">{s.stageName}</td>
-                    <td className="py-2 pr-3">{s.start}</td>
-                    <td className="py-2 pr-3">{s.end}</td>
-                    <td className="py-2">{s.artistName}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {group.schedule.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => void commitCurrentTable()}
-            disabled={busy}
-            className="mt-3 text-xs text-zinc-500 underline hover:text-zinc-300"
-          >
-            Re-save current table (refresh IDs)
-          </button>
-        ) : null}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setCalendarMode("mine")}
+          className={`border-2 px-2 py-1 text-xs font-semibold ${
+            calendarMode === "mine"
+              ? "border-zinc-900 bg-zinc-900 text-white"
+              : "border-zinc-900 bg-white text-zinc-900"
+          }`}
+        >
+          Your plan
+        </button>
+        <button
+          type="button"
+          onClick={() => setCalendarMode("all")}
+          className={`border-2 px-2 py-1 text-xs font-semibold ${
+            calendarMode === "all"
+              ? "border-zinc-900 bg-zinc-900 text-white"
+              : "border-zinc-900 bg-white text-zinc-900"
+          }`}
+        >
+          Full timetable
+        </button>
       </div>
+
+      <ScheduleCalendar
+        schedule={group.schedule}
+        memberId={calendarMode === "mine" ? session.memberId : undefined}
+        allMemberSlotIntents={group.allMemberSlotIntents}
+        group={group}
+        caption={
+          calendarMode === "mine"
+            ? "Slots you’re keeping (clash picks + slot flags). Hidden sets are dropped from your plan."
+            : "Everything on the squad timetable."
+        }
+      />
+
+      {group.schedule.length > 0 ? (
+        <button
+          type="button"
+          onClick={() => void commitCurrentTable()}
+          disabled={busy}
+          className="text-xs text-zinc-600 underline"
+        >
+          Re-save schedule (refresh slot IDs)
+        </button>
+      ) : null}
     </div>
   );
 }

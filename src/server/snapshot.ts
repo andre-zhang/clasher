@@ -19,21 +19,28 @@ export async function buildSnapshot(
     },
   });
 
-  const [ratings, comments, conflicts, intents] = await Promise.all([
-    db.rating.findMany({
-      where: { member: { squadId } },
-    }),
-    db.comment.findMany({
-      where: { squadId },
-      orderBy: { createdAt: "desc" },
-    }),
-    db.conflictResolution.findMany({
-      where: { squadId },
-    }),
-    db.memberSlotIntent.findMany({
-      where: { squadId, memberId: viewingMemberId },
-    }),
-  ]);
+  const [ratings, comments, conflicts, intents, allIntents, squadDefaults] =
+    await Promise.all([
+      db.rating.findMany({
+        where: { member: { squadId } },
+      }),
+      db.comment.findMany({
+        where: { squadId },
+        orderBy: { createdAt: "desc" },
+      }),
+      db.conflictResolution.findMany({
+        where: { squadId },
+      }),
+      db.memberSlotIntent.findMany({
+        where: { squadId, memberId: viewingMemberId },
+      }),
+      db.memberSlotIntent.findMany({
+        where: { squadId },
+      }),
+      db.squadClashDefault.findMany({
+        where: { squadId },
+      }),
+    ]);
 
   return {
     id: squad.id,
@@ -80,12 +87,29 @@ export async function buildSnapshot(
       choice: c.choice,
       planNote: c.planNote,
       individualOnly: c.individualOnly,
+      planMode: c.planMode ?? null,
+      splitFirstSlotId: c.splitFirstSlotId ?? null,
+      splitSecondSlotId: c.splitSecondSlotId ?? null,
+      groupLeanSlotId: c.groupLeanSlotId ?? null,
     })),
     memberSlotIntents: intents.map((i) => ({
       slotId: i.slotId,
       wants: i.wants,
       planFrom: i.planFrom,
       planTo: i.planTo,
+    })),
+    allMemberSlotIntents: allIntents.map((i) => ({
+      memberId: i.memberId,
+      slotId: i.slotId,
+      wants: i.wants,
+      planFrom: i.planFrom,
+      planTo: i.planTo,
+    })),
+    squadClashDefaults: squadDefaults.map((d) => ({
+      slotAId: d.slotAId,
+      slotBId: d.slotBId,
+      choiceSlotId: d.choiceSlotId,
+      setByMemberId: d.setByMemberId,
     })),
   };
 }

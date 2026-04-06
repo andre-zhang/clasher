@@ -8,31 +8,33 @@ datasource db {
 }
 
 model Squad {
-  id            String   @id @default(uuid())
-  festivalName  String
-  inviteToken   String   @unique
-  phase         String   @default("prefestival")
-  festivalDate  DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  members       Member[]
-  artists       Artist[]
-  comments      Comment[]
-  scheduleSlots ScheduleSlot[]
-  conflicts     ConflictResolution[]
-  slotIntents   MemberSlotIntent[]
+  id                 String              @id @default(uuid())
+  festivalName       String
+  inviteToken        String              @unique
+  phase              String              @default("prefestival")
+  festivalDate       DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  members            Member[]
+  artists            Artist[]
+  comments           Comment[]
+  scheduleSlots      ScheduleSlot[]
+  conflicts          ConflictResolution[]
+  slotIntents        MemberSlotIntent[]
+  squadClashDefaults SquadClashDefault[]
 }
 
 model Member {
-  id          String   @id @default(uuid())
-  squadId     String
-  squad       Squad    @relation(fields: [squadId], references: [id], onDelete: Cascade)
-  displayName String
-  secret      String   @unique @default(uuid())
-  createdAt   DateTime @default(now())
-  ratings     Rating[]
-  conflicts   ConflictResolution[]
-  slotIntents MemberSlotIntent[]
+  id                   String              @id @default(uuid())
+  squadId              String
+  squad                Squad               @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  displayName          String
+  secret               String              @unique @default(uuid())
+  createdAt            DateTime            @default(now())
+  ratings              Rating[]
+  conflicts            ConflictResolution[]
+  slotIntents          MemberSlotIntent[]
+  squadClashDefaultsSet SquadClashDefault[]
 }
 
 model Artist {
@@ -79,16 +81,20 @@ model ScheduleSlot {
 }
 
 model ConflictResolution {
-  id             String  @id @default(uuid())
-  squadId        String
-  squad          Squad   @relation(fields: [squadId], references: [id], onDelete: Cascade)
-  memberId       String
-  member         Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  slotAId        String
-  slotBId        String
-  choice         String?
-  planNote       String?
-  individualOnly Boolean @default(false)
+  id                String  @id @default(uuid())
+  squadId           String
+  squad             Squad   @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  memberId          String
+  member            Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  slotAId           String
+  slotBId           String
+  choice            String?
+  planNote          String?
+  individualOnly    Boolean @default(false)
+  planMode          String?
+  splitFirstSlotId  String?
+  splitSecondSlotId String?
+  groupLeanSlotId   String?
 
   @@unique([squadId, memberId, slotAId, slotBId])
 }
@@ -105,4 +111,20 @@ model MemberSlotIntent {
   planTo    String?
 
   @@unique([memberId, slotId])
+}
+
+/** Squad-wide default pick for an overlapping pair (any member can update). */
+model SquadClashDefault {
+  id             String   @id @default(uuid())
+  squadId        String
+  squad          Squad    @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  slotAId        String
+  slotBId        String
+  choiceSlotId   String
+  setByMemberId  String
+  setByMember    Member   @relation(fields: [setByMemberId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([squadId, slotAId, slotBId])
 }

@@ -22,6 +22,69 @@ export function slotsTimeOverlap(
 
 export type SlotPair = { a: FestivalSnapshot["schedule"][0]; b: FestivalSnapshot["schedule"][0] };
 
+export function isMyClashResolved(
+  r: FestivalSnapshot["conflictResolutions"][0] | undefined
+): boolean {
+  if (!r) return false;
+  if (
+    r.planMode === "group" ||
+    r.planMode === "pick" ||
+    r.planMode === "split_seq" ||
+    r.planMode === "custom"
+  ) {
+    return true;
+  }
+  if (r.choice != null && r.choice !== "") return true;
+  return false;
+}
+
+function memberRatesHot(
+  group: FestivalSnapshot,
+  memberId: string,
+  artistId: string
+): boolean {
+  const t = group.ratings.find(
+    (r) => r.memberId === memberId && r.artistId === artistId
+  )?.tier;
+  return t === "must" || t === "want";
+}
+
+/** Overlap matters only if someone rated both artists ❤️/🔥. */
+export function pairHasSquadInterest(
+  group: FestivalSnapshot,
+  a: FestivalSnapshot["schedule"][0],
+  b: FestivalSnapshot["schedule"][0]
+): boolean {
+  for (const m of group.members) {
+    if (
+      memberRatesHot(group, m.id, a.artistId) &&
+      memberRatesHot(group, m.id, b.artistId)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function findEngagedOverlappingPairs(
+  group: FestivalSnapshot
+): SlotPair[] {
+  return findOverlappingPairs(group.schedule).filter(({ a, b }) =>
+    pairHasSquadInterest(group, a, b)
+  );
+}
+
+export function findUnresolvedOverlappingPairs(
+  group: FestivalSnapshot,
+  memberId: string
+): SlotPair[] {
+  const pairs = findEngagedOverlappingPairs(group);
+  return pairs.filter(({ a, b }) => {
+    const r = findMyResolution(group, memberId, a.id, b.id);
+    return !isMyClashResolved(r);
+  });
+}
+
 export function findOverlappingPairs(
   schedule: FestivalSnapshot["schedule"]
 ): SlotPair[] {
@@ -55,4 +118,36 @@ export function findMyResolution(
       c.slotAId === x &&
       c.slotBId === y
   );
+}
+
+export function describeConflictResolution(
+  c: FestivalSnapshot["conflictResolutions"][0],
+  a: FestivalSnapshot["schedule"][0],
+  b: FestivalSnapshot["schedule"][0]
+): string {
+  if (c.planMode === "group") {
+    if (c.groupLeanSlotId === a.id) {
+      return `with group · lean ${a.artistName}`;
+    }
+    if (c.groupLeanSlotId === b.id) {
+      return `with group · lean ${b.artistName}`;
+    }
+    return "with group";
+  }
+  if (c.planMode === "pick" && c.choice) {
+    if (c.choice === a.id) return a.artistName;
+    if (c.choice === b.id) return b.artistName;
+  }
+  if (c.choice === a.id) return a.artistName;
+  if (c.choice === b.id) return b.artistName;
+  if (c.planMode === "split_seq") {
+    const n = (id: string) =>
+      id === a.id ? a.artistName : id === b.id ? b.artistName : "?";
+    if (c.splitFirstSlotId && c.splitSecondSlotId) {
+      return `${n(c.splitFirstSlotId)} → ${n(c.splitSecondSlotId)}`;
+    }
+  }
+  if (c.planMode === "custom") return "custom";
+  if (c.individualOnly && !c.choice && !c.planMode) return "solo / undecided";
+  return "—";
 }
