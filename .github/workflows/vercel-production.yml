@@ -1,9 +1,12 @@
 # Auto-deploy production on every push to `main`.
-# GitHub repo → Settings → Secrets and variables → Actions → New repository secret:
-#   VERCEL_TOKEN = create at https://vercel.com/account/tokens (scope: full account or this project)
 #
-# Alternative (no Actions): Vercel Dashboard → clasher → Settings → Git → Connect Repository
-# (then Vercel builds on push without this workflow).
+# REQUIRED — add this secret or the job will fail with "no credentials":
+#   GitHub → repo → Settings → Secrets and variables → Actions → New repository secret
+#   Name:  VERCEL_TOKEN
+#   Value: create at https://vercel.com/account/tokens (full account access is fine)
+#
+# Optional: disable this workflow and use Vercel → Project → Settings → Git → Connect Repository
+# so Vercel builds on push without VERCEL_TOKEN in GitHub.
 
 name: Deploy Production to Vercel
 
@@ -18,11 +21,19 @@ jobs:
     env:
       VERCEL_ORG_ID: team_T9KRCYcoLh8xN9gghpsDKeyC
       VERCEL_PROJECT_ID: prj_E0GX9npaGoraBe53wjcNI8iNJkgp
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Require VERCEL_TOKEN secret
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::Missing GitHub Actions secret VERCEL_TOKEN. Add it under Settings → Secrets and variables → Actions. Create a token: https://vercel.com/account/tokens"
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,4 +51,6 @@ jobs:
           echo '{"projectId":"prj_E0GX9npaGoraBe53wjcNI8iNJkgp","orgId":"team_T9KRCYcoLh8xN9gghpsDKeyC","projectName":"clasher"}' > .vercel/project.json
 
       - name: Deploy to Vercel (production)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN"
