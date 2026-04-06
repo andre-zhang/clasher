@@ -18,6 +18,7 @@ model Squad {
   members            Member[]
   artists            Artist[]
   comments           Comment[]
+  slotComments       SlotComment[]
   scheduleSlots      ScheduleSlot[]
   conflicts          ConflictResolution[]
   slotIntents        MemberSlotIntent[]
@@ -34,6 +35,7 @@ model Member {
   ratings              Rating[]
   conflicts            ConflictResolution[]
   slotIntents          MemberSlotIntent[]
+  slotComments         SlotComment[]
   squadClashDefaultsSet SquadClashDefault[]
 }
 
@@ -68,6 +70,19 @@ model Comment {
   createdAt DateTime @default(now())
 }
 
+/** Per-set notes on the schedule (emoji/text). */
+model SlotComment {
+  id        String       @id @default(uuid())
+  squadId   String
+  squad     Squad        @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  slotId    String
+  slot      ScheduleSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime     @default(now())
+}
+
 model ScheduleSlot {
   id        String @id @default(uuid())
   squadId   String
@@ -78,6 +93,7 @@ model ScheduleSlot {
   end       String
   artistId  String
   artist    Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  slotComments SlotComment[]
 }
 
 model ConflictResolution {

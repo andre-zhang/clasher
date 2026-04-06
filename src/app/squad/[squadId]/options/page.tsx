@@ -102,7 +102,9 @@ export default function OptionsPage() {
           onClick={() => void onDemoFull()}
           className="text-xs text-zinc-500 underline hover:text-zinc-800 disabled:opacity-40"
         >
-          {demoBusy ? "Loading demo…" : "Load demo festival (lineup + schedule)"}
+          {demoBusy
+            ? "Loading demo…"
+            : "Load demo festival (lineup + schedule + sample squad)"}
         </button>
       </section>
 

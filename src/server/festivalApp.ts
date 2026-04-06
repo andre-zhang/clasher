@@ -1,11 +1,17 @@
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { randomUUID } from "node:crypto";
 
 import { prisma } from "@/lib/prisma";
 
 import { dbErrorHttpResponse } from "./dbErrors";
-import { DEMO_ARTIST_NAMES, DEMO_SLOT_ROWS } from "./demoFestivalData";
+import {
+  DEMO_ARTIST_NAMES,
+  DEMO_FRIEND_DISPLAY_NAMES,
+  DEMO_FRIEND_HOT_ARTIST_INDICES,
+  DEMO_SLOT_ROWS,
+} from "./demoFestivalData";
 import { patchIntentsForConflict } from "./applyConflictIntents";
 import { wantsDeltaFromChoice } from "./memberSlotIntentPatch";
 import { buildSnapshot } from "./snapshot";
@@ -205,6 +211,36 @@ export function createFestivalApp(apiBasePath: string): Hono {
         artistId: body.artistId,
         memberId: member.id,
         body: body.body.trim(),
+      },
+    });
+    const snap = await buildSnapshot(prisma, member.squadId, member.id);
+    return c.json({ group: snap });
+  });
+
+  app.post("/squads/:squadId/slot-comments", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    let body: { slotId?: string; body?: string };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid_json" }, 400);
+    }
+    const text = body.body?.trim() ?? "";
+    if (!body.slotId || !text)
+      return c.json({ error: "bad_request" }, 400);
+    const slot = await prisma.scheduleSlot.findFirst({
+      where: { id: body.slotId, squadId: member.squadId },
+    });
+    if (!slot) return c.json({ error: "unknown_slot" }, 400);
+    const safe = text.slice(0, 500);
+    await prisma.slotComment.create({
+      data: {
+        squadId: member.squadId,
+        slotId: body.slotId,
+        memberId: member.id,
+        body: safe,
       },
     });
     const snap = await buildSnapshot(prisma, member.squadId, member.id);
@@ -573,6 +609,12 @@ export function createFestivalApp(apiBasePath: string): Hono {
         where: { artist: { squadId: sid } },
       });
       await tx.comment.deleteMany({ where: { squadId: sid } });
+      await tx.member.deleteMany({
+        where: {
+          squadId: sid,
+          displayName: { in: [...DEMO_FRIEND_DISPLAY_NAMES] },
+        },
+      });
       await tx.artist.deleteMany({ where: { squadId: sid } });
 
       for (let i = 0; i < DEMO_ARTIST_NAMES.length; i++) {
@@ -654,13 +696,20 @@ export function createFestivalApp(apiBasePath: string): Hono {
     await prisma.$transaction(async (tx) => {
       await tx.squadClashDefault.deleteMany({ where: { squadId: sid } });
       await tx.conflictResolution.deleteMany({ where: { squadId: sid } });
-      await tx.scheduleSlot.deleteMany({ where: { squadId: sid } });
       await tx.memberSlotIntent.deleteMany({ where: { squadId: sid } });
       await tx.rating.deleteMany({
         where: { artist: { squadId: sid } },
       });
       await tx.comment.deleteMany({ where: { squadId: sid } });
+      await tx.slotComment.deleteMany({ where: { squadId: sid } });
+      await tx.scheduleSlot.deleteMany({ where: { squadId: sid } });
       await tx.artist.deleteMany({ where: { squadId: sid } });
+      await tx.member.deleteMany({
+        where: {
+          squadId: sid,
+          displayName: { in: [...DEMO_FRIEND_DISPLAY_NAMES] },
+        },
+      });
 
       for (let i = 0; i < DEMO_ARTIST_NAMES.length; i++) {
         const name = DEMO_ARTIST_NAMES[i]!;
@@ -689,6 +738,51 @@ export function createFestivalApp(apiBasePath: string): Hono {
           )!,
         })),
       });
+
+      const slots = await tx.scheduleSlot.findMany({
+        where: { squadId: sid },
+        orderBy: [{ dayLabel: "asc" }, { start: "asc" }],
+      });
+      const artistIndexById = new Map(
+        artists.map((a, idx) => [a.id, idx] as const)
+      );
+
+      for (const friendName of DEMO_FRIEND_DISPLAY_NAMES) {
+        const friend = await tx.member.create({
+          data: {
+            squadId: sid,
+            displayName: friendName,
+            secret: randomUUID(),
+          },
+        });
+        const hotIdx = new Set(DEMO_FRIEND_HOT_ARTIST_INDICES[friendName]);
+        let i = 0;
+        for (const idx of hotIdx) {
+          const artist = artists[idx];
+          if (!artist) continue;
+          await tx.rating.create({
+            data: {
+              memberId: friend.id,
+              artistId: artist.id,
+              tier: i++ === 0 ? "must" : "want",
+            },
+          });
+        }
+        for (const slot of slots) {
+          const ai = artistIndexById.get(slot.artistId);
+          const wants = ai != null && hotIdx.has(ai);
+          await tx.memberSlotIntent.create({
+            data: {
+              squadId: sid,
+              memberId: friend.id,
+              slotId: slot.id,
+              wants,
+              planFrom: null,
+              planTo: null,
+            },
+          });
+        }
+      }
 
       await tx.squad.update({
         where: { id: sid },

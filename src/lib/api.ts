@@ -159,6 +159,21 @@ export async function apiAddComment(
   return j.group as FestivalSnapshot;
 }
 
+export async function apiAddSlotComment(
+  session: ClasherSession,
+  slotId: string,
+  body: string
+): Promise<FestivalSnapshot> {
+  const r = await fetch(apiUrl(`/squads/${session.squadId}/slot-comments`), {
+    method: "POST",
+    headers: { ...bearer(session.memberSecret), "Content-Type": "application/json" },
+    body: JSON.stringify({ slotId, body }),
+  });
+  await ensureOk(r);
+  const j = await r.json();
+  return j.group as FestivalSnapshot;
+}
+
 export async function apiBulkArtists(
   session: ClasherSession,
   names: string[]

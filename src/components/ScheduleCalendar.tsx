@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
 import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
@@ -33,12 +33,23 @@ function intentWindow(
   };
 }
 
+function slotNotesFor(
+  slotComments: FestivalSnapshot["slotComments"],
+  slotId: string
+) {
+  return slotComments.filter((c) => c.slotId === slotId);
+}
+
+const NOTE_EMOJIS = ["🔥", "❤️", "🎉", "🚻", "💃", "😴"] as const;
+
 export function ScheduleCalendar({
   schedule,
   memberId,
   allMemberSlotIntents,
   group,
   caption,
+  slotComments = [],
+  onAddSlotComment,
 }: {
   schedule: Slot[];
   memberId?: string;
@@ -46,6 +57,8 @@ export function ScheduleCalendar({
   /** When set with memberId, applies squad “stay with group” defaults to visibility. */
   group?: FestivalSnapshot | null;
   caption?: string;
+  slotComments?: FestivalSnapshot["slotComments"];
+  onAddSlotComment?: (slotId: string, body: string) => Promise<void>;
 }) {
   const days = useMemo(() => {
     const d = new Set(schedule.map((s) => s.dayLabel.trim()));
@@ -95,6 +108,20 @@ export function ScheduleCalendar({
 
   const pxPerSlot = 28;
   const timelineH = Math.max(ticks.length * pxPerSlot, 120);
+
+  const noteDialogRef = useRef<HTMLDialogElement>(null);
+  const [noteSlotId, setNoteSlotId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+
+  const noteSlot = useMemo(
+    () => schedule.find((s) => s.id === noteSlotId) ?? null,
+    [schedule, noteSlotId]
+  );
+
+  useEffect(() => {
+    if (noteSlotId) noteDialogRef.current?.showModal();
+  }, [noteSlotId]);
 
   if (!schedule.length) {
     return <p className="text-sm text-zinc-600">No slots.</p>;
@@ -200,6 +227,8 @@ export function ScheduleCalendar({
                           {compactSquadTierStrip(group, slot.artistId)}
                         </p>
                       ) : null;
+                    const notes = slotNotesFor(slotComments, slot.id);
+                    const notePreview = notes[0];
                     return (
                       <div
                         key={slot.id}
@@ -220,6 +249,37 @@ export function ScheduleCalendar({
                         {sub ? (
                           <p className="text-[10px] text-zinc-700">{sub}</p>
                         ) : null}
+                        {notes.length > 0 ? (
+                          <p
+                            className="mt-0.5 truncate text-[9px] text-zinc-700"
+                            title={notes
+                              .map((n) => {
+                                const who = group?.members.find(
+                                  (m) => m.id === n.memberId
+                                )?.displayName;
+                                return `${who ?? "?"}: ${n.body}`;
+                              })
+                              .join("\n")}
+                          >
+                            {notePreview
+                              ? `${group?.members.find((m) => m.id === notePreview.memberId)?.displayName?.split(" ")[0] ?? "?"}: ${notePreview.body}`
+                              : ""}
+                            {notes.length > 1 ? ` +${notes.length - 1}` : ""}
+                          </p>
+                        ) : null}
+                        {onAddSlotComment ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNoteDraft("");
+                              setNoteSlotId(slot.id);
+                            }}
+                            className="mt-0.5 w-full truncate border border-zinc-400 bg-white/80 px-0.5 text-left text-[9px] font-medium text-zinc-800 hover:bg-white"
+                          >
+                            {notes.length ? "Notes · add" : "+ Note / emoji"}
+                          </button>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -228,6 +288,95 @@ export function ScheduleCalendar({
           ))}
         </div>
       )}
+
+      <dialog
+        ref={noteDialogRef}
+        className="max-w-md border-2 border-zinc-900 bg-white p-4 shadow-[4px_4px_0_0_#18181b] backdrop:bg-black/40"
+        onClose={() => {
+          setNoteSlotId(null);
+          setNoteDraft("");
+        }}
+      >
+        {noteSlot ? (
+          <>
+            <h3 className="text-sm font-bold text-zinc-900">
+              {noteSlot.artistName}
+            </h3>
+            <p className="font-mono text-xs text-zinc-600">
+              {noteSlot.dayLabel} · {noteSlot.stageName} · {noteSlot.start}–
+              {noteSlot.end}
+            </p>
+            <ul className="mt-3 max-h-40 space-y-2 overflow-y-auto border-t border-zinc-200 pt-2 text-xs">
+              {slotNotesFor(slotComments, noteSlot.id).map((n) => (
+                <li key={n.id} className="border border-zinc-200 bg-zinc-50 p-2">
+                  <span className="font-semibold text-zinc-700">
+                    {group?.members.find((m) => m.id === n.memberId)
+                      ?.displayName ?? "?"}
+                  </span>
+                  <p className="mt-0.5 whitespace-pre-wrap text-zinc-900">
+                    {n.body}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            {onAddSlotComment ? (
+              <div className="mt-3 space-y-2 border-t border-zinc-200 pt-3">
+                <p className="text-[10px] font-bold uppercase text-zinc-500">
+                  Add
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {NOTE_EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      className="border-2 border-zinc-900 bg-white px-1.5 py-0.5 text-sm hover:bg-zinc-100"
+                      onClick={() =>
+                        setNoteDraft((d) => (d ? `${d} ${e}` : e))
+                      }
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  className="min-h-[64px] w-full border-2 border-zinc-900 px-2 py-1 text-sm"
+                  placeholder="Note or emoji"
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                />
+                <button
+                  type="button"
+                  disabled={noteSaving || !noteDraft.trim()}
+                  className="border-2 border-zinc-900 bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                  onClick={() => {
+                    const t = noteDraft.trim();
+                    if (!t || !noteSlot) return;
+                    setNoteSaving(true);
+                    void (async () => {
+                      try {
+                        await onAddSlotComment(noteSlot.id, t);
+                        setNoteDraft("");
+                        noteDialogRef.current?.close();
+                      } finally {
+                        setNoteSaving(false);
+                      }
+                    })();
+                  }}
+                >
+                  Save note
+                </button>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="mt-3 text-xs text-zinc-600 underline"
+              onClick={() => noteDialogRef.current?.close()}
+            >
+              Close
+            </button>
+          </>
+        ) : null}
+      </dialog>
     </div>
   );
 }

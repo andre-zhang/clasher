@@ -19,12 +19,16 @@ export async function buildSnapshot(
     },
   });
 
-  const [ratings, comments, conflicts, intents, allIntents, squadDefaults] =
+  const [ratings, comments, slotComments, conflicts, intents, allIntents, squadDefaults] =
     await Promise.all([
       db.rating.findMany({
         where: { member: { squadId } },
       }),
       db.comment.findMany({
+        where: { squadId },
+        orderBy: { createdAt: "desc" },
+      }),
+      db.slotComment.findMany({
         where: { squadId },
         orderBy: { createdAt: "desc" },
       }),
@@ -67,6 +71,13 @@ export async function buildSnapshot(
     comments: comments.map((c) => ({
       id: c.id,
       artistId: c.artistId,
+      memberId: c.memberId,
+      body: c.body,
+      createdAt: c.createdAt.toISOString(),
+    })),
+    slotComments: slotComments.map((c) => ({
+      id: c.id,
+      slotId: c.slotId,
       memberId: c.memberId,
       body: c.body,
       createdAt: c.createdAt.toISOString(),

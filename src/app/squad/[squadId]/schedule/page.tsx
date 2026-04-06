@@ -9,7 +9,13 @@ import { normalizeImportedScheduleSlots } from "@/lib/importNormalize";
 import type { ScheduleDraftSlot } from "@/lib/api";
 
 export default function SchedulePage() {
-  const { session, group, replaceSchedule, parseScheduleFile } = useClasher();
+  const {
+    session,
+    group,
+    replaceSchedule,
+    parseScheduleFile,
+    addSlotComment,
+  } = useClasher();
   const [draft, setDraft] = useState<ScheduleDraftSlot[] | null>(null);
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -269,6 +275,8 @@ export default function SchedulePage() {
         memberId={calendarMode === "mine" ? session.memberId : undefined}
         allMemberSlotIntents={group.allMemberSlotIntents}
         group={group}
+        slotComments={group.slotComments}
+        onAddSlotComment={addSlotComment}
         caption={
           calendarMode === "mine"
             ? "Slots you’re keeping (clash picks + slot flags). Hidden sets are dropped from your plan."

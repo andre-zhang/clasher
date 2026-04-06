@@ -53,7 +53,7 @@ function labelAtBucket(
 }
 
 export default function PlansPage() {
-  const { session, group, putSlotIntents } = useClasher();
+  const { session, group, putSlotIntents, addSlotComment } = useClasher();
   const [tab, setTab] = useState<"person" | "everyone">("person");
   const [syncBusy, setSyncBusy] = useState(false);
   const [memberId, setMemberId] = useState<string | null>(null);
@@ -165,6 +165,8 @@ export default function PlansPage() {
               memberId={activeMember}
               allMemberSlotIntents={group.allMemberSlotIntents}
               group={group}
+              slotComments={group.slotComments}
+              onAddSlotComment={addSlotComment}
             />
           ) : null}
         </div>
@@ -192,40 +194,59 @@ export default function PlansPage() {
           {!activeDay || buckets.length === 0 ? (
             <p className="text-sm text-zinc-600">No schedule for this day.</p>
           ) : (
-            <table className="min-w-full border-collapse border-2 border-zinc-900 text-left text-xs">
-              <thead>
-                <tr>
-                  <th className="border-2 border-zinc-900 bg-zinc-100 px-2 py-1 font-mono">
-                    Time
-                  </th>
-                  {members.map((m) => (
-                    <th
-                      key={m.id}
-                      className="border-2 border-zinc-900 bg-zinc-100 px-2 py-1"
-                    >
-                      {m.displayName}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
+            <div className="flex overflow-x-auto border-2 border-zinc-900 bg-white shadow-[2px_2px_0_0_#18181b]">
+              <div
+                className="flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50"
+                style={{ width: 52, minHeight: buckets.length * 28 + 32 }}
+              >
+                <div className="h-8 shrink-0 border-b-2 border-zinc-900" />
                 {buckets.map((t) => (
-                  <tr key={t}>
-                    <td className="border border-zinc-300 bg-zinc-50 px-2 py-1 font-mono text-zinc-700">
-                      {hhmmFromMinutes(t)}
-                    </td>
-                    {members.map((m) => (
-                      <td
-                        key={m.id}
-                        className="border border-zinc-300 px-2 py-1 text-zinc-900"
-                      >
-                        {labelAtBucket(group, m.id, activeDay, t)}
-                      </td>
-                    ))}
-                  </tr>
+                  <div
+                    key={t}
+                    className="flex shrink-0 items-start border-b border-zinc-200 px-1 pt-0.5 text-[10px] font-mono text-zinc-600"
+                    style={{ height: 28 }}
+                  >
+                    {hhmmFromMinutes(t)}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+              {members.map((m) => (
+                <div
+                  key={m.id}
+                  className="relative min-w-[104px] flex-1 border-r-2 border-zinc-900 last:border-r-0"
+                  style={{ minHeight: buckets.length * 28 + 32 }}
+                >
+                  <div className="sticky top-0 z-[1] flex h-8 items-center justify-center border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-none text-zinc-900">
+                    <span className="line-clamp-2">{m.displayName}</span>
+                  </div>
+                  <div>
+                    {buckets.map((t) => {
+                      const label = labelAtBucket(group, m.id, activeDay, t);
+                      const empty = label === "—";
+                      return (
+                        <div
+                          key={t}
+                          className={`flex items-center border-b border-zinc-100 px-1 ${
+                            empty ? "bg-white" : "bg-indigo-50"
+                          }`}
+                          style={{ minHeight: 28 }}
+                        >
+                          <span
+                            className={`text-[10px] leading-tight ${
+                              empty
+                                ? "text-zinc-400"
+                                : "font-semibold text-zinc-900"
+                            }`}
+                          >
+                            {label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

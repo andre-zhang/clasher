@@ -33,3 +33,15 @@ export const DEMO_SLOT_ROWS: {
   { dayLabel: "Sat", stageName: "North", start: "19:00", end: "20:30", artistIndex: 0 },
   { dayLabel: "Sat", stageName: "South", start: "19:15", end: "20:15", artistIndex: 1 },
 ];
+
+/** Fake squad members for demo-full (removed on each demo reload). */
+export const DEMO_FRIEND_DISPLAY_NAMES = ["Alex (demo)", "Jordan (demo)"] as const;
+
+/** Artist indices (DEMO_ARTIST_NAMES) each friend marks ❤️/🔥 so overlaps become engaged clashes. */
+export const DEMO_FRIEND_HOT_ARTIST_INDICES: Record<
+  (typeof DEMO_FRIEND_DISPLAY_NAMES)[number],
+  number[]
+> = {
+  "Alex (demo)": [0, 1, 2, 3],
+  "Jordan (demo)": [0, 1, 4, 5],
+};

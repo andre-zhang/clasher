@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 
 import {
   apiAddComment,
+  apiAddSlotComment,
   apiBulkArtists,
   apiDeleteSquad,
   apiDemoFull,
@@ -77,6 +78,7 @@ type ClasherContextValue = {
   peekInvite: (token: string) => ReturnType<typeof apiPeekInvite>;
   setRating: (artistId: string, tier: RatingTier) => Promise<void>;
   addComment: (artistId: string, body: string) => Promise<void>;
+  addSlotComment: (slotId: string, body: string) => Promise<void>;
   commitLineupNames: (names: string[]) => Promise<void>;
   replaceSchedule: (slots: ScheduleDraftSlot[]) => Promise<void>;
   setConflict: (payload: ConflictPlanPayload) => Promise<void>;
@@ -182,6 +184,15 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
     [requireSession]
   );
 
+  const addSlotComment = useCallback(
+    async (slotId: string, body: string) => {
+      const s = requireSession();
+      const g = await apiAddSlotComment(s, slotId, body);
+      setGroup(g);
+    },
+    [requireSession]
+  );
+
   const commitLineupNames = useCallback(
     async (names: string[]) => {
       const s = requireSession();
@@ -261,6 +272,7 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       peekInvite: apiPeekInvite,
       setRating,
       addComment,
+      addSlotComment,
       commitLineupNames,
       replaceSchedule,
       setConflict,
@@ -281,6 +293,7 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       leave,
       setRating,
       addComment,
+      addSlotComment,
       commitLineupNames,
       replaceSchedule,
       setConflict,

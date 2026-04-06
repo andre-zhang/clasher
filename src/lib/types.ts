@@ -16,6 +16,13 @@ export interface FestivalSnapshot {
     body: string;
     createdAt: string;
   }[];
+  slotComments: {
+    id: string;
+    slotId: string;
+    memberId: string;
+    body: string;
+    createdAt: string;
+  }[];
   schedule: {
     id: string;
     dayLabel: string;

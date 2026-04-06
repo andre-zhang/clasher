@@ -73,7 +73,7 @@ export default function ClashesPage() {
         <p className="text-sm text-zinc-600">
           {group.schedule.length < 2
             ? "Need at least two slots."
-            : "No engaged clashes: you need overlapping acts on the same day where you and at least one friend both marked ❤️ or 🔥 on both sides. Sync slot flags from lineup if ratings are set."}
+            : "Nothing to resolve right now."}
         </p>
       ) : (
         <ul className="space-y-4">
