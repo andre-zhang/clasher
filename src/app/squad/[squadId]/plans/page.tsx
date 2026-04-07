@@ -233,7 +233,7 @@ export default function PlansPage() {
             </select>
           </label>
           <p className="text-[11px] text-zinc-600">
-            Reflects clash choices and squad defaults. Tap a set for full times
+            Reflects clash choices and shared defaults. Tap a set for full times
             and how overlaps were resolved.
           </p>
           {activeMember ? (

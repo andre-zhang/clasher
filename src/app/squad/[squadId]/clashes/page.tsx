@@ -324,7 +324,7 @@ function ClashCard({
           /^\d{1,2}:\d{2}$/.test(w.planTo)
       );
       if (!ok) {
-        setLocalErr("Custom squad default: use HH:mm (e.g. 18:30) for both sets.");
+        setLocalErr("Custom group default: use HH:mm (e.g. 18:30) for both sets.");
         return;
       }
       extra = { squadDefaultCustomWindows: wins };
@@ -336,7 +336,7 @@ function ClashCard({
 
   const squadDefaultSummary =
     squadDefaultMode === "none"
-      ? "Won’t change the squad default"
+      ? "Won’t change the group default"
       : squadDefaultMode === "set_a"
         ? `Set pick: ${a.artistName}`
         : squadDefaultMode === "set_b"
@@ -345,7 +345,7 @@ function ClashCard({
             ? `Split: ${a.artistName} → ${b.artistName}`
             : squadDefaultMode === "split_ba"
               ? `Split: ${b.artistName} → ${a.artistName}`
-              : "Set custom times for the squad";
+              : "Set custom times for the group";
 
   return (
     <li className="border-2 border-zinc-900 bg-white p-4 shadow-[3px_3px_0_0_#18181b]">
@@ -368,7 +368,7 @@ function ClashCard({
 
       {squadDef ? (
         <p className="mt-2 rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-xs text-indigo-950">
-          <span className="font-semibold">Squad default:</span>{" "}
+          <span className="font-semibold">Group default:</span>{" "}
           {describeSquadDefaultBanner(squadDef, a, b)}
           <span className="text-indigo-700">
             {" "}
@@ -435,7 +435,7 @@ function ClashCard({
         {branch === "group" ? (
           <div className="space-y-3 border-2 border-zinc-200 p-3">
             <p className="text-xs text-zinc-700">
-              You follow the squad’s call. Optionally say which set you’d join if
+              You follow the group’s call. Optionally say which set you’d join if
               the group splits (doesn’t override the group—just your preference).
             </p>
             <div className="flex flex-wrap gap-2">
@@ -484,7 +484,7 @@ function ClashCard({
                 onClick={() => setSquadDefaultOpen((o) => !o)}
                 className="flex w-full items-center justify-between gap-2 border-2 border-zinc-900 bg-white px-2 py-1.5 text-left text-[10px] font-bold uppercase tracking-wide text-zinc-700 shadow-[1px_1px_0_0_#18181b] hover:bg-zinc-50 disabled:opacity-40"
               >
-                <span>Squad default</span>
+                <span>Group default</span>
                 <span className="text-sm font-bold" aria-hidden>
                   {squadDefaultOpen ? "−" : "+"}
                 </span>
@@ -496,7 +496,7 @@ function ClashCard({
               ) : (
                 <>
                   <p className="text-[11px] text-zinc-600">
-                    Optional: set how the whole squad resolves this clash for
+                    Optional: set how the whole group resolves this clash for
                     anyone on “stay with group.” Otherwise only your follow-group
                     choice is saved.
                   </p>
@@ -635,7 +635,7 @@ function ClashCard({
                 }
                 className="text-xs text-zinc-600 underline hover:text-zinc-900"
               >
-                Clear squad default for this clash
+                Clear group default for this clash
               </button>
             ) : null}
 
@@ -762,7 +762,7 @@ function ClashCard({
         onClose={() => setPendingGroupSave(null)}
       >
         <p className="text-sm text-zinc-800">
-          This updates the squad default for this clash: everyone on “stay with
+          This updates the group default for this clash: everyone on “stay with
           group” follows this plan (pick, split, or custom times) until someone
           changes it.
         </p>

@@ -15,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Festival Squad (Clasher)",
+  title: "Clasher",
   description:
-    "Cloud-first festival planning: shared lineup, timetable, and clash picks with HTTPS invites.",
+    "Shared lineup, timetable, and clash picks — invite links, no passwords.",
 };
 
 export default function RootLayout({

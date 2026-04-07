@@ -1,4 +1,4 @@
-# Festival Squad (Clasher)
+# Clasher
 
 Cloud-first web app: **Next.js** UI and **`/api`** on the same origin, **PostgreSQL** (e.g. Neon) as source of truth. No passwords—each browser stores a **member secret**; squads are joined with a normal **`https://…/join/{token}`** link.
 

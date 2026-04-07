@@ -50,7 +50,7 @@ export default function OptionsPage() {
   async function onDeleteSquad() {
     if (
       !confirm(
-        "Delete this squad and all lineup, schedule, and ratings? This cannot be undone."
+        "Delete this group and all lineup, schedule, and ratings? This cannot be undone."
       )
     ) {
       return;
@@ -104,7 +104,7 @@ export default function OptionsPage() {
         >
           {demoBusy
             ? "Loading demo…"
-            : "Load demo festival (lineup + schedule + sample squad)"}
+            : "Load demo data (lineup + schedule + sample group)"}
         </button>
       </section>
 
@@ -118,7 +118,7 @@ export default function OptionsPage() {
           onClick={() => void onDeleteSquad()}
           className="mt-2 border-2 border-red-800 bg-white px-3 py-2 text-xs font-semibold text-red-900 shadow-[2px_2px_0_0_#991b1b] hover:bg-red-50 disabled:opacity-40"
         >
-          {delBusy ? "Deleting…" : "Delete squad"}
+          {delBusy ? "Deleting…" : "Delete group"}
         </button>
       </section>
 

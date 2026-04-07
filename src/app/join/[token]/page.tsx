@@ -68,7 +68,7 @@ export default function JoinTokenPage() {
       <Link href="/" className="text-sm text-zinc-600 underline">
         ← Back
       </Link>
-      <h1 className="mt-6 text-2xl font-bold text-zinc-900">Join squad</h1>
+      <h1 className="mt-6 text-2xl font-bold text-zinc-900">Join group</h1>
       {peekName ? (
         <p className="mt-2 text-sm text-zinc-700">
           <span className="font-semibold">{peekName}</span>

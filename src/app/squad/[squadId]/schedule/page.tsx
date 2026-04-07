@@ -336,7 +336,7 @@ export default function SchedulePage() {
         caption={
           calendarMode === "mine"
             ? "Only sets you marked: ❤️/🔥 in Lineup, or “Your plan” in Full timetable. Clash picks do not change this list."
-            : "Whole squad timetable. Tick “Your plan” to add a set to your shortlist (or use Lineup ratings)."
+            : "Full timetable for everyone. Tick “Your plan” to add a set to your shortlist (or use Lineup ratings)."
         }
       />
 

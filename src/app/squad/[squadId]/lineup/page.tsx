@@ -199,7 +199,7 @@ export default function LineupPage() {
                 <span className="font-semibold text-zinc-800">You</span>{" "}
                 {myTierEmoji(group, a.id, session.memberId)}
                 <span className="text-zinc-400"> · </span>
-                <span className="font-semibold text-zinc-800">Squad</span>{" "}
+                <span className="font-semibold text-zinc-800">Others</span>{" "}
                 {compactSquadTierStrip(group, a.id, session.memberId)}
               </p>
             </button>
@@ -301,7 +301,7 @@ function ArtistDetailDialog({
         </div>
 
         <p className="mt-2 text-xs text-zinc-600">
-          Squad votes:{" "}
+          Group votes:{" "}
           {TIERS_ORDER.map((t) => {
             const n = group.ratings.filter(
               (r) =>

@@ -8,7 +8,7 @@ export default function HomePage() {
           Clasher
         </p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
-          Festival Squad
+          Lineup, timetable, clash picks
         </h1>
       </div>
       <div className="flex flex-col gap-3">
@@ -16,7 +16,7 @@ export default function HomePage() {
           href="/create"
           className="border-2 border-zinc-900 bg-indigo-600 px-4 py-3 text-center text-sm font-semibold text-white shadow-[4px_4px_0_0_#18181b]"
         >
-          Create a squad
+          Create a group
         </Link>
         <Link
           href="/join"

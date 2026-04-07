@@ -22,7 +22,7 @@ export default function CreatePage() {
     setBusy(true);
     try {
       const res = await apiCreateSquad(
-        festivalName.trim() || "My festival",
+        festivalName.trim() || "My event",
         displayName.trim() || "You"
       );
       const session: ClasherSession = {
@@ -51,10 +51,10 @@ export default function CreatePage() {
       <Link href="/" className="text-sm text-zinc-600 underline">
         ← Back
       </Link>
-      <h1 className="mt-6 text-2xl font-bold text-zinc-900">Create a squad</h1>
+      <h1 className="mt-6 text-2xl font-bold text-zinc-900">Create a group</h1>
       <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-4">
         <label className="block">
-          <span className="text-sm font-medium text-zinc-800">Festival</span>
+          <span className="text-sm font-medium text-zinc-800">Event name</span>
           <input
             className="mt-1 w-full border-2 border-zinc-900 bg-white px-3 py-2 text-zinc-900 outline-none"
             value={festivalName}

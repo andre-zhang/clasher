@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SyntheticEvent,
+} from "react";
 
 import {
   effectiveMemberSlotPlanWindow,
@@ -184,6 +190,7 @@ export function ScheduleCalendar({
   }, [minMaxForStages]);
 
   const timelineHRender = Math.max(ticksRender.length * pxPerSlot, 120);
+  const timelineBodyPx = ticksRender.length * pxPerSlot;
   const { minM: minMR, maxM: maxMR } = minMaxForStages;
 
   if (!schedule.length) {
@@ -259,8 +266,9 @@ export function ScheduleCalendar({
                   const ss = parseHm(slot.start);
                   const ee = parseHm(slot.end);
                   if (Number.isNaN(ss) || Number.isNaN(ee)) return null;
+                  const rawPct = ((ee - ss) / (maxMR - minMR)) * 100;
                   const top = ((ss - minMR) / (maxMR - minMR)) * 100;
-                  const h = Math.max(((ee - ss) / (maxMR - minMR)) * 100, 3);
+                  const h = Math.max(rawPct, 3);
                   const all =
                     group?.allMemberSlotIntents ?? allMemberSlotIntents ?? [];
                   const planMember = memberId ?? scheduleKeepMemberId;
@@ -314,6 +322,43 @@ export function ScheduleCalendar({
                         )
                       : false;
 
+                  const scheduleKeepRow = Boolean(
+                    showScheduleKeepToggle &&
+                      skMid &&
+                      group &&
+                      onToggleScheduleKeep
+                  );
+                  const canOpenPanel = Boolean(
+                    onAddSlotComment || showQuickRate
+                  );
+                  const rawSlotHeightPx = (rawPct / 100) * timelineBodyPx;
+                  const compact =
+                    rawSlotHeightPx > 0 &&
+                    rawSlotHeightPx < 88 &&
+                    (showQuickRate ||
+                      squadPills.length > 0 ||
+                      Boolean(onAddSlotComment) ||
+                      scheduleKeepRow);
+
+                  const stopBubble = (e: SyntheticEvent) => {
+                    e.stopPropagation();
+                  };
+
+                  const openSlotPanel = (e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    setNoteDraft("");
+                    setNoteSlotId(slot.id);
+                  };
+
+                  const cardInteractive = Boolean(onSlotOpenDetail);
+                  const shellClass = `absolute left-0.5 right-0.5 border-2 border-zinc-900 bg-indigo-50 px-1 py-0.5 text-left shadow-[2px_2px_0_0_#18181b] ${
+                    cardInteractive
+                      ? "cursor-pointer hover:bg-indigo-100"
+                      : ""
+                  } flex flex-col ${
+                    compact ? "z-[8] overflow-visible" : "overflow-hidden"
+                  }`;
+
                   return (
                     <div
                       key={slot.id}
@@ -335,163 +380,227 @@ export function ScheduleCalendar({
                             }
                           : undefined
                       }
-                      className={`absolute left-0.5 right-0.5 overflow-hidden border-2 border-zinc-900 bg-indigo-50 px-1 py-0.5 text-left shadow-[2px_2px_0_0_#18181b] ${
-                        onSlotOpenDetail
-                          ? "cursor-pointer hover:bg-indigo-100"
-                          : ""
-                      }`}
+                      className={shellClass}
                       style={{
                         top: `${top}%`,
                         height: `${h}%`,
                       }}
                     >
-                      <p className="text-[11px] font-semibold leading-tight text-zinc-900">
-                        {slot.artistName}
-                      </p>
-
-                      {showQuickRate || squadPills.length > 0 ? (
-                        <div
-                          className="mt-0.5 flex flex-wrap items-center gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        >
-                          {showQuickRate ? (
-                            <span
-                              className="inline-flex flex-wrap gap-0.5"
-                              title="Your rating"
-                            >
-                              {TIERS_ORDER.map((tier) => {
-                                const active = myEmoji === TIER_EMOJI[tier];
-                                return (
-                                  <button
-                                    key={tier}
-                                    type="button"
-                                    disabled={ratingBusy === slot.id}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (!onSetRating) return;
-                                      setRatingBusy(slot.id);
-                                      void (async () => {
-                                        try {
-                                          await onSetRating(
-                                            slot.artistId,
-                                            tier
-                                          );
-                                        } finally {
-                                          setRatingBusy(null);
-                                        }
-                                      })();
-                                    }}
-                                    className={`min-h-[18px] min-w-[18px] rounded border px-0.5 text-[11px] leading-none transition-colors ${
-                                      active
-                                        ? "border-zinc-900 bg-zinc-900 text-white"
-                                        : "border-zinc-300 bg-white text-zinc-800 hover:border-zinc-900"
-                                    } disabled:opacity-40`}
-                                  >
-                                    {TIER_EMOJI[tier]}
-                                  </button>
-                                );
-                              })}
-                            </span>
-                          ) : null}
-                          {squadPills.length > 0 ? (
-                            <span className="inline-flex flex-wrap gap-0.5">
-                              {squadPills.map(({ tier, emoji, count }) => (
-                                <span
-                                  key={tier}
-                                  className="rounded-full border border-zinc-300 bg-white/90 px-1 py-px text-[9px] font-medium tabular-nums text-zinc-700"
-                                >
-                                  {emoji}
-                                  {count}
-                                </span>
-                              ))}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-
-                      <p className="text-[10px] font-mono text-zinc-600">
-                        {slot.start}–{slot.end}
-                      </p>
-                      {sub ? (
-                        <p className="text-[10px] text-zinc-700">{sub}</p>
-                      ) : null}
-
-                      {showScheduleKeepToggle &&
-                      skMid &&
-                      group &&
-                      onToggleScheduleKeep ? (
-                        <label
-                          className="mt-0.5 flex cursor-pointer items-center gap-1 border-t border-zinc-200 pt-0.5 text-[9px] text-zinc-800"
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={onShortlist}
-                            disabled={hot || keepBusy === slot.id}
-                            title={
-                              hot
-                                ? "In lineup as ❤️/🔥 — remove there to drop from Your plan"
-                                : "Show on Your plan"
-                            }
-                            onChange={(e) => {
-                              const next = e.target.checked;
-                              setKeepBusy(slot.id);
-                              void (async () => {
-                                try {
-                                  await onToggleScheduleKeep(slot.id, next);
-                                } finally {
-                                  setKeepBusy(null);
-                                }
-                              })();
-                            }}
-                            className="h-3 w-3 border border-zinc-900"
-                          />
-                          <span>Your plan</span>
-                        </label>
-                      ) : null}
-
-                      {notes.length > 0 ? (
-                        <p
-                          className="mt-0.5 truncate text-[9px] text-zinc-700"
-                          title={notes
-                            .map((n) => {
-                              const who = group?.members.find(
-                                (m) => m.id === n.memberId
-                              )?.displayName;
-                              return `${who ?? "?"}: ${n.body}`;
-                            })
-                            .join("\n")}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {notePreview
-                            ? `${group?.members.find((m) => m.id === notePreview.memberId)?.displayName?.split(" ")[0] ?? "?"}: ${notePreview.body}`
-                            : ""}
-                          {notes.length > 1 ? ` +${notes.length - 1}` : ""}
-                        </p>
-                      ) : null}
-                      {onAddSlotComment ? (
-                        <div
-                          className="mt-0.5 flex items-start justify-end gap-0.5"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            aria-label={
-                              notes.length ? "Open notes" : "Add note"
-                            }
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setNoteDraft("");
-                              setNoteSlotId(slot.id);
-                            }}
-                            className="flex h-6 w-6 shrink-0 items-center justify-center border-2 border-zinc-900 bg-white text-sm font-bold leading-none text-zinc-900 shadow-[1px_1px_0_0_#18181b] hover:bg-zinc-100"
+                      {compact ? (
+                        <>
+                          <p className="line-clamp-2 text-[11px] font-semibold leading-tight text-zinc-900">
+                            {slot.artistName}
+                          </p>
+                          <p className="truncate font-mono text-[9px] text-zinc-600">
+                            {slot.start}–{slot.end}
+                          </p>
+                          <div
+                            className="mt-auto flex shrink-0 items-center justify-end gap-1 border-t border-zinc-200/70 pt-0.5"
+                            onClick={stopBubble}
+                            onKeyDown={stopBubble}
                           >
-                            +
-                          </button>
-                        </div>
-                      ) : null}
+                            {scheduleKeepRow ? (
+                              <label
+                                className="flex cursor-pointer items-center"
+                                title={
+                                  hot
+                                    ? "In lineup as ❤️/🔥 — remove there to drop from Your plan"
+                                    : "Your plan"
+                                }
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={onShortlist}
+                                  disabled={hot || keepBusy === slot.id}
+                                  onChange={(e) => {
+                                    const next = e.target.checked;
+                                    setKeepBusy(slot.id);
+                                    void (async () => {
+                                      try {
+                                        if (onToggleScheduleKeep) {
+                                          await onToggleScheduleKeep(
+                                            slot.id,
+                                            next
+                                          );
+                                        }
+                                      } finally {
+                                        setKeepBusy(null);
+                                      }
+                                    })();
+                                  }}
+                                  className="h-3 w-3 border border-zinc-900"
+                                />
+                              </label>
+                            ) : null}
+                            {canOpenPanel ? (
+                              <button
+                                type="button"
+                                aria-label="Notes and rating"
+                                onClick={openSlotPanel}
+                                className="flex h-6 w-6 shrink-0 items-center justify-center border-2 border-zinc-900 bg-white text-sm font-bold leading-none text-zinc-900 shadow-[1px_1px_0_0_#18181b] hover:bg-zinc-100"
+                              >
+                                +
+                              </button>
+                            ) : null}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+                            <p className="shrink-0 text-[11px] font-semibold leading-tight text-zinc-900">
+                              {slot.artistName}
+                            </p>
+
+                            {showQuickRate || squadPills.length > 0 ? (
+                              <div
+                                className="flex flex-wrap items-center gap-1"
+                                onClick={stopBubble}
+                                onKeyDown={stopBubble}
+                              >
+                                {showQuickRate ? (
+                                  <span
+                                    className="inline-flex flex-wrap gap-0.5"
+                                    title="Your rating"
+                                  >
+                                    {TIERS_ORDER.map((tier) => {
+                                      const active =
+                                        myEmoji === TIER_EMOJI[tier];
+                                      return (
+                                        <button
+                                          key={tier}
+                                          type="button"
+                                          disabled={ratingBusy === slot.id}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (!onSetRating) return;
+                                            setRatingBusy(slot.id);
+                                            void (async () => {
+                                              try {
+                                                await onSetRating(
+                                                  slot.artistId,
+                                                  tier
+                                                );
+                                              } finally {
+                                                setRatingBusy(null);
+                                              }
+                                            })();
+                                          }}
+                                          className={`min-h-[18px] min-w-[18px] rounded border px-0.5 text-[11px] leading-none transition-colors ${
+                                            active
+                                              ? "border-zinc-900 bg-zinc-900 text-white"
+                                              : "border-zinc-300 bg-white text-zinc-800 hover:border-zinc-900"
+                                          } disabled:opacity-40`}
+                                        >
+                                          {TIER_EMOJI[tier]}
+                                        </button>
+                                      );
+                                    })}
+                                  </span>
+                                ) : null}
+                                {squadPills.length > 0 ? (
+                                  <span className="inline-flex flex-wrap gap-0.5">
+                                    {squadPills.map(({ tier, emoji, count }) => (
+                                      <span
+                                        key={tier}
+                                        className="rounded-full border border-zinc-300 bg-white/90 px-1 py-px text-[9px] font-medium tabular-nums text-zinc-700"
+                                      >
+                                        {emoji}
+                                        {count}
+                                      </span>
+                                    ))}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : null}
+
+                            <p className="shrink-0 font-mono text-[10px] text-zinc-600">
+                              {slot.start}–{slot.end}
+                            </p>
+                            {sub ? (
+                              <p className="shrink-0 text-[10px] text-zinc-700">
+                                {sub}
+                              </p>
+                            ) : null}
+
+                            {scheduleKeepRow ? (
+                              <label
+                                className="flex shrink-0 cursor-pointer items-center gap-1 border-t border-zinc-200 pt-0.5 text-[9px] text-zinc-800"
+                                onClick={stopBubble}
+                                onKeyDown={stopBubble}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={onShortlist}
+                                  disabled={hot || keepBusy === slot.id}
+                                  title={
+                                    hot
+                                      ? "In lineup as ❤️/🔥 — remove there to drop from Your plan"
+                                      : "Show on Your plan"
+                                  }
+                                  onChange={(e) => {
+                                    const next = e.target.checked;
+                                    setKeepBusy(slot.id);
+                                    void (async () => {
+                                      try {
+                                        if (onToggleScheduleKeep) {
+                                          await onToggleScheduleKeep(
+                                            slot.id,
+                                            next
+                                          );
+                                        }
+                                      } finally {
+                                        setKeepBusy(null);
+                                      }
+                                    })();
+                                  }}
+                                  className="h-3 w-3 border border-zinc-900"
+                                />
+                                <span>Your plan</span>
+                              </label>
+                            ) : null}
+
+                            {notes.length > 0 ? (
+                              <p
+                                className="mt-0.5 shrink-0 truncate text-[9px] text-zinc-700"
+                                title={notes
+                                  .map((n) => {
+                                    const who = group?.members.find(
+                                      (m) => m.id === n.memberId
+                                    )?.displayName;
+                                    return `${who ?? "?"}: ${n.body}`;
+                                  })
+                                  .join("\n")}
+                                onClick={stopBubble}
+                              >
+                                {notePreview
+                                  ? `${group?.members.find((m) => m.id === notePreview.memberId)?.displayName?.split(" ")[0] ?? "?"}: ${notePreview.body}`
+                                  : ""}
+                                {notes.length > 1
+                                  ? ` +${notes.length - 1}`
+                                  : ""}
+                              </p>
+                            ) : null}
+                          </div>
+                          {onAddSlotComment ? (
+                            <div
+                              className="mt-auto flex shrink-0 justify-end border-t border-zinc-200/80 pt-0.5"
+                              onClick={stopBubble}
+                              onKeyDown={stopBubble}
+                            >
+                              <button
+                                type="button"
+                                aria-label={
+                                  notes.length ? "Open notes" : "Add note"
+                                }
+                                onClick={openSlotPanel}
+                                className="flex h-6 w-6 shrink-0 items-center justify-center border-2 border-zinc-900 bg-white text-sm font-bold leading-none text-zinc-900 shadow-[1px_1px_0_0_#18181b] hover:bg-zinc-100"
+                              >
+                                +
+                              </button>
+                            </div>
+                          ) : null}
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -518,7 +627,50 @@ export function ScheduleCalendar({
               {noteSlot.dayLabel} · {noteSlot.stageName} · {noteSlot.start}–
               {noteSlot.end}
             </p>
-            <p className="mt-1 text-[10px] font-bold uppercase text-zinc-500">
+            {onSetRating && memberId && group ? (
+              <div
+                className="mt-3 border-t border-zinc-200 pt-3"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
+                <p className="text-[10px] font-bold uppercase text-zinc-500">
+                  Your rating
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {TIERS_ORDER.map((tier) => {
+                    const active =
+                      myTierEmoji(group, noteSlot.artistId, memberId) ===
+                      TIER_EMOJI[tier];
+                    return (
+                      <button
+                        key={tier}
+                        type="button"
+                        disabled={ratingBusy === noteSlot.id}
+                        onClick={() => {
+                          if (!onSetRating) return;
+                          setRatingBusy(noteSlot.id);
+                          void (async () => {
+                            try {
+                              await onSetRating(noteSlot.artistId, tier);
+                            } finally {
+                              setRatingBusy(null);
+                            }
+                          })();
+                        }}
+                        className={`min-h-[28px] min-w-[28px] rounded border px-1 text-sm leading-none transition-colors ${
+                          active
+                            ? "border-zinc-900 bg-zinc-900 text-white"
+                            : "border-zinc-300 bg-white text-zinc-800 hover:border-zinc-900"
+                        } disabled:opacity-40`}
+                      >
+                        {TIER_EMOJI[tier]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+            <p className="mt-3 text-[10px] font-bold uppercase text-zinc-500">
               Notes
             </p>
             <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto border-t border-zinc-200 pt-2 text-xs">
