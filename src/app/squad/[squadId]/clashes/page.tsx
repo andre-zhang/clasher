@@ -5,8 +5,10 @@ import { useMemo, useRef, useState } from "react";
 import { useClasher } from "@/context/ClasherContext";
 import {
   describeConflictResolution,
+  findEngagedOverlappingPairs,
   findMyResolution,
   findUnresolvedOverlappingPairs,
+  isMyClashResolved,
 } from "@/lib/clash";
 import { findSquadClashDefault } from "@/lib/effectiveIntents";
 import type { ConflictPlanPayload } from "@/lib/api";
@@ -40,13 +42,28 @@ export default function ClashesPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const pairs = useMemo(
+  const engaged = useMemo(
+    () => (group ? findEngagedOverlappingPairs(group) : []),
+    [group]
+  );
+
+  const unresolvedPairs = useMemo(
     () =>
       group && session
         ? findUnresolvedOverlappingPairs(group, session.memberId)
         : [],
     [group, session]
   );
+
+  const resolvedPairs = useMemo(() => {
+    if (!group || !session) return [];
+    return engaged.filter(({ a, b }) => {
+      const x = a.id <= b.id ? a.id : b.id;
+      const y = a.id <= b.id ? b.id : a.id;
+      const r = findMyResolution(group, session.memberId, x, y);
+      return r && isMyClashResolved(r);
+    });
+  }, [engaged, group, session]);
 
   if (!group || !session) return null;
 
@@ -91,7 +108,7 @@ export default function ClashesPage() {
         </p>
       ) : null}
 
-      {pairs.length === 0 ? (
+      {unresolvedPairs.length === 0 ? (
         <p className="text-sm text-zinc-600">
           {group.schedule.length < 2
             ? "Need at least two slots."
@@ -99,7 +116,7 @@ export default function ClashesPage() {
         </p>
       ) : (
         <ul className="space-y-4">
-          {pairs.map(({ a, b }) => (
+          {unresolvedPairs.map(({ a, b }) => (
             <ClashCard
               key={`${a.id}-${b.id}`}
               a={a}
@@ -112,6 +129,30 @@ export default function ClashesPage() {
           ))}
         </ul>
       )}
+
+      {resolvedPairs.length > 0 ? (
+        <details className="mt-8 rounded border-2 border-zinc-300 bg-zinc-50 p-3 shadow-[2px_2px_0_0_#18181b]">
+          <summary className="cursor-pointer text-sm font-bold text-zinc-900">
+            Resolved clashes ({resolvedPairs.length})
+          </summary>
+          <p className="mt-2 text-[11px] text-zinc-600">
+            Open to review or change a past decision.
+          </p>
+          <ul className="mt-3 space-y-4">
+            {resolvedPairs.map(({ a, b }) => (
+              <ClashCard
+                key={`resolved-${a.id}-${b.id}`}
+                a={a}
+                b={b}
+                myMemberId={session.memberId}
+                group={group}
+                busy={busy}
+                onSave={(p) => run(() => setConflict(p))}
+              />
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }

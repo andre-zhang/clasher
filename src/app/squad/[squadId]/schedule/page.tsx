@@ -6,6 +6,7 @@ import { ScanningOverlay } from "@/components/ScanningOverlay";
 import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { useClasher } from "@/context/ClasherContext";
 import { normalizeImportedScheduleSlots } from "@/lib/importNormalize";
+import { buildSlotIntentsFromHotRatings } from "@/lib/syncIntentsFromRatings";
 import type { ScheduleDraftSlot } from "@/lib/api";
 
 export default function SchedulePage() {
@@ -13,15 +14,18 @@ export default function SchedulePage() {
     session,
     group,
     replaceSchedule,
-    parseScheduleFile,
+    parseScheduleFiles,
     addSlotComment,
     setRating,
+    patchScheduleKeep,
+    putSlotIntents,
   } = useClasher();
   const [draft, setDraft] = useState<ScheduleDraftSlot[] | null>(null);
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [calendarMode, setCalendarMode] = useState<"mine" | "all">("mine");
+  const [syncBusy, setSyncBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   if (!group || !session) return null;
@@ -57,16 +61,18 @@ export default function SchedulePage() {
     ]);
   }
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
+  async function onFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = [...(e.target.files ?? [])];
     e.target.value = "";
-    if (!f) return;
+    if (!files.length) return;
     setParseErr(null);
     setScanning(true);
     setBusy(true);
     try {
-      const slots = await parseScheduleFile(f);
-      setDraft(normalizeImportedScheduleSlots(slots));
+      const slots = await parseScheduleFiles(files);
+      setDraft((prev) =>
+        normalizeImportedScheduleSlots([...(prev ?? []), ...slots])
+      );
     } catch (err) {
       setParseErr(err instanceof Error ? err.message : String(err));
     } finally {
@@ -86,6 +92,18 @@ export default function SchedulePage() {
       setParseErr(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function syncHotToShortlist() {
+    if (!group?.schedule.length || !session) return;
+    setSyncBusy(true);
+    try {
+      await putSlotIntents(
+        buildSlotIntentsFromHotRatings(group, session.memberId)
+      );
+    } finally {
+      setSyncBusy(false);
     }
   }
 
@@ -116,6 +134,15 @@ export default function SchedulePage() {
 
       <h1 className="text-xl font-bold text-zinc-900">Schedule</h1>
 
+      <button
+        type="button"
+        disabled={syncBusy || !group.schedule.length}
+        onClick={() => void syncHotToShortlist()}
+        className="border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40"
+      >
+        Sync ❤️/🔥 from Lineup → Your plan
+      </button>
+
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -123,16 +150,21 @@ export default function SchedulePage() {
           disabled={busy}
           className="border-2 border-zinc-900 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-50"
         >
-          Scan timetable
+          Scan timetable (1+ photos)
         </button>
         <input
           ref={fileRef}
           type="file"
           accept="image/*"
+          multiple
           className="hidden"
-          onChange={onFile}
+          onChange={onFiles}
         />
       </div>
+      <p className="text-[11px] text-zinc-600">
+        You can select several screenshots in one go; times use PM-first rules
+        for bare hours (e.g. first “1” → 1pm, second “1” that day → 1am).
+      </p>
 
       {parseErr ? (
         <p className="border-2 border-red-800 bg-red-50 px-3 py-2 text-sm text-red-900">
@@ -222,6 +254,14 @@ export default function SchedulePage() {
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+              className="border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium"
+            >
+              Add more scans
+            </button>
+            <button
+              type="button"
               onClick={addDraftRow}
               className="border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium"
             >
@@ -278,6 +318,16 @@ export default function SchedulePage() {
         group={group}
         slotComments={group.slotComments}
         onAddSlotComment={addSlotComment}
+        visibilityMode={
+          calendarMode === "mine" ? "scheduleShortlist" : "effectivePlan"
+        }
+        scheduleKeepMemberId={
+          calendarMode === "all" ? session.memberId : undefined
+        }
+        showScheduleKeepToggle={calendarMode === "all"}
+        onToggleScheduleKeep={(slotId, keep) =>
+          patchScheduleKeep(slotId, keep)
+        }
         onSetRating={
           calendarMode === "mine"
             ? (artistId, tier) => setRating(artistId, tier)
@@ -285,8 +335,8 @@ export default function SchedulePage() {
         }
         caption={
           calendarMode === "mine"
-            ? "Slots you’re keeping (clash picks + slot flags). Hidden sets are dropped from your plan."
-            : "Everything on the squad timetable."
+            ? "Only sets you marked: ❤️/🔥 in Lineup, or “Your plan” in Full timetable. Clash picks do not change this list."
+            : "Whole squad timetable. Tick “Your plan” to add a set to your shortlist (or use Lineup ratings)."
         }
       />
 

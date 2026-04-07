@@ -15,8 +15,10 @@ export function buildSlotIntentsFromHotRatings(
       })
       .map((s) => s.id)
   );
+  const hot = (id: string) => wantsIds.has(id);
   return group.schedule.map((s) => ({
     slotId: s.id,
-    wants: wantsIds.has(s.id),
+    wants: hot(s.id),
+    scheduleKeep: hot(s.id),
   }));
 }

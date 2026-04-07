@@ -123,6 +123,8 @@ model MemberSlotIntent {
   member    Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
   slotId    String
   wants     Boolean @default(true)
+  /** Schedule tab “Your plan”: show this slot if true or lineup ❤️/🔥. Ignores clash-only wants. */
+  scheduleKeep Boolean @default(false)
   planFrom  String?
   planTo    String?
 

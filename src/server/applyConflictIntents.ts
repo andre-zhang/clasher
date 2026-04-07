@@ -20,7 +20,15 @@ async function upsertIntent(
 ) {
   await tx.memberSlotIntent.upsert({
     where: { memberId_slotId: { memberId, slotId } },
-    create: { squadId, memberId, slotId, wants, planFrom, planTo },
+    create: {
+      squadId,
+      memberId,
+      slotId,
+      wants,
+      planFrom,
+      planTo,
+      scheduleKeep: false,
+    },
     update: { wants, planFrom, planTo },
   });
 }

@@ -249,6 +249,7 @@ export async function apiPutSlotIntents(
   intents: {
     slotId: string;
     wants: boolean;
+    scheduleKeep?: boolean;
     planFrom?: string | null;
     planTo?: string | null;
   }[]
@@ -257,6 +258,24 @@ export async function apiPutSlotIntents(
     method: "PUT",
     headers: { ...bearer(session.memberSecret), "Content-Type": "application/json" },
     body: JSON.stringify({ intents }),
+  });
+  await ensureOk(r);
+  const j = await r.json();
+  return j.group as FestivalSnapshot;
+}
+
+export async function apiPatchScheduleKeep(
+  session: ClasherSession,
+  slotId: string,
+  keep: boolean
+): Promise<FestivalSnapshot> {
+  const r = await fetch(apiUrl(`/squads/${session.squadId}/schedule-keep`), {
+    method: "PATCH",
+    headers: {
+      ...bearer(session.memberSecret),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ slotId, keep }),
   });
   await ensureOk(r);
   const j = await r.json();
@@ -326,11 +345,14 @@ export async function apiParseLineupImage(file: File): Promise<string[]> {
   return Array.isArray(j.artists) ? j.artists : [];
 }
 
-export async function apiParseScheduleImage(
-  file: File
+export async function apiParseScheduleImages(
+  files: File[]
 ): Promise<ScheduleDraftSlot[]> {
+  if (!files.length) return [];
   const form = new FormData();
-  form.append("file", file);
+  for (const f of files) {
+    form.append("file", f);
+  }
   const r = await fetchWithTimeout(apiUrl("/parse/schedule"), {
     method: "POST",
     body: form,

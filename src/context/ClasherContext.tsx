@@ -17,7 +17,8 @@ import {
   apiDeleteSquad,
   apiDemoFull,
   apiParseLineupImage,
-  apiParseScheduleImage,
+  apiParseScheduleImages,
+  apiPatchScheduleKeep,
   apiPeekInvite,
   apiPutSlotIntents,
   apiReplaceSchedule,
@@ -86,14 +87,17 @@ type ClasherContextValue = {
     intents: {
       slotId: string;
       wants: boolean;
+      scheduleKeep?: boolean;
       planFrom?: string | null;
       planTo?: string | null;
     }[]
   ) => Promise<void>;
+  patchScheduleKeep: (slotId: string, keep: boolean) => Promise<void>;
   loadDemoFull: () => Promise<void>;
   deleteSquad: () => Promise<void>;
   parseLineupFile: (file: File) => Promise<string[]>;
-  parseScheduleFile: (file: File) => Promise<ScheduleDraftSlot[]>;
+  /** One or more timetable screenshots; results merged and deduped server-side. */
+  parseScheduleFiles: (files: File[]) => Promise<ScheduleDraftSlot[]>;
 };
 
 const ClasherContext = createContext<ClasherContextValue | null>(null);
@@ -225,12 +229,22 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       intents: {
         slotId: string;
         wants: boolean;
+        scheduleKeep?: boolean;
         planFrom?: string | null;
         planTo?: string | null;
       }[]
     ) => {
       const s = requireSession();
       const g = await apiPutSlotIntents(s, intents);
+      setGroup(g);
+    },
+    [requireSession]
+  );
+
+  const patchScheduleKeep = useCallback(
+    async (slotId: string, keep: boolean) => {
+      const s = requireSession();
+      const g = await apiPatchScheduleKeep(s, slotId, keep);
       setGroup(g);
     },
     [requireSession]
@@ -256,8 +270,8 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
     return apiParseLineupImage(file);
   }, []);
 
-  const parseScheduleFile = useCallback(async (file: File) => {
-    return apiParseScheduleImage(file);
+  const parseScheduleFiles = useCallback(async (files: File[]) => {
+    return apiParseScheduleImages(files);
   }, []);
 
   const value = useMemo<ClasherContextValue>(
@@ -277,10 +291,11 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       replaceSchedule,
       setConflict,
       putSlotIntents,
+      patchScheduleKeep,
       loadDemoFull,
       deleteSquad,
       parseLineupFile,
-      parseScheduleFile,
+      parseScheduleFiles,
     }),
     [
       session,
@@ -298,10 +313,11 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       replaceSchedule,
       setConflict,
       putSlotIntents,
+      patchScheduleKeep,
       loadDemoFull,
       deleteSquad,
       parseLineupFile,
-      parseScheduleFile,
+      parseScheduleFiles,
     ]
   );
 

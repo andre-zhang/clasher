@@ -1,5 +1,7 @@
 import type { ScheduleDraftSlot } from "@/lib/api";
 
+import { normalizeScheduleTimesForImport } from "@/lib/scheduleTimeNormalize";
+
 /** If the whole string is uppercase (with letters), convert to Title Case words. */
 export function normalizeImportedText(s: string): string {
   const t = s.trim();
@@ -24,11 +26,12 @@ export function normalizeImportedArtistNames(names: string[]): string[] {
 export function normalizeImportedScheduleSlots(
   slots: ScheduleDraftSlot[]
 ): ScheduleDraftSlot[] {
-  return slots.map((s) => ({
+  const text = slots.map((s) => ({
     dayLabel: normalizeImportedText(s.dayLabel),
     stageName: normalizeImportedText(s.stageName),
     start: s.start.trim(),
     end: s.end.trim(),
     artistName: normalizeImportedText(s.artistName),
   }));
+  return normalizeScheduleTimesForImport(text);
 }

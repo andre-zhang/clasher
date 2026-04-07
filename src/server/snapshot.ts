@@ -127,6 +127,7 @@ export async function buildSnapshot(
     memberSlotIntents: intents.map((i) => ({
       slotId: i.slotId,
       wants: i.wants,
+      scheduleKeep: i.scheduleKeep ?? false,
       planFrom: i.planFrom,
       planTo: i.planTo,
     })),
@@ -134,6 +135,7 @@ export async function buildSnapshot(
       memberId: i.memberId,
       slotId: i.slotId,
       wants: i.wants,
+      scheduleKeep: i.scheduleKeep ?? false,
       planFrom: i.planFrom,
       planTo: i.planTo,
     })),

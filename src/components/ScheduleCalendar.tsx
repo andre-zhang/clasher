@@ -8,6 +8,10 @@ import {
 } from "@/lib/effectiveIntents";
 import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
 import { myTierEmoji, squadReactionPills } from "@/lib/reactionsUi";
+import {
+  memberKeepsSlotOnScheduleShortlist,
+  memberRatesHotForArtist,
+} from "@/lib/scheduleShortlist";
 import { TIER_EMOJI, TIERS_ORDER } from "@/lib/tiers";
 import type { FestivalSnapshot, RatingTier } from "@/lib/types";
 
@@ -50,17 +54,27 @@ export function ScheduleCalendar({
   slotComments = [],
   onAddSlotComment,
   onSetRating,
+  /** Schedule “Your plan” uses shortlist (lineup + pins); Plans uses effective (clashes). */
+  visibilityMode = "effectivePlan",
+  /** Full timetable: pin rows to “Your plan” for this member. */
+  scheduleKeepMemberId,
+  showScheduleKeepToggle = false,
+  onToggleScheduleKeep,
+  onSlotOpenDetail,
 }: {
   schedule: Slot[];
   memberId?: string;
   allMemberSlotIntents?: FestivalSnapshot["allMemberSlotIntents"];
-  /** When set with memberId, applies squad “stay with group” defaults to visibility. */
   group?: FestivalSnapshot | null;
   caption?: string;
   slotComments?: FestivalSnapshot["slotComments"];
   onAddSlotComment?: (slotId: string, body: string) => Promise<void>;
-  /** Quick tier buttons (❤️/🔥/…); only when you pass this + memberId + group. */
   onSetRating?: (artistId: string, tier: RatingTier) => Promise<void>;
+  visibilityMode?: "effectivePlan" | "scheduleShortlist";
+  scheduleKeepMemberId?: string;
+  showScheduleKeepToggle?: boolean;
+  onToggleScheduleKeep?: (slotId: string, keep: boolean) => Promise<void>;
+  onSlotOpenDetail?: (slot: Slot) => void;
 }) {
   const days = useMemo(() => {
     const d = new Set(schedule.map((s) => s.dayLabel.trim()));
@@ -72,7 +86,11 @@ export function ScheduleCalendar({
 
   const filtered = useMemo(() => {
     let rows = schedule.filter((s) => s.dayLabel.trim() === activeDay);
-    if (memberId && group) {
+    if (memberId && group && visibilityMode === "scheduleShortlist") {
+      rows = rows.filter((s) =>
+        memberKeepsSlotOnScheduleShortlist(group, memberId, s.id)
+      );
+    } else if (memberId && group && visibilityMode === "effectivePlan") {
       rows = rows.filter((s) =>
         effectiveMemberWantsSlot(group, memberId, s.id)
       );
@@ -81,41 +99,23 @@ export function ScheduleCalendar({
       rows = rows.filter((s) => memberWantsSlotRaw(all, memberId, s.id));
     }
     return rows;
-  }, [schedule, activeDay, memberId, allMemberSlotIntents, group]);
-
-  const { stages, minM, maxM } = useMemo(() => {
-    if (!filtered.length) {
-      return { stages: [] as string[], minM: 0, maxM: 60 };
-    }
-    const st = [...new Set(filtered.map((s) => s.stageName.trim()))].sort();
-    const mins: number[] = [];
-    for (const s of filtered) {
-      const a = parseHm(s.start);
-      const b = parseHm(s.end);
-      if (!Number.isNaN(a)) mins.push(a);
-      if (!Number.isNaN(b)) mins.push(b);
-    }
-    const lo = Math.min(...mins);
-    const hi = Math.max(...mins);
-    const minM = Math.floor(lo / 30) * 30;
-    const maxM = Math.max(minM + 60, Math.ceil(hi / 30) * 30);
-    return { stages: st, minM, maxM };
-  }, [filtered]);
-
-  const ticks = useMemo(() => {
-    const t: number[] = [];
-    for (let m = minM; m <= maxM; m += 30) t.push(m);
-    return t;
-  }, [minM, maxM]);
+  }, [
+    schedule,
+    activeDay,
+    memberId,
+    allMemberSlotIntents,
+    group,
+    visibilityMode,
+  ]);
 
   const pxPerSlot = 28;
-  const timelineH = Math.max(ticks.length * pxPerSlot, 120);
 
   const noteDialogRef = useRef<HTMLDialogElement>(null);
   const [noteSlotId, setNoteSlotId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [ratingBusy, setRatingBusy] = useState<string | null>(null);
+  const [keepBusy, setKeepBusy] = useState<string | null>(null);
 
   const noteSlot = useMemo(
     () => schedule.find((s) => s.id === noteSlotId) ?? null,
@@ -129,6 +129,66 @@ export function ScheduleCalendar({
   if (!schedule.length) {
     return <p className="text-sm text-zinc-600">No slots.</p>;
   }
+
+  const allStagesForDay = useMemo(() => {
+    const rows = schedule.filter((s) => s.dayLabel.trim() === activeDay);
+    return [...new Set(rows.map((s) => s.stageName.trim()))].sort();
+  }, [schedule, activeDay]);
+
+  const showAllStages =
+    showScheduleKeepToggle &&
+    scheduleKeepMemberId &&
+    group &&
+    onToggleScheduleKeep &&
+    !memberId;
+
+  const stagesFromFiltered = useMemo(() => {
+    if (!filtered.length) return [] as string[];
+    return [...new Set(filtered.map((s) => s.stageName.trim()))].sort();
+  }, [filtered]);
+
+  const stagesToRender = showAllStages ? allStagesForDay : stagesFromFiltered;
+  const slotsForStage = (stage: string) => {
+    const base = schedule.filter(
+      (s) =>
+        s.dayLabel.trim() === activeDay && s.stageName.trim() === stage
+    );
+    if (!showAllStages) {
+      return base.filter((s) => filtered.some((f) => f.id === s.id));
+    }
+    return base;
+  };
+
+  const minMaxForStages = useMemo(() => {
+    const rows = showAllStages
+      ? schedule.filter((s) => s.dayLabel.trim() === activeDay)
+      : filtered;
+    if (!rows.length) {
+      return { minM: 0, maxM: 60 };
+    }
+    const mins: number[] = [];
+    for (const s of rows) {
+      const a = parseHm(s.start);
+      const b = parseHm(s.end);
+      if (!Number.isNaN(a)) mins.push(a);
+      if (!Number.isNaN(b)) mins.push(b);
+    }
+    const lo = Math.min(...mins);
+    const hi = Math.max(...mins);
+    const minM = Math.floor(lo / 30) * 30;
+    const maxM = Math.max(minM + 60, Math.ceil(hi / 30) * 30);
+    return { minM, maxM };
+  }, [showAllStages, schedule, activeDay, filtered]);
+
+  const ticksRender = useMemo(() => {
+    const t: number[] = [];
+    const { minM: lo, maxM: hi } = minMaxForStages;
+    for (let m = lo; m <= hi; m += 30) t.push(m);
+    return t;
+  }, [minMaxForStages]);
+
+  const timelineHRender = Math.max(ticksRender.length * pxPerSlot, 120);
+  const { minM: minMR, maxM: maxMR } = minMaxForStages;
 
   return (
     <div className="space-y-3">
@@ -154,16 +214,18 @@ export function ScheduleCalendar({
         </div>
       ) : null}
 
-      {!filtered.length ? (
+      {!showAllStages && !filtered.length ? (
+        <p className="text-sm text-zinc-600">Nothing for this day.</p>
+      ) : showAllStages && !allStagesForDay.length ? (
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : (
         <div className="flex overflow-x-auto border-2 border-zinc-900 bg-white">
           <div
             className="flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50"
-            style={{ width: 52, minHeight: timelineH }}
+            style={{ width: 52, minHeight: timelineHRender }}
           >
             <div className="h-8 border-b-2 border-zinc-900" />
-            {ticks.map((m) => (
+            {ticksRender.map((m) => (
               <div
                 key={m}
                 className="flex shrink-0 items-start border-b border-zinc-200 px-1 pt-0.5 text-[10px] font-mono text-zinc-600"
@@ -173,183 +235,266 @@ export function ScheduleCalendar({
               </div>
             ))}
           </div>
-          {stages.map((stage) => (
+          {stagesToRender.map((stage) => (
             <div
               key={stage}
               className="relative min-w-[120px] flex-1 border-r-2 border-zinc-900 last:border-r-0"
-              style={{ minHeight: timelineH }}
+              style={{ minHeight: timelineHRender }}
             >
               <div className="sticky top-0 z-[1] h-8 border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-8 text-zinc-900">
                 {stage}
               </div>
               <div
                 className="relative"
-                style={{ height: ticks.length * pxPerSlot }}
+                style={{ height: ticksRender.length * pxPerSlot }}
               >
-                {ticks.map((m, i) => (
+                {ticksRender.map((m, i) => (
                   <div
                     key={m}
                     className="absolute left-0 right-0 border-b border-zinc-100"
                     style={{ top: i * pxPerSlot, height: pxPerSlot }}
                   />
                 ))}
-                {filtered
-                  .filter((s) => s.stageName.trim() === stage)
-                  .map((slot) => {
-                    const ss = parseHm(slot.start);
-                    const ee = parseHm(slot.end);
-                    if (Number.isNaN(ss) || Number.isNaN(ee)) return null;
-                    const top = ((ss - minM) / (maxM - minM)) * 100;
-                    const h = Math.max(((ee - ss) / (maxM - minM)) * 100, 3);
-                    const all =
-                      group?.allMemberSlotIntents ?? allMemberSlotIntents ?? [];
-                    const win =
-                      group && memberId
-                        ? effectiveMemberSlotPlanWindow(group, memberId, slot)
-                        : memberId
-                          ? (() => {
-                              const w = intentWindow(all, memberId, slot.id);
-                              return {
-                                planFrom: w.from,
-                                planTo: w.to,
-                              };
-                            })()
-                          : { planFrom: null, planTo: null };
-                    const sub =
-                      win.planFrom && win.planTo
-                        ? `${win.planFrom}–${win.planTo}`
-                        : null;
-                    const notes = slotNotesFor(slotComments, slot.id);
-                    const notePreview = notes[0];
-                    const showQuickRate = Boolean(
-                      memberId && group && onSetRating
-                    );
-                    const myEmoji = group
-                      ? myTierEmoji(group, slot.artistId, memberId!)
-                      : "·";
-                    const squadPills = group
-                      ? squadReactionPills(group, slot.artistId)
-                      : [];
+                {slotsForStage(stage).map((slot) => {
+                  const ss = parseHm(slot.start);
+                  const ee = parseHm(slot.end);
+                  if (Number.isNaN(ss) || Number.isNaN(ee)) return null;
+                  const top = ((ss - minMR) / (maxMR - minMR)) * 100;
+                  const h = Math.max(((ee - ss) / (maxMR - minMR)) * 100, 3);
+                  const all =
+                    group?.allMemberSlotIntents ?? allMemberSlotIntents ?? [];
+                  const planMember = memberId ?? scheduleKeepMemberId;
+                  const win =
+                    group && planMember
+                      ? effectiveMemberSlotPlanWindow(
+                          group,
+                          planMember,
+                          slot
+                        )
+                      : planMember
+                        ? (() => {
+                            const w = intentWindow(all, planMember, slot.id);
+                            return {
+                              planFrom: w.from,
+                              planTo: w.to,
+                            };
+                          })()
+                        : { planFrom: null, planTo: null };
+                  const sub =
+                    win.planFrom && win.planTo
+                      ? `${win.planFrom}–${win.planTo}`
+                      : null;
+                  const notes = slotNotesFor(slotComments, slot.id);
+                  const notePreview = notes[0];
+                  const showQuickRate = Boolean(
+                    memberId && group && onSetRating
+                  );
+                  const myEmoji = group
+                    ? myTierEmoji(group, slot.artistId, memberId!)
+                    : "·";
+                  const squadPills = group
+                    ? squadReactionPills(group, slot.artistId)
+                    : [];
 
-                    return (
-                      <div
-                        key={slot.id}
-                        title={`${slot.artistName} ${slot.start}–${slot.end}`}
-                        className="absolute left-0.5 right-0.5 overflow-hidden border-2 border-zinc-900 bg-indigo-50 px-1 py-0.5 text-left shadow-[2px_2px_0_0_#18181b]"
-                        style={{
-                          top: `${top}%`,
-                          height: `${h}%`,
-                        }}
-                      >
-                        <p className="text-[11px] font-semibold leading-tight text-zinc-900">
-                          {slot.artistName}
-                        </p>
+                  const skMid = scheduleKeepMemberId;
+                  const hot =
+                    skMid && group
+                      ? memberRatesHotForArtist(
+                          group,
+                          skMid,
+                          slot.artistId
+                        )
+                      : false;
+                  const onShortlist =
+                    skMid && group
+                      ? memberKeepsSlotOnScheduleShortlist(
+                          group,
+                          skMid,
+                          slot.id
+                        )
+                      : false;
 
-                        {showQuickRate || squadPills.length > 0 ? (
-                          <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                            {showQuickRate ? (
-                              <span
-                                className="inline-flex flex-wrap gap-0.5"
-                                title="Your rating"
-                              >
-                                {TIERS_ORDER.map((tier) => {
-                                  const active =
-                                    myEmoji === TIER_EMOJI[tier];
-                                  return (
-                                    <button
-                                      key={tier}
-                                      type="button"
-                                      disabled={ratingBusy === slot.id}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (!onSetRating) return;
-                                        setRatingBusy(slot.id);
-                                        void (async () => {
-                                          try {
-                                            await onSetRating(
-                                              slot.artistId,
-                                              tier
-                                            );
-                                          } finally {
-                                            setRatingBusy(null);
-                                          }
-                                        })();
-                                      }}
-                                      className={`min-h-[18px] min-w-[18px] rounded border px-0.5 text-[11px] leading-none transition-colors ${
-                                        active
-                                          ? "border-zinc-900 bg-zinc-900 text-white"
-                                          : "border-zinc-300 bg-white text-zinc-800 hover:border-zinc-900"
-                                      } disabled:opacity-40`}
-                                    >
-                                      {TIER_EMOJI[tier]}
-                                    </button>
-                                  );
-                                })}
-                              </span>
-                            ) : null}
-                            {squadPills.length > 0 ? (
-                              <span className="inline-flex flex-wrap gap-0.5">
-                                {squadPills.map(({ tier, emoji, count }) => (
-                                  <span
-                                    key={tier}
-                                    className="rounded-full border border-zinc-300 bg-white/90 px-1 py-px text-[9px] font-medium tabular-nums text-zinc-700"
-                                  >
-                                    {emoji}
-                                    {count}
-                                  </span>
-                                ))}
-                              </span>
-                            ) : null}
-                          </div>
-                        ) : null}
-
-                        <p className="text-[10px] font-mono text-zinc-600">
-                          {slot.start}–{slot.end}
-                        </p>
-                        {sub ? (
-                          <p className="text-[10px] text-zinc-700">{sub}</p>
-                        ) : null}
-                        {notes.length > 0 ? (
-                          <p
-                            className="mt-0.5 truncate text-[9px] text-zinc-700"
-                            title={notes
-                              .map((n) => {
-                                const who = group?.members.find(
-                                  (m) => m.id === n.memberId
-                                )?.displayName;
-                                return `${who ?? "?"}: ${n.body}`;
-                              })
-                              .join("\n")}
-                          >
-                            {notePreview
-                              ? `${group?.members.find((m) => m.id === notePreview.memberId)?.displayName?.split(" ")[0] ?? "?"}: ${notePreview.body}`
-                              : ""}
-                            {notes.length > 1 ? ` +${notes.length - 1}` : ""}
-                          </p>
-                        ) : null}
-                        {onAddSlotComment ? (
-                          <div className="mt-0.5 flex items-start justify-end gap-0.5">
-                            <button
-                              type="button"
-                              aria-label={
-                                notes.length
-                                  ? "Open notes"
-                                  : "Add note"
+                  return (
+                    <div
+                      key={slot.id}
+                      title={`${slot.artistName} ${slot.start}–${slot.end}`}
+                      role={onSlotOpenDetail ? "button" : undefined}
+                      tabIndex={onSlotOpenDetail ? 0 : undefined}
+                      onClick={
+                        onSlotOpenDetail
+                          ? () => onSlotOpenDetail(slot)
+                          : undefined
+                      }
+                      onKeyDown={
+                        onSlotOpenDetail
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                onSlotOpenDetail(slot);
                               }
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setNoteDraft("");
-                                setNoteSlotId(slot.id);
-                              }}
-                              className="flex h-6 w-6 shrink-0 items-center justify-center border-2 border-zinc-900 bg-white text-sm font-bold leading-none text-zinc-900 shadow-[1px_1px_0_0_#18181b] hover:bg-zinc-100"
+                            }
+                          : undefined
+                      }
+                      className={`absolute left-0.5 right-0.5 overflow-hidden border-2 border-zinc-900 bg-indigo-50 px-1 py-0.5 text-left shadow-[2px_2px_0_0_#18181b] ${
+                        onSlotOpenDetail
+                          ? "cursor-pointer hover:bg-indigo-100"
+                          : ""
+                      }`}
+                      style={{
+                        top: `${top}%`,
+                        height: `${h}%`,
+                      }}
+                    >
+                      <p className="text-[11px] font-semibold leading-tight text-zinc-900">
+                        {slot.artistName}
+                      </p>
+
+                      {showQuickRate || squadPills.length > 0 ? (
+                        <div
+                          className="mt-0.5 flex flex-wrap items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          {showQuickRate ? (
+                            <span
+                              className="inline-flex flex-wrap gap-0.5"
+                              title="Your rating"
                             >
-                              +
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
+                              {TIERS_ORDER.map((tier) => {
+                                const active = myEmoji === TIER_EMOJI[tier];
+                                return (
+                                  <button
+                                    key={tier}
+                                    type="button"
+                                    disabled={ratingBusy === slot.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!onSetRating) return;
+                                      setRatingBusy(slot.id);
+                                      void (async () => {
+                                        try {
+                                          await onSetRating(
+                                            slot.artistId,
+                                            tier
+                                          );
+                                        } finally {
+                                          setRatingBusy(null);
+                                        }
+                                      })();
+                                    }}
+                                    className={`min-h-[18px] min-w-[18px] rounded border px-0.5 text-[11px] leading-none transition-colors ${
+                                      active
+                                        ? "border-zinc-900 bg-zinc-900 text-white"
+                                        : "border-zinc-300 bg-white text-zinc-800 hover:border-zinc-900"
+                                    } disabled:opacity-40`}
+                                  >
+                                    {TIER_EMOJI[tier]}
+                                  </button>
+                                );
+                              })}
+                            </span>
+                          ) : null}
+                          {squadPills.length > 0 ? (
+                            <span className="inline-flex flex-wrap gap-0.5">
+                              {squadPills.map(({ tier, emoji, count }) => (
+                                <span
+                                  key={tier}
+                                  className="rounded-full border border-zinc-300 bg-white/90 px-1 py-px text-[9px] font-medium tabular-nums text-zinc-700"
+                                >
+                                  {emoji}
+                                  {count}
+                                </span>
+                              ))}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      <p className="text-[10px] font-mono text-zinc-600">
+                        {slot.start}–{slot.end}
+                      </p>
+                      {sub ? (
+                        <p className="text-[10px] text-zinc-700">{sub}</p>
+                      ) : null}
+
+                      {showScheduleKeepToggle &&
+                      skMid &&
+                      group &&
+                      onToggleScheduleKeep ? (
+                        <label
+                          className="mt-0.5 flex cursor-pointer items-center gap-1 border-t border-zinc-200 pt-0.5 text-[9px] text-zinc-800"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={onShortlist}
+                            disabled={hot || keepBusy === slot.id}
+                            title={
+                              hot
+                                ? "In lineup as ❤️/🔥 — remove there to drop from Your plan"
+                                : "Show on Your plan"
+                            }
+                            onChange={(e) => {
+                              const next = e.target.checked;
+                              setKeepBusy(slot.id);
+                              void (async () => {
+                                try {
+                                  await onToggleScheduleKeep(slot.id, next);
+                                } finally {
+                                  setKeepBusy(null);
+                                }
+                              })();
+                            }}
+                            className="h-3 w-3 border border-zinc-900"
+                          />
+                          <span>Your plan</span>
+                        </label>
+                      ) : null}
+
+                      {notes.length > 0 ? (
+                        <p
+                          className="mt-0.5 truncate text-[9px] text-zinc-700"
+                          title={notes
+                            .map((n) => {
+                              const who = group?.members.find(
+                                (m) => m.id === n.memberId
+                              )?.displayName;
+                              return `${who ?? "?"}: ${n.body}`;
+                            })
+                            .join("\n")}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {notePreview
+                            ? `${group?.members.find((m) => m.id === notePreview.memberId)?.displayName?.split(" ")[0] ?? "?"}: ${notePreview.body}`
+                            : ""}
+                          {notes.length > 1 ? ` +${notes.length - 1}` : ""}
+                        </p>
+                      ) : null}
+                      {onAddSlotComment ? (
+                        <div
+                          className="mt-0.5 flex items-start justify-end gap-0.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            aria-label={
+                              notes.length ? "Open notes" : "Add note"
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNoteDraft("");
+                              setNoteSlotId(slot.id);
+                            }}
+                            className="flex h-6 w-6 shrink-0 items-center justify-center border-2 border-zinc-900 bg-white text-sm font-bold leading-none text-zinc-900 shadow-[1px_1px_0_0_#18181b] hover:bg-zinc-100"
+                          >
+                            +
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

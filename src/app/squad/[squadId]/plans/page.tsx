@@ -1,9 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { useClasher } from "@/context/ClasherContext";
+import {
+  describeConflictResolution,
+  findMyResolution,
+  isMyClashResolved,
+  slotsTimeOverlap,
+} from "@/lib/clash";
 import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
@@ -59,6 +65,46 @@ function labelAtBucket(
   return "—";
 }
 
+function planDetailBullets(
+  group: FestivalSnapshot,
+  memberId: string,
+  slot: FestivalSnapshot["schedule"][0]
+): string[] {
+  const lines: string[] = [
+    `Full listing: ${slot.start}–${slot.end} · ${slot.stageName} · ${slot.dayLabel}`,
+  ];
+  if (effectiveMemberWantsSlot(group, memberId, slot.id)) {
+    const w = effectiveMemberSlotPlanWindow(group, memberId, slot);
+    if (w.planFrom && w.planTo) {
+      lines.push(`Your plan window: ${w.planFrom}–${w.planTo}`);
+    } else {
+      lines.push("Your plan window: full set (no partial time)");
+    }
+  } else {
+    lines.push("Not on your plan for this window (clash / flags).");
+  }
+
+  for (const other of group.schedule) {
+    if (other.id === slot.id) continue;
+    if (!slotsTimeOverlap(slot, other)) continue;
+    const x = slot.id <= other.id ? slot.id : other.id;
+    const y = slot.id <= other.id ? other.id : slot.id;
+    const a = group.schedule.find((s) => s.id === x)!;
+    const b = group.schedule.find((s) => s.id === y)!;
+    const r = findMyResolution(group, memberId, x, y);
+    if (r && isMyClashResolved(r)) {
+      lines.push(
+        `Clash with ${other.artistName}: ${describeConflictResolution(r, a, b)}`
+      );
+    } else if (r) {
+      lines.push(
+        `Clash with ${other.artistName}: in progress / undecided`
+      );
+    }
+  }
+  return lines;
+}
+
 export default function PlansPage() {
   const { session, group, putSlotIntents, addSlotComment, setRating } =
     useClasher();
@@ -66,6 +112,10 @@ export default function PlansPage() {
   const [syncBusy, setSyncBusy] = useState(false);
   const [memberId, setMemberId] = useState<string | null>(null);
   const [day, setDay] = useState<string | null>(null);
+  const [planDetailSlotId, setPlanDetailSlotId] = useState<string | null>(
+    null
+  );
+  const planDetailRef = useRef<HTMLDialogElement>(null);
 
   const me = session?.memberId ?? null;
   const activeMember = memberId ?? me;
@@ -80,7 +130,10 @@ export default function PlansPage() {
 
   const { buckets, members } = useMemo(() => {
     if (!group || !activeDay) {
-      return { buckets: [] as number[], members: [] as { id: string; displayName: string }[] };
+      return {
+        buckets: [] as number[],
+        members: [] as { id: string; displayName: string }[],
+      };
     }
     const mins: number[] = [];
     for (const s of group.schedule) {
@@ -97,6 +150,18 @@ export default function PlansPage() {
     for (let t = lo; t < hi; t += 30) b.push(t);
     return { buckets: b, members: group.members };
   }, [group, activeDay]);
+
+  const detailSlot = useMemo(
+    () =>
+      group && planDetailSlotId
+        ? group.schedule.find((s) => s.id === planDetailSlotId) ?? null
+        : null,
+    [group, planDetailSlotId]
+  );
+
+  useEffect(() => {
+    if (planDetailSlotId) planDetailRef.current?.showModal();
+  }, [planDetailSlotId]);
 
   if (!group || !session) return null;
 
@@ -167,6 +232,10 @@ export default function PlansPage() {
               ))}
             </select>
           </label>
+          <p className="text-[11px] text-zinc-600">
+            Reflects clash choices and squad defaults. Tap a set for full times
+            and how overlaps were resolved.
+          </p>
           {activeMember ? (
             <ScheduleCalendar
               schedule={group.schedule}
@@ -175,11 +244,13 @@ export default function PlansPage() {
               group={group}
               slotComments={group.slotComments}
               onAddSlotComment={addSlotComment}
+              visibilityMode="effectivePlan"
               onSetRating={
                 activeMember === session.memberId
                   ? (artistId, tier) => setRating(artistId, tier)
                   : undefined
               }
+              onSlotOpenDetail={(slot) => setPlanDetailSlotId(slot.id)}
             />
           ) : null}
         </div>
@@ -263,6 +334,34 @@ export default function PlansPage() {
           )}
         </div>
       )}
+
+      <dialog
+        ref={planDetailRef}
+        className="max-w-md border-2 border-zinc-900 bg-white p-4 shadow-[4px_4px_0_0_#18181b] backdrop:bg-black/40"
+        onClose={() => setPlanDetailSlotId(null)}
+      >
+        {detailSlot && activeMember ? (
+          <>
+            <h3 className="text-base font-bold text-zinc-900">
+              {detailSlot.artistName}
+            </h3>
+            <ul className="mt-3 list-disc space-y-2 pl-4 text-sm text-zinc-800">
+              {planDetailBullets(group, activeMember, detailSlot).map(
+                (line, i) => (
+                  <li key={i}>{line}</li>
+                )
+              )}
+            </ul>
+            <button
+              type="button"
+              className="mt-4 text-xs text-zinc-600 underline"
+              onClick={() => planDetailRef.current?.close()}
+            >
+              Close
+            </button>
+          </>
+        ) : null}
+      </dialog>
     </div>
   );
 }

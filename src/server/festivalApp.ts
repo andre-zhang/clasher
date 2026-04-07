@@ -15,6 +15,8 @@ import {
 } from "./demoFestivalData";
 import { patchIntentsForConflict } from "./applyConflictIntents";
 import { wantsDeltaFromChoice } from "./memberSlotIntentPatch";
+import { normalizeScheduleTimesForImport } from "@/lib/scheduleTimeNormalize";
+
 import { buildSnapshot } from "./snapshot";
 import { runVisionJson } from "./vision";
 
@@ -556,6 +558,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
             },
             data: {
               wants: existing.wants || row.wants,
+              scheduleKeep: existing.scheduleKeep || row.scheduleKeep,
               planFrom: null,
               planTo: null,
             },
@@ -567,6 +570,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
               memberId: row.memberId,
               slotId: keep,
               wants: row.wants,
+              scheduleKeep: row.scheduleKeep,
               planFrom: null,
               planTo: null,
             },
@@ -778,6 +782,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
               memberId: friend.id,
               slotId: slot.id,
               wants,
+              scheduleKeep: wants,
               planFrom: null,
               planTo: null,
             },
@@ -1075,6 +1080,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
               memberId: member.id,
               slotId: sid,
               wants,
+              scheduleKeep: false,
               planFrom: null,
               planTo: null,
             },
@@ -1186,6 +1192,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
       intents?: {
         slotId?: string;
         wants?: boolean;
+        scheduleKeep?: boolean;
         planFrom?: string | null;
         planTo?: string | null;
       }[];
@@ -1206,6 +1213,10 @@ export function createFestivalApp(apiBasePath: string): Hono {
           memberId: member.id,
           slotId: String(row.slotId ?? ""),
           wants: Boolean(row.wants),
+          scheduleKeep:
+            row.scheduleKeep !== undefined && row.scheduleKeep !== null
+              ? Boolean(row.scheduleKeep)
+              : false,
           planFrom:
             row.planFrom != null && String(row.planFrom).trim()
               ? String(row.planFrom).trim()
@@ -1219,6 +1230,43 @@ export function createFestivalApp(apiBasePath: string): Hono {
       if (rows.length > 0) {
         await tx.memberSlotIntent.createMany({ data: rows });
       }
+    });
+    const snap = await buildSnapshot(prisma, member.squadId, member.id);
+    return c.json({ group: snap });
+  });
+
+  app.patch("/squads/:squadId/schedule-keep", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    let body: { slotId?: string; keep?: boolean };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid_json" }, 400);
+    }
+    const slotId = String(body.slotId ?? "").trim();
+    if (!slotId) return c.json({ error: "bad_request" }, 400);
+    const keep = Boolean(body.keep);
+    const slot = await prisma.scheduleSlot.findFirst({
+      where: { id: slotId, squadId: member.squadId },
+    });
+    if (!slot) return c.json({ error: "not_found" }, 404);
+
+    await prisma.memberSlotIntent.upsert({
+      where: {
+        memberId_slotId: { memberId: member.id, slotId },
+      },
+      create: {
+        squadId: member.squadId,
+        memberId: member.id,
+        slotId,
+        wants: true,
+        scheduleKeep: keep,
+        planFrom: null,
+        planTo: null,
+      },
+      update: { scheduleKeep: keep },
     });
     const snap = await buildSnapshot(prisma, member.squadId, member.id);
     return c.json({ group: snap });
@@ -1238,26 +1286,73 @@ export function createFestivalApp(apiBasePath: string): Hono {
   });
 
   app.post("/parse/schedule", async (c) => {
-    const parsed = await visionJsonFromForm(
-      c,
-      "Extract the timetable: each performance with day name (short), stage/venue name, start time, end time, and artist. Use 24h HH:mm for times if possible.",
-      'Schema: {"slots":[{"dayLabel":"Fri","stageName":"Main","start":"18:00","end":"19:00","artistName":"Act"}]}'
-    );
-    if (parsed instanceof Response) return parsed;
-    const rawSlots = Array.isArray(parsed.slots) ? parsed.slots : [];
-    const slots = rawSlots
-      .map((s) => s as Record<string, unknown>)
-      .filter(Boolean)
-      .map((s) => ({
-        dayLabel: String(s.dayLabel ?? s.day ?? "").trim() || "?",
-        stageName: String(s.stageName ?? s.stage ?? "Main").trim(),
-        start: String(s.start ?? s.startTime ?? "").trim(),
-        end: String(s.end ?? s.endTime ?? "").trim(),
-        artistName: String(
-          s.artistName ?? s.artist ?? s.name ?? ""
-        ).trim(),
-      }))
-      .filter((s) => s.artistName && s.start && s.end);
+    const prompt =
+      "Extract the timetable: each performance with day name (short), stage/venue name, start time, end time, and artist. " +
+      "Use 24h HH:mm when obvious; otherwise use 12h-style times (am/pm if printed, or bare hours like 1, 7:30). " +
+      "Do not invent am/pm when missing — bare numbers are OK.";
+    const schemaHint =
+      'Schema: {"slots":[{"dayLabel":"Fri","stageName":"Main","start":"18:00","end":"19:00","artistName":"Act"}]}';
+
+    const form = await c.req.formData();
+    const files = form
+      .getAll("file")
+      .filter((f): f is File => f instanceof File);
+    if (files.length === 0) {
+      return c.json(
+        {
+          error: "missing_file",
+          message: "Expected one or more multipart files named file",
+        },
+        400
+      );
+    }
+
+    const merged: {
+      dayLabel: string;
+      stageName: string;
+      start: string;
+      end: string;
+      artistName: string;
+    }[] = [];
+
+    for (const file of files) {
+      const buf = Buffer.from(await file.arrayBuffer());
+      const mime = file.type || "image/jpeg";
+      const result = await runVisionJson(buf, mime, schemaHint, prompt);
+      if (!result.ok) {
+        return c.json(
+          { error: "vision_unconfigured", message: result.message },
+          503
+        );
+      }
+      const rawSlots = Array.isArray(result.json.slots)
+        ? result.json.slots
+        : [];
+      for (const item of rawSlots) {
+        const s = item as Record<string, unknown>;
+        const row = {
+          dayLabel: String(s.dayLabel ?? s.day ?? "").trim() || "?",
+          stageName: String(s.stageName ?? s.stage ?? "Main").trim(),
+          start: String(s.start ?? s.startTime ?? "").trim(),
+          end: String(s.end ?? s.endTime ?? "").trim(),
+          artistName: String(
+            s.artistName ?? s.artist ?? s.name ?? ""
+          ).trim(),
+        };
+        if (row.artistName && row.start && row.end) merged.push(row);
+      }
+    }
+
+    const seen = new Set<string>();
+    const deduped = merged.filter((s) => {
+      const k =
+        `${s.dayLabel}\t${s.stageName}\t${s.start}\t${s.end}\t${s.artistName}`.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+
+    const slots = normalizeScheduleTimesForImport(deduped);
     return c.json({ slots });
   });
 
