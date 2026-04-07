@@ -15,6 +15,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
     "@prisma/client": "^6.19.0",
+    "prisma": "^6.19.0",
     "hono": "^4.12.10",
     "next": "15.5.14",
     "openai": "^6.33.0",
@@ -29,7 +30,6 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.14",
     "postcss": "^8",
-    "prisma": "^6.19.0",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
   }
