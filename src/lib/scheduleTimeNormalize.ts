@@ -27,7 +27,7 @@ function normalizeOneTime(
   const hm = s.match(/^(\d{1,2})(?::(\d{2}))?$/);
   if (!hm) return s;
 
-  let hour = parseInt(hm[1]!, 10);
+  const hour = parseInt(hm[1]!, 10);
   const minute = hm[2] ? parseInt(hm[2], 10) : 0;
   if (minute < 0 || minute > 59) return s;
 

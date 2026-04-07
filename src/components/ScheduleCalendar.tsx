@@ -126,10 +126,6 @@ export function ScheduleCalendar({
     if (noteSlotId) noteDialogRef.current?.showModal();
   }, [noteSlotId]);
 
-  if (!schedule.length) {
-    return <p className="text-sm text-zinc-600">No slots.</p>;
-  }
-
   const allStagesForDay = useMemo(() => {
     const rows = schedule.filter((s) => s.dayLabel.trim() === activeDay);
     return [...new Set(rows.map((s) => s.stageName.trim()))].sort();
@@ -189,6 +185,10 @@ export function ScheduleCalendar({
 
   const timelineHRender = Math.max(ticksRender.length * pxPerSlot, 120);
   const { minM: minMR, maxM: maxMR } = minMaxForStages;
+
+  if (!schedule.length) {
+    return <p className="text-sm text-zinc-600">No slots.</p>;
+  }
 
   return (
     <div className="space-y-3">
