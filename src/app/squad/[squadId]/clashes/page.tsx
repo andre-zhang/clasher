@@ -13,6 +13,28 @@ import type { ConflictPlanPayload } from "@/lib/api";
 import { buildSlotIntentsFromHotRatings } from "@/lib/syncIntentsFromRatings";
 import type { FestivalSnapshot } from "@/lib/types";
 
+function describeSquadDefaultBanner(
+  def: NonNullable<ReturnType<typeof findSquadClashDefault>>,
+  a: FestivalSnapshot["schedule"][0],
+  b: FestivalSnapshot["schedule"][0]
+): string {
+  const mode = def.defaultPlanMode ?? "pick";
+  if (mode === "pick" && def.choiceSlotId) {
+    return def.choiceSlotId === a.id ? a.artistName : b.artistName;
+  }
+  if (
+    mode === "split_seq" &&
+    def.splitFirstSlotId &&
+    def.splitSecondSlotId
+  ) {
+    const n = (id: string) =>
+      id === a.id ? a.artistName : id === b.id ? b.artistName : "?";
+    return `Split: ${n(def.splitFirstSlotId)} → ${n(def.splitSecondSlotId)}`;
+  }
+  if (mode === "custom") return "Custom times";
+  return "—";
+}
+
 export default function ClashesPage() {
   const { session, group, setConflict, putSlotIntents } = useClasher();
   const [err, setErr] = useState<string | null>(null);
@@ -166,11 +188,13 @@ function ClashCard({
 
   const squadDef = findSquadClashDefault(group, a.id, b.id);
   const confirmRef = useRef<HTMLDialogElement>(null);
+  const [squadDefaultOpen, setSquadDefaultOpen] = useState(false);
   const [squadDefaultMode, setSquadDefaultMode] = useState<
-    "none" | "set_a" | "set_b"
+    "none" | "set_a" | "set_b" | "split_ab" | "split_ba" | "custom"
   >("none");
   const [pendingGroupSave, setPendingGroupSave] =
     useState<ConflictPlanPayload | null>(null);
+  const [localErr, setLocalErr] = useState<string | null>(null);
 
   const others = group.conflictResolutions.filter(
     (c) =>
@@ -231,16 +255,56 @@ function ClashCard({
   }
 
   function openGroupSave() {
-    if (squadDefaultMode === "set_a" || squadDefaultMode === "set_b") {
-      const choice = squadDefaultMode === "set_a" ? a.id : b.id;
-      setPendingGroupSave(
-        buildGroupPayload({ squadDefaultChoiceSlotId: choice })
-      );
-      confirmRef.current?.showModal();
-    } else {
-      void onSave(buildGroupPayload());
+    setLocalErr(null);
+    const base = buildGroupPayload();
+
+    if (squadDefaultMode === "none") {
+      void onSave(base);
+      return;
     }
+
+    let extra: Partial<ConflictPlanPayload> = {};
+    if (squadDefaultMode === "set_a") {
+      extra = { squadDefaultChoiceSlotId: a.id };
+    } else if (squadDefaultMode === "set_b") {
+      extra = { squadDefaultChoiceSlotId: b.id };
+    } else if (squadDefaultMode === "split_ab") {
+      extra = { squadDefaultSplitOrderSlotIds: [a.id, b.id] };
+    } else if (squadDefaultMode === "split_ba") {
+      extra = { squadDefaultSplitOrderSlotIds: [b.id, a.id] };
+    } else if (squadDefaultMode === "custom") {
+      const wins = [
+        { slotId: a.id, planFrom: cFromA.trim(), planTo: cToA.trim() },
+        { slotId: b.id, planFrom: cFromB.trim(), planTo: cToB.trim() },
+      ];
+      const ok = wins.every(
+        (w) =>
+          /^\d{1,2}:\d{2}$/.test(w.planFrom) &&
+          /^\d{1,2}:\d{2}$/.test(w.planTo)
+      );
+      if (!ok) {
+        setLocalErr("Custom squad default: use HH:mm (e.g. 18:30) for both sets.");
+        return;
+      }
+      extra = { squadDefaultCustomWindows: wins };
+    }
+
+    setPendingGroupSave({ ...base, ...extra });
+    confirmRef.current?.showModal();
   }
+
+  const squadDefaultSummary =
+    squadDefaultMode === "none"
+      ? "Won’t change the squad default"
+      : squadDefaultMode === "set_a"
+        ? `Set pick: ${a.artistName}`
+        : squadDefaultMode === "set_b"
+          ? `Set pick: ${b.artistName}`
+          : squadDefaultMode === "split_ab"
+            ? `Split: ${a.artistName} → ${b.artistName}`
+            : squadDefaultMode === "split_ba"
+              ? `Split: ${b.artistName} → ${a.artistName}`
+              : "Set custom times for the squad";
 
   return (
     <li className="border-2 border-zinc-900 bg-white p-4 shadow-[3px_3px_0_0_#18181b]">
@@ -264,7 +328,7 @@ function ClashCard({
       {squadDef ? (
         <p className="mt-2 rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-xs text-indigo-950">
           <span className="font-semibold">Squad default:</span>{" "}
-          {squadDef.choiceSlotId === a.id ? a.artistName : b.artistName}
+          {describeSquadDefaultBanner(squadDef, a, b)}
           <span className="text-indigo-700">
             {" "}
             (
@@ -372,49 +436,152 @@ function ClashCard({
               </button>
             </div>
 
-            <fieldset className="space-y-2 border border-zinc-200 p-2">
-              <legend className="px-1 text-[10px] font-bold uppercase text-zinc-500">
-                Squad default
-              </legend>
-              <p className="text-[11px] text-zinc-600">
-                Choose whether to set the group’s pick for everyone on “stay with
-                group,” or only save your own follow-group choice.
-              </p>
-              <label className="flex cursor-pointer items-start gap-2 text-xs">
-                <input
-                  type="radio"
-                  name={`squad-def-${a.id}-${b.id}`}
-                  checked={squadDefaultMode === "none"}
-                  onChange={() => setSquadDefaultMode("none")}
-                  className="mt-0.5"
-                />
-                <span>Don’t change the squad default</span>
-              </label>
-              <label className="flex cursor-pointer items-start gap-2 text-xs">
-                <input
-                  type="radio"
-                  name={`squad-def-${a.id}-${b.id}`}
-                  checked={squadDefaultMode === "set_a"}
-                  onChange={() => setSquadDefaultMode("set_a")}
-                  className="mt-0.5"
-                />
-                <span>
-                  Set squad default: <strong>{a.artistName}</strong>
+            <div className="space-y-2 border border-zinc-200 bg-zinc-50/50 p-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setSquadDefaultOpen((o) => !o)}
+                className="flex w-full items-center justify-between gap-2 border-2 border-zinc-900 bg-white px-2 py-1.5 text-left text-[10px] font-bold uppercase tracking-wide text-zinc-700 shadow-[1px_1px_0_0_#18181b] hover:bg-zinc-50 disabled:opacity-40"
+              >
+                <span>Squad default</span>
+                <span className="text-sm font-bold" aria-hidden>
+                  {squadDefaultOpen ? "−" : "+"}
                 </span>
-              </label>
-              <label className="flex cursor-pointer items-start gap-2 text-xs">
-                <input
-                  type="radio"
-                  name={`squad-def-${a.id}-${b.id}`}
-                  checked={squadDefaultMode === "set_b"}
-                  onChange={() => setSquadDefaultMode("set_b")}
-                  className="mt-0.5"
-                />
-                <span>
-                  Set squad default: <strong>{b.artistName}</strong>
-                </span>
-              </label>
-            </fieldset>
+              </button>
+              {!squadDefaultOpen ? (
+                <p className="px-0.5 text-[10px] text-zinc-600">
+                  {squadDefaultSummary}
+                </p>
+              ) : (
+                <>
+                  <p className="text-[11px] text-zinc-600">
+                    Optional: set how the whole squad resolves this clash for
+                    anyone on “stay with group.” Otherwise only your follow-group
+                    choice is saved.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setSquadDefaultMode("none")}
+                      className={`border-2 px-2 py-1 text-xs font-medium ${
+                        squadDefaultMode === "none"
+                          ? "border-zinc-900 bg-zinc-900 text-white"
+                          : "border-zinc-900 bg-white"
+                      }`}
+                    >
+                      Don’t change default
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setSquadDefaultMode("set_a")}
+                      className={`border-2 px-2 py-1 text-xs font-medium ${
+                        squadDefaultMode === "set_a"
+                          ? "border-zinc-900 bg-zinc-900 text-white"
+                          : "border-zinc-900 bg-white"
+                      }`}
+                    >
+                      Pick: {a.artistName}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setSquadDefaultMode("set_b")}
+                      className={`border-2 px-2 py-1 text-xs font-medium ${
+                        squadDefaultMode === "set_b"
+                          ? "border-zinc-900 bg-zinc-900 text-white"
+                          : "border-zinc-900 bg-white"
+                      }`}
+                    >
+                      Pick: {b.artistName}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setSquadDefaultMode("split_ab")}
+                      className={`border-2 px-2 py-1 text-xs font-medium ${
+                        squadDefaultMode === "split_ab"
+                          ? "border-zinc-900 bg-zinc-900 text-white"
+                          : "border-zinc-900 bg-white"
+                      }`}
+                    >
+                      Split: {a.artistName} → {b.artistName}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setSquadDefaultMode("split_ba")}
+                      className={`border-2 px-2 py-1 text-xs font-medium ${
+                        squadDefaultMode === "split_ba"
+                          ? "border-zinc-900 bg-zinc-900 text-white"
+                          : "border-zinc-900 bg-white"
+                      }`}
+                    >
+                      Split: {b.artistName} → {a.artistName}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setSquadDefaultMode("custom")}
+                      className={`border-2 px-2 py-1 text-xs font-medium ${
+                        squadDefaultMode === "custom"
+                          ? "border-zinc-900 bg-zinc-900 text-white"
+                          : "border-zinc-900 bg-white"
+                      }`}
+                    >
+                      Custom times
+                    </button>
+                  </div>
+                  {squadDefaultMode === "custom" ? (
+                    <div className="grid gap-2 sm:grid-cols-2 text-xs">
+                      <div className="space-y-1 border border-zinc-300 bg-white p-2">
+                        <p className="font-semibold">{a.artistName}</p>
+                        <label className="block">
+                          From
+                          <input
+                            className="mt-0.5 w-full border-2 border-zinc-900 px-1 font-mono"
+                            value={cFromA}
+                            onChange={(e) => setCFromA(e.target.value)}
+                          />
+                        </label>
+                        <label className="block">
+                          To
+                          <input
+                            className="mt-0.5 w-full border-2 border-zinc-900 px-1 font-mono"
+                            value={cToA}
+                            onChange={(e) => setCToA(e.target.value)}
+                          />
+                        </label>
+                      </div>
+                      <div className="space-y-1 border border-zinc-300 bg-white p-2">
+                        <p className="font-semibold">{b.artistName}</p>
+                        <label className="block">
+                          From
+                          <input
+                            className="mt-0.5 w-full border-2 border-zinc-900 px-1 font-mono"
+                            value={cFromB}
+                            onChange={(e) => setCFromB(e.target.value)}
+                          />
+                        </label>
+                        <label className="block">
+                          To
+                          <input
+                            className="mt-0.5 w-full border-2 border-zinc-900 px-1 font-mono"
+                            value={cToB}
+                            onChange={(e) => setCToB(e.target.value)}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+
+            {localErr ? (
+              <p className="text-xs text-red-800">{localErr}</p>
+            ) : null}
 
             {squadDef ? (
               <button
@@ -554,9 +721,9 @@ function ClashCard({
         onClose={() => setPendingGroupSave(null)}
       >
         <p className="text-sm text-zinc-800">
-          This makes the decision for the group: everyone who stays on “follow
-          group” will use this pick for this clash until someone else sets a new
-          squad default.
+          This updates the squad default for this clash: everyone on “stay with
+          group” follows this plan (pick, split, or custom times) until someone
+          changes it.
         </p>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button

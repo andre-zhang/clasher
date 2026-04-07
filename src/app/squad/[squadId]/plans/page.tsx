@@ -4,7 +4,10 @@ import { useMemo, useState } from "react";
 
 import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { useClasher } from "@/context/ClasherContext";
-import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
+import {
+  effectiveMemberSlotPlanWindow,
+  effectiveMemberWantsSlot,
+} from "@/lib/effectiveIntents";
 import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
 import { buildSlotIntentsFromHotRatings } from "@/lib/syncIntentsFromRatings";
 import type { FestivalSnapshot } from "@/lib/types";
@@ -14,19 +17,23 @@ function effectiveWindow(
   memberId: string,
   slot: FestivalSnapshot["schedule"][0]
 ): { start: number; end: number } {
-  const row = group.allMemberSlotIntents.find(
-    (i) => i.memberId === memberId && i.slotId === slot.id
-  );
   const s0 = parseHm(slot.start);
   const e0 = parseHm(slot.end);
   if (Number.isNaN(s0) || Number.isNaN(e0)) return { start: 0, end: 0 };
   if (!effectiveMemberWantsSlot(group, memberId, slot.id)) {
     return { start: s0, end: s0 };
   }
-  // No personal row or wants=false but squad default still shows this slot → full slot window.
-  if (!row || !row.wants) return { start: s0, end: e0 };
-  const fs = row.planFrom ? parseHm(row.planFrom) : s0;
-  const fe = row.planTo ? parseHm(row.planTo) : e0;
+  const row = group.allMemberSlotIntents.find(
+    (i) => i.memberId === memberId && i.slotId === slot.id
+  );
+  const eff = effectiveMemberSlotPlanWindow(group, memberId, slot);
+  const fromS = eff.planFrom ?? row?.planFrom ?? null;
+  const toS = eff.planTo ?? row?.planTo ?? null;
+  if (!fromS && !toS && (!row || !row.wants)) {
+    return { start: s0, end: e0 };
+  }
+  const fs = fromS ? parseHm(fromS) : s0;
+  const fe = toS ? parseHm(toS) : e0;
   const ss = Number.isNaN(fs) ? s0 : Math.max(s0, fs);
   const ee = Number.isNaN(fe) ? e0 : Math.min(e0, fe);
   return { start: ss, end: Math.max(ss, ee) };
@@ -53,7 +60,8 @@ function labelAtBucket(
 }
 
 export default function PlansPage() {
-  const { session, group, putSlotIntents, addSlotComment } = useClasher();
+  const { session, group, putSlotIntents, addSlotComment, setRating } =
+    useClasher();
   const [tab, setTab] = useState<"person" | "everyone">("person");
   const [syncBusy, setSyncBusy] = useState(false);
   const [memberId, setMemberId] = useState<string | null>(null);
@@ -167,6 +175,11 @@ export default function PlansPage() {
               group={group}
               slotComments={group.slotComments}
               onAddSlotComment={addSlotComment}
+              onSetRating={
+                activeMember === session.memberId
+                  ? (artistId, tier) => setRating(artistId, tier)
+                  : undefined
+              }
             />
           ) : null}
         </div>

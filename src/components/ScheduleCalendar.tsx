@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
-import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
 import {
-  compactSquadTierStrip,
-  myTierEmoji,
-} from "@/lib/reactionsUi";
-import type { FestivalSnapshot } from "@/lib/types";
+  effectiveMemberSlotPlanWindow,
+  effectiveMemberWantsSlot,
+} from "@/lib/effectiveIntents";
+import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
+import { myTierEmoji, squadReactionPills } from "@/lib/reactionsUi";
+import { TIER_EMOJI, TIERS_ORDER } from "@/lib/tiers";
+import type { FestivalSnapshot, RatingTier } from "@/lib/types";
 
 type Slot = FestivalSnapshot["schedule"][0];
 
@@ -40,8 +41,6 @@ function slotNotesFor(
   return slotComments.filter((c) => c.slotId === slotId);
 }
 
-const NOTE_EMOJIS = ["🔥", "❤️", "🎉", "🚻", "💃", "😴"] as const;
-
 export function ScheduleCalendar({
   schedule,
   memberId,
@@ -50,6 +49,7 @@ export function ScheduleCalendar({
   caption,
   slotComments = [],
   onAddSlotComment,
+  onSetRating,
 }: {
   schedule: Slot[];
   memberId?: string;
@@ -59,6 +59,8 @@ export function ScheduleCalendar({
   caption?: string;
   slotComments?: FestivalSnapshot["slotComments"];
   onAddSlotComment?: (slotId: string, body: string) => Promise<void>;
+  /** Quick tier buttons (❤️/🔥/…); only when you pass this + memberId + group. */
+  onSetRating?: (artistId: string, tier: RatingTier) => Promise<void>;
 }) {
   const days = useMemo(() => {
     const d = new Set(schedule.map((s) => s.dayLabel.trim()));
@@ -113,6 +115,7 @@ export function ScheduleCalendar({
   const [noteSlotId, setNoteSlotId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
+  const [ratingBusy, setRatingBusy] = useState<string | null>(null);
 
   const noteSlot = useMemo(
     () => schedule.find((s) => s.id === noteSlotId) ?? null,
@@ -198,37 +201,36 @@ export function ScheduleCalendar({
                     if (Number.isNaN(ss) || Number.isNaN(ee)) return null;
                     const top = ((ss - minM) / (maxM - minM)) * 100;
                     const h = Math.max(((ee - ss) / (maxM - minM)) * 100, 3);
-                    const all = group?.allMemberSlotIntents ?? allMemberSlotIntents ?? [];
-                    const win = memberId
-                      ? intentWindow(all, memberId, slot.id)
-                      : { from: null, to: null };
+                    const all =
+                      group?.allMemberSlotIntents ?? allMemberSlotIntents ?? [];
+                    const win =
+                      group && memberId
+                        ? effectiveMemberSlotPlanWindow(group, memberId, slot)
+                        : memberId
+                          ? (() => {
+                              const w = intentWindow(all, memberId, slot.id);
+                              return {
+                                planFrom: w.from,
+                                planTo: w.to,
+                              };
+                            })()
+                          : { planFrom: null, planTo: null };
                     const sub =
-                      win.from && win.to ? `${win.from}–${win.to}` : null;
-                    const reactLine =
-                      group && memberId ? (
-                        <p
-                          className="truncate text-[9px] leading-tight text-zinc-600"
-                          title={`You ${myTierEmoji(group, slot.artistId, memberId)} · Squad ${compactSquadTierStrip(group, slot.artistId)}`}
-                        >
-                          <span className="font-semibold">
-                            {myTierEmoji(group, slot.artistId, memberId)}
-                          </span>
-                          <span className="text-zinc-400"> · </span>
-                          <span>
-                            {compactSquadTierStrip(
-                              group,
-                              slot.artistId,
-                              memberId
-                            )}
-                          </span>
-                        </p>
-                      ) : group ? (
-                        <p className="truncate text-[9px] text-zinc-600">
-                          {compactSquadTierStrip(group, slot.artistId)}
-                        </p>
-                      ) : null;
+                      win.planFrom && win.planTo
+                        ? `${win.planFrom}–${win.planTo}`
+                        : null;
                     const notes = slotNotesFor(slotComments, slot.id);
                     const notePreview = notes[0];
+                    const showQuickRate = Boolean(
+                      memberId && group && onSetRating
+                    );
+                    const myEmoji = group
+                      ? myTierEmoji(group, slot.artistId, memberId!)
+                      : "·";
+                    const squadPills = group
+                      ? squadReactionPills(group, slot.artistId)
+                      : [];
+
                     return (
                       <div
                         key={slot.id}
@@ -242,7 +244,65 @@ export function ScheduleCalendar({
                         <p className="text-[11px] font-semibold leading-tight text-zinc-900">
                           {slot.artistName}
                         </p>
-                        {reactLine}
+
+                        {showQuickRate || squadPills.length > 0 ? (
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                            {showQuickRate ? (
+                              <span
+                                className="inline-flex flex-wrap gap-0.5"
+                                title="Your rating"
+                              >
+                                {TIERS_ORDER.map((tier) => {
+                                  const active =
+                                    myEmoji === TIER_EMOJI[tier];
+                                  return (
+                                    <button
+                                      key={tier}
+                                      type="button"
+                                      disabled={ratingBusy === slot.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!onSetRating) return;
+                                        setRatingBusy(slot.id);
+                                        void (async () => {
+                                          try {
+                                            await onSetRating(
+                                              slot.artistId,
+                                              tier
+                                            );
+                                          } finally {
+                                            setRatingBusy(null);
+                                          }
+                                        })();
+                                      }}
+                                      className={`min-h-[18px] min-w-[18px] rounded border px-0.5 text-[11px] leading-none transition-colors ${
+                                        active
+                                          ? "border-zinc-900 bg-zinc-900 text-white"
+                                          : "border-zinc-300 bg-white text-zinc-800 hover:border-zinc-900"
+                                      } disabled:opacity-40`}
+                                    >
+                                      {TIER_EMOJI[tier]}
+                                    </button>
+                                  );
+                                })}
+                              </span>
+                            ) : null}
+                            {squadPills.length > 0 ? (
+                              <span className="inline-flex flex-wrap gap-0.5">
+                                {squadPills.map(({ tier, emoji, count }) => (
+                                  <span
+                                    key={tier}
+                                    className="rounded-full border border-zinc-300 bg-white/90 px-1 py-px text-[9px] font-medium tabular-nums text-zinc-700"
+                                  >
+                                    {emoji}
+                                    {count}
+                                  </span>
+                                ))}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
+
                         <p className="text-[10px] font-mono text-zinc-600">
                           {slot.start}–{slot.end}
                         </p>
@@ -268,17 +328,24 @@ export function ScheduleCalendar({
                           </p>
                         ) : null}
                         {onAddSlotComment ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setNoteDraft("");
-                              setNoteSlotId(slot.id);
-                            }}
-                            className="mt-0.5 w-full truncate border border-zinc-400 bg-white/80 px-0.5 text-left text-[9px] font-medium text-zinc-800 hover:bg-white"
-                          >
-                            {notes.length ? "Notes · add" : "+ Note / emoji"}
-                          </button>
+                          <div className="mt-0.5 flex items-start justify-end gap-0.5">
+                            <button
+                              type="button"
+                              aria-label={
+                                notes.length
+                                  ? "Open notes"
+                                  : "Add note"
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setNoteDraft("");
+                                setNoteSlotId(slot.id);
+                              }}
+                              className="flex h-6 w-6 shrink-0 items-center justify-center border-2 border-zinc-900 bg-white text-sm font-bold leading-none text-zinc-900 shadow-[1px_1px_0_0_#18181b] hover:bg-zinc-100"
+                            >
+                              +
+                            </button>
+                          </div>
                         ) : null}
                       </div>
                     );
@@ -306,7 +373,10 @@ export function ScheduleCalendar({
               {noteSlot.dayLabel} · {noteSlot.stageName} · {noteSlot.start}–
               {noteSlot.end}
             </p>
-            <ul className="mt-3 max-h-40 space-y-2 overflow-y-auto border-t border-zinc-200 pt-2 text-xs">
+            <p className="mt-1 text-[10px] font-bold uppercase text-zinc-500">
+              Notes
+            </p>
+            <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto border-t border-zinc-200 pt-2 text-xs">
               {slotNotesFor(slotComments, noteSlot.id).map((n) => (
                 <li key={n.id} className="border border-zinc-200 bg-zinc-50 p-2">
                   <span className="font-semibold text-zinc-700">
@@ -321,26 +391,9 @@ export function ScheduleCalendar({
             </ul>
             {onAddSlotComment ? (
               <div className="mt-3 space-y-2 border-t border-zinc-200 pt-3">
-                <p className="text-[10px] font-bold uppercase text-zinc-500">
-                  Add
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {NOTE_EMOJIS.map((e) => (
-                    <button
-                      key={e}
-                      type="button"
-                      className="border-2 border-zinc-900 bg-white px-1.5 py-0.5 text-sm hover:bg-zinc-100"
-                      onClick={() =>
-                        setNoteDraft((d) => (d ? `${d} ${e}` : e))
-                      }
-                    >
-                      {e}
-                    </button>
-                  ))}
-                </div>
                 <textarea
                   className="min-h-[64px] w-full border-2 border-zinc-900 px-2 py-1 text-sm"
-                  placeholder="Note or emoji"
+                  placeholder="Write a note (emoji ok)"
                   value={noteDraft}
                   onChange={(e) => setNoteDraft(e.target.value)}
                 />

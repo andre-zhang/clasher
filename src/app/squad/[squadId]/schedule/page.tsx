@@ -15,6 +15,7 @@ export default function SchedulePage() {
     replaceSchedule,
     parseScheduleFile,
     addSlotComment,
+    setRating,
   } = useClasher();
   const [draft, setDraft] = useState<ScheduleDraftSlot[] | null>(null);
   const [parseErr, setParseErr] = useState<string | null>(null);
@@ -277,6 +278,11 @@ export default function SchedulePage() {
         group={group}
         slotComments={group.slotComments}
         onAddSlotComment={addSlotComment}
+        onSetRating={
+          calendarMode === "mine"
+            ? (artistId, tier) => setRating(artistId, tier)
+            : undefined
+        }
         caption={
           calendarMode === "mine"
             ? "Slots you’re keeping (clash picks + slot flags). Hidden sets are dropped from your plan."

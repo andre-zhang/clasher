@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -818,6 +819,12 @@ export function createFestivalApp(apiBasePath: string): Hono {
       customWindows?: { slotId: string; planFrom: string; planTo: string }[];
       groupLeanSlotId?: string | null;
       squadDefaultChoiceSlotId?: string | null;
+      squadDefaultSplitOrderSlotIds?: [string, string];
+      squadDefaultCustomWindows?: {
+        slotId: string;
+        planFrom: string;
+        planTo: string;
+      }[];
       clearSquadDefault?: boolean;
     };
     try {
@@ -908,15 +915,70 @@ export function createFestivalApp(apiBasePath: string): Hono {
     }
 
     let squadDefaultChoice: string | null = null;
-    if (
-      planMode === "group" &&
-      body.squadDefaultChoiceSlotId != null &&
-      String(body.squadDefaultChoiceSlotId).length > 0
-    ) {
-      squadDefaultChoice = String(body.squadDefaultChoiceSlotId);
-      if (squadDefaultChoice !== slotAId && squadDefaultChoice !== slotBId) {
+    let squadDefaultSplitOrder: [string, string] | null = null;
+    let squadDefaultCustomWins:
+      | { slotId: string; planFrom: string; planTo: string }[]
+      | null = null;
+
+    if (planMode === "group") {
+      const sc =
+        body.squadDefaultChoiceSlotId != null &&
+        String(body.squadDefaultChoiceSlotId).length > 0
+          ? String(body.squadDefaultChoiceSlotId)
+          : null;
+      if (sc && sc !== slotAId && sc !== slotBId) {
         return c.json({ error: "bad_squad_default" }, 400);
       }
+
+      const so = body.squadDefaultSplitOrderSlotIds;
+      let splitOrd: [string, string] | null = null;
+      if (so != null) {
+        if (!Array.isArray(so) || so.length !== 2) {
+          return c.json({ error: "bad_squad_split" }, 400);
+        }
+        const pair = new Set([slotAId, slotBId]);
+        if (
+          so[0] === so[1] ||
+          !pair.has(so[0]!) ||
+          !pair.has(so[1]!)
+        ) {
+          return c.json({ error: "bad_squad_split" }, 400);
+        }
+        splitOrd = [so[0]!, so[1]!];
+      }
+
+      if (body.squadDefaultCustomWindows != null) {
+        const wins = body.squadDefaultCustomWindows;
+        const pair = new Set([slotAId, slotBId]);
+        if (!Array.isArray(wins) || wins.length !== 2) {
+          return c.json({ error: "bad_squad_custom" }, 400);
+        }
+        const seen = new Set<string>();
+        const normalized: { slotId: string; planFrom: string; planTo: string }[] =
+          [];
+        for (const w of wins) {
+          if (!w?.slotId || !pair.has(w.slotId) || seen.has(w.slotId)) {
+            return c.json({ error: "bad_squad_custom" }, 400);
+          }
+          seen.add(w.slotId);
+          const from = String(w.planFrom).trim();
+          const to = String(w.planTo).trim();
+          if (!/^\d{1,2}:\d{2}$/.test(from) || !/^\d{1,2}:\d{2}$/.test(to)) {
+            return c.json({ error: "bad_squad_custom" }, 400);
+          }
+          normalized.push({ slotId: w.slotId, planFrom: from, planTo: to });
+        }
+        squadDefaultCustomWins = normalized;
+      }
+
+      const modes = [sc, splitOrd, squadDefaultCustomWins].filter(Boolean)
+        .length;
+      if (modes > 1) {
+        return c.json({ error: "bad_squad_default_multi" }, 400);
+      }
+
+      squadDefaultChoice = sc;
+      squadDefaultSplitOrder = splitOrd;
     }
 
     await prisma.$transaction(async (tx) => {
@@ -986,11 +1048,19 @@ export function createFestivalApp(apiBasePath: string): Hono {
             squadId: member.squadId,
             slotAId,
             slotBId,
+            defaultPlanMode: "pick",
             choiceSlotId: squadDefaultChoice,
+            splitFirstSlotId: null,
+            splitSecondSlotId: null,
+            customWindows: Prisma.JsonNull,
             setByMemberId: member.id,
           },
           update: {
+            defaultPlanMode: "pick",
             choiceSlotId: squadDefaultChoice,
+            splitFirstSlotId: null,
+            splitSecondSlotId: null,
+            customWindows: Prisma.JsonNull,
             setByMemberId: member.id,
           },
         });
@@ -1011,6 +1081,95 @@ export function createFestivalApp(apiBasePath: string): Hono {
             update: { wants, planFrom: null, planTo: null },
           });
         }
+      }
+
+      if (planMode === "group" && squadDefaultSplitOrder) {
+        const [f, s2] = squadDefaultSplitOrder;
+        await tx.squadClashDefault.upsert({
+          where: {
+            squadId_slotAId_slotBId: {
+              squadId: member.squadId,
+              slotAId,
+              slotBId,
+            },
+          },
+          create: {
+            squadId: member.squadId,
+            slotAId,
+            slotBId,
+            defaultPlanMode: "split_seq",
+            choiceSlotId: null,
+            splitFirstSlotId: f,
+            splitSecondSlotId: s2,
+            customWindows: Prisma.JsonNull,
+            setByMemberId: member.id,
+          },
+          update: {
+            defaultPlanMode: "split_seq",
+            choiceSlotId: null,
+            splitFirstSlotId: f,
+            splitSecondSlotId: s2,
+            customWindows: Prisma.JsonNull,
+            setByMemberId: member.id,
+          },
+        });
+        await patchIntentsForConflict(
+          tx,
+          member.squadId,
+          member.id,
+          slotAId,
+          slotBId,
+          {
+            planMode: "split_seq",
+            choice: null,
+            splitOrderSlotIds: squadDefaultSplitOrder,
+            customWindows: null,
+          }
+        );
+      }
+
+      if (planMode === "group" && squadDefaultCustomWins) {
+        await tx.squadClashDefault.upsert({
+          where: {
+            squadId_slotAId_slotBId: {
+              squadId: member.squadId,
+              slotAId,
+              slotBId,
+            },
+          },
+          create: {
+            squadId: member.squadId,
+            slotAId,
+            slotBId,
+            defaultPlanMode: "custom",
+            choiceSlotId: null,
+            splitFirstSlotId: null,
+            splitSecondSlotId: null,
+            customWindows: squadDefaultCustomWins,
+            setByMemberId: member.id,
+          },
+          update: {
+            defaultPlanMode: "custom",
+            choiceSlotId: null,
+            splitFirstSlotId: null,
+            splitSecondSlotId: null,
+            customWindows: squadDefaultCustomWins,
+            setByMemberId: member.id,
+          },
+        });
+        await patchIntentsForConflict(
+          tx,
+          member.squadId,
+          member.id,
+          slotAId,
+          slotBId,
+          {
+            planMode: "custom",
+            choice: null,
+            splitOrderSlotIds: null,
+            customWindows: squadDefaultCustomWins,
+          }
+        );
       }
     });
 

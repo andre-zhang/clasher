@@ -1,6 +1,27 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
 import type { FestivalSnapshot } from "@/lib/types";
+
+function parseCustomWindows(
+  raw: Prisma.JsonValue | null
+): { slotId: string; planFrom: string; planTo: string }[] | null {
+  if (raw == null) return null;
+  if (!Array.isArray(raw)) return null;
+  const out: { slotId: string; planFrom: string; planTo: string }[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object") return null;
+    const o = x as Record<string, unknown>;
+    if (typeof o.slotId !== "string") return null;
+    if (typeof o.planFrom !== "string" || typeof o.planTo !== "string")
+      return null;
+    out.push({
+      slotId: o.slotId,
+      planFrom: o.planFrom,
+      planTo: o.planTo,
+    });
+  }
+  return out.length ? out : null;
+}
 
 export async function buildSnapshot(
   db: PrismaClient,
@@ -119,7 +140,11 @@ export async function buildSnapshot(
     squadClashDefaults: squadDefaults.map((d) => ({
       slotAId: d.slotAId,
       slotBId: d.slotBId,
-      choiceSlotId: d.choiceSlotId,
+      defaultPlanMode: d.defaultPlanMode ?? "pick",
+      choiceSlotId: d.choiceSlotId ?? null,
+      splitFirstSlotId: d.splitFirstSlotId ?? null,
+      splitSecondSlotId: d.splitSecondSlotId ?? null,
+      customWindows: parseCustomWindows(d.customWindows),
       setByMemberId: d.setByMemberId,
     })),
   };

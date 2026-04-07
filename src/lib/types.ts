@@ -60,7 +60,11 @@ export interface FestivalSnapshot {
   squadClashDefaults: {
     slotAId: string;
     slotBId: string;
-    choiceSlotId: string;
+    defaultPlanMode: string;
+    choiceSlotId: string | null;
+    splitFirstSlotId: string | null;
+    splitSecondSlotId: string | null;
+    customWindows: { slotId: string; planFrom: string; planTo: string }[] | null;
     setByMemberId: string;
   }[];
 }

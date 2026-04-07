@@ -33,6 +33,20 @@ export function compactSquadTierStrip(
   return parts.length ? parts.join("") : "—";
 }
 
+/** Per-tier counts for pill UI (schedule cards). */
+export function squadReactionPills(
+  group: FestivalSnapshot,
+  artistId: string,
+  excludeMemberId?: string
+): { tier: RatingTier; emoji: string; count: number }[] {
+  const counts = tierCountsForArtist(group, artistId, excludeMemberId);
+  return TIERS_ORDER.filter((t) => counts[t] > 0).map((t) => ({
+    tier: t,
+    emoji: TIER_EMOJI[t],
+    count: counts[t],
+  }));
+}
+
 export function myTierEmoji(
   group: FestivalSnapshot,
   artistId: string,

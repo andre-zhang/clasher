@@ -223,6 +223,10 @@ export type ConflictPlanPayload = {
   groupLeanSlotId?: string | null;
   /** With planMode group: set squad-wide default pick (shows confirm on client). */
   squadDefaultChoiceSlotId?: string | null;
+  /** With planMode group: set squad default split order (first → second). */
+  squadDefaultSplitOrderSlotIds?: [string, string];
+  /** With planMode group: set squad default custom windows (both slots). */
+  squadDefaultCustomWindows?: { slotId: string; planFrom: string; planTo: string }[];
   clearSquadDefault?: boolean;
 };
 

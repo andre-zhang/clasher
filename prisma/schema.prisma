@@ -129,18 +129,23 @@ model MemberSlotIntent {
   @@unique([memberId, slotId])
 }
 
-/** Squad-wide default pick for an overlapping pair (any member can update). */
+/** Squad-wide default for an overlapping pair (any member can update). */
 model SquadClashDefault {
-  id             String   @id @default(uuid())
-  squadId        String
-  squad          Squad    @relation(fields: [squadId], references: [id], onDelete: Cascade)
-  slotAId        String
-  slotBId        String
-  choiceSlotId   String
-  setByMemberId  String
-  setByMember    Member   @relation(fields: [setByMemberId], references: [id], onDelete: Cascade)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                String   @id @default(uuid())
+  squadId           String
+  squad             Squad    @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  slotAId           String
+  slotBId           String
+  /** pick | split_seq | custom */
+  defaultPlanMode   String   @default("pick")
+  choiceSlotId      String?
+  splitFirstSlotId  String?
+  splitSecondSlotId String?
+  customWindows     Json?
+  setByMemberId     String
+  setByMember       Member   @relation(fields: [setByMemberId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@unique([squadId, slotAId, slotBId])
 }

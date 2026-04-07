@@ -1,4 +1,5 @@
 import type { FestivalSnapshot } from "@/lib/types";
+import { hhmmFromMinutes, parseHm, splitSwitchMinutes } from "@/lib/timeHm";
 
 function normPair(a: string, b: string): [string, string] {
   return a <= b ? [a, b] : [b, a];
@@ -13,6 +14,95 @@ export function findSquadClashDefault(
   return group.squadClashDefaults.find(
     (d) => d.slotAId === x && d.slotBId === y
   );
+}
+
+function clampMinutesToSlot(
+  slot: { start: string; end: string },
+  m: number
+): number {
+  const s = parseHm(slot.start);
+  const e = parseHm(slot.end);
+  if (Number.isNaN(s) || Number.isNaN(e)) return m;
+  return Math.min(e, Math.max(s, m));
+}
+
+function splitWindowsForPair(
+  schedule: FestivalSnapshot["schedule"],
+  slotAId: string,
+  slotBId: string,
+  firstId: string,
+  secondId: string
+): Record<string, { planFrom: string; planTo: string }> {
+  const out: Record<string, { planFrom: string; planTo: string }> = {};
+  const first = schedule.find((s) => s.id === firstId);
+  const second = schedule.find((s) => s.id === secondId);
+  if (!first || !second) return out;
+  const ids = new Set([slotAId, slotBId]);
+  if (!ids.has(firstId) || !ids.has(secondId) || firstId === secondId)
+    return out;
+  const mid = splitSwitchMinutes(
+    {
+      dayLabel: first.dayLabel,
+      start: first.start,
+      end: first.end,
+    },
+    {
+      dayLabel: second.dayLabel,
+      start: second.start,
+      end: second.end,
+    }
+  );
+  const mFirst = clampMinutesToSlot(first, mid);
+  const mSecond = clampMinutesToSlot(second, mid);
+  out[firstId] = { planFrom: first.start, planTo: hhmmFromMinutes(mFirst) };
+  out[secondId] = { planFrom: hhmmFromMinutes(mSecond), planTo: second.end };
+  return out;
+}
+
+/**
+ * Plan window for a slot after squad default (split/custom) for members on "group".
+ */
+export function effectiveMemberSlotPlanWindow(
+  group: FestivalSnapshot,
+  memberId: string,
+  slot: FestivalSnapshot["schedule"][0]
+): { planFrom: string | null; planTo: string | null } {
+  const row = group.allMemberSlotIntents.find(
+    (i) => i.memberId === memberId && i.slotId === slot.id
+  );
+
+  const groupRes = group.conflictResolutions.filter(
+    (c) =>
+      c.memberId === memberId &&
+      c.planMode === "group" &&
+      (c.slotAId === slot.id || c.slotBId === slot.id)
+  );
+
+  for (const c of groupRes) {
+    const def = findSquadClashDefault(group, c.slotAId, c.slotBId);
+    if (!def) continue;
+    const mode = def.defaultPlanMode ?? "pick";
+    if (mode === "split_seq" && def.splitFirstSlotId && def.splitSecondSlotId) {
+      const wins = splitWindowsForPair(
+        group.schedule,
+        c.slotAId,
+        c.slotBId,
+        def.splitFirstSlotId,
+        def.splitSecondSlotId
+      );
+      const w = wins[slot.id];
+      if (w) return { planFrom: w.planFrom, planTo: w.planTo };
+    }
+    if (mode === "custom" && def.customWindows?.length) {
+      const w = def.customWindows.find((x) => x.slotId === slot.id);
+      if (w) return { planFrom: w.planFrom, planTo: w.planTo };
+    }
+  }
+
+  return {
+    planFrom: row?.planFrom ?? null,
+    planTo: row?.planTo ?? null,
+  };
 }
 
 /**
@@ -36,8 +126,16 @@ export function effectiveMemberWantsSlot(
   );
   for (const c of groupRes) {
     const def = findSquadClashDefault(group, c.slotAId, c.slotBId);
-    if (def) {
-      return def.choiceSlotId === slotId;
+    if (!def) continue;
+    const mode = def.defaultPlanMode ?? "pick";
+    if (mode === "pick") {
+      if (def.choiceSlotId) {
+        return def.choiceSlotId === slotId;
+      }
+      continue;
+    }
+    if (mode === "split_seq" || mode === "custom") {
+      if (slotId === c.slotAId || slotId === c.slotBId) return true;
     }
   }
 
