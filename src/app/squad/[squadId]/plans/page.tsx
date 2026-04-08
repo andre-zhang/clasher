@@ -187,7 +187,7 @@ export default function PlansPage() {
         onClick={() => void syncHotFlags()}
         className="border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40"
       >
-        Sync ❤️/🔥 → slot flags
+        Sync from Lineup
       </button>
 
       <div className="flex flex-wrap gap-2">
@@ -200,7 +200,7 @@ export default function PlansPage() {
               : "border-zinc-900 bg-white text-zinc-900"
           }`}
         >
-          One person · stage × time
+          One person
         </button>
         <button
           type="button"
@@ -211,7 +211,7 @@ export default function PlansPage() {
               : "border-zinc-900 bg-white text-zinc-900"
           }`}
         >
-          Everyone · people × time
+          Everyone
         </button>
       </div>
 
@@ -232,10 +232,6 @@ export default function PlansPage() {
               ))}
             </select>
           </label>
-          <p className="text-[11px] text-zinc-600">
-            Reflects clash choices and shared defaults. Tap a set for full times
-            and how overlaps were resolved.
-          </p>
           {activeMember ? (
             <ScheduleCalendar
               schedule={group.schedule}

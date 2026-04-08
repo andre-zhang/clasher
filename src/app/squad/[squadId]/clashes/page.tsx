@@ -99,7 +99,7 @@ export default function ClashesPage() {
         onClick={() => void syncHotFlags()}
         className="border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40"
       >
-        Sync ❤️/🔥 → slot flags
+        Sync from Lineup
       </button>
 
       {err ? (
@@ -135,9 +135,6 @@ export default function ClashesPage() {
           <summary className="cursor-pointer text-sm font-bold text-zinc-900">
             Resolved clashes ({resolvedPairs.length})
           </summary>
-          <p className="mt-2 text-[11px] text-zinc-600">
-            Open to review or change a past decision.
-          </p>
           <ul className="mt-3 space-y-4">
             {resolvedPairs.map(({ a, b }) => (
               <ClashCard

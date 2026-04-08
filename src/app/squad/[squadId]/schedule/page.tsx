@@ -130,7 +130,7 @@ export default function SchedulePage() {
 
   return (
     <div className="space-y-6">
-      {scanning ? <ScanningOverlay label="Scanning timetable…" /> : null}
+      {scanning ? <ScanningOverlay /> : null}
 
       <h1 className="text-xl font-bold text-zinc-900">Schedule</h1>
 
@@ -140,7 +140,7 @@ export default function SchedulePage() {
         onClick={() => void syncHotToShortlist()}
         className="border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40"
       >
-        Sync ❤️/🔥 from Lineup → Your plan
+        Sync from Lineup
       </button>
 
       <div className="flex flex-wrap gap-2">
@@ -150,7 +150,7 @@ export default function SchedulePage() {
           disabled={busy}
           className="border-2 border-zinc-900 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-50"
         >
-          Scan timetable (1+ photos)
+          Scan timetable
         </button>
         <input
           ref={fileRef}
@@ -161,11 +161,6 @@ export default function SchedulePage() {
           onChange={onFiles}
         />
       </div>
-      <p className="text-[11px] text-zinc-600">
-        You can select several screenshots in one go; times use PM-first rules
-        for bare hours (e.g. first “1” → 1pm, second “1” that day → 1am).
-      </p>
-
       {parseErr ? (
         <p className="border-2 border-red-800 bg-red-50 px-3 py-2 text-sm text-red-900">
           {parseErr}
@@ -174,9 +169,7 @@ export default function SchedulePage() {
 
       {draft && draft.length > 0 ? (
         <div className="border-2 border-zinc-900 bg-indigo-50 p-4 shadow-[3px_3px_0_0_#18181b]">
-          <p className="text-sm font-semibold text-zinc-900">
-            Edit before commit ({draft.length})
-          </p>
+          <p className="text-sm font-semibold text-zinc-900">Draft ({draft.length})</p>
           <div className="mt-2 max-h-72 overflow-auto text-xs">
             <table className="w-full border-collapse border border-zinc-900 text-left">
               <thead>
@@ -333,11 +326,6 @@ export default function SchedulePage() {
             ? (artistId, tier) => setRating(artistId, tier)
             : undefined
         }
-        caption={
-          calendarMode === "mine"
-            ? "Only sets you marked: ❤️/🔥 in Lineup, or “Your plan” in Full timetable. Clash picks do not change this list."
-            : "Full timetable for everyone. Tick “Your plan” to add a set to your shortlist (or use Lineup ratings)."
-        }
       />
 
       {group.schedule.length > 0 ? (
@@ -347,7 +335,7 @@ export default function SchedulePage() {
           disabled={busy}
           className="text-xs text-zinc-600 underline"
         >
-          Re-save schedule (refresh slot IDs)
+          Re-save schedule
         </button>
       ) : null}
     </div>

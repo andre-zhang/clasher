@@ -71,9 +71,6 @@ export default function OptionsPage() {
       <h1 className="text-xl font-bold text-zinc-900">Options</h1>
 
       <section className="space-y-3">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500">
-          Invite
-        </h2>
         <button
           type="button"
           onClick={() => void copyInvite()}
@@ -104,19 +101,16 @@ export default function OptionsPage() {
         >
           {demoBusy
             ? "Loading demo…"
-            : "Load demo data (lineup + schedule + sample group)"}
+            : "Load demo"}
         </button>
       </section>
 
       <section className="border-t border-zinc-300 pt-4">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500">
-          Danger
-        </h2>
         <button
           type="button"
           disabled={delBusy}
           onClick={() => void onDeleteSquad()}
-          className="mt-2 border-2 border-red-800 bg-white px-3 py-2 text-xs font-semibold text-red-900 shadow-[2px_2px_0_0_#991b1b] hover:bg-red-50 disabled:opacity-40"
+          className="border-2 border-red-800 bg-white px-3 py-2 text-xs font-semibold text-red-900 shadow-[2px_2px_0_0_#991b1b] hover:bg-red-50 disabled:opacity-40"
         >
           {delBusy ? "Deleting…" : "Delete group"}
         </button>

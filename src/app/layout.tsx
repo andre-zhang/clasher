@@ -16,8 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Clasher",
-  description:
-    "Shared lineup, timetable, and clash picks — invite links, no passwords.",
+  description: "Clasher",
 };
 
 export default function RootLayout({

@@ -88,7 +88,7 @@ export default function LineupPage() {
 
   return (
     <div className="space-y-6">
-      {scanning ? <ScanningOverlay label="Scanning poster…" /> : null}
+      {scanning ? <ScanningOverlay /> : null}
 
       <h1 className="text-xl font-bold text-zinc-900">Lineup</h1>
 
@@ -119,7 +119,7 @@ export default function LineupPage() {
       {draftNames && draftNames.length > 0 ? (
         <div className="border-2 border-zinc-900 bg-indigo-50 p-4 shadow-[3px_3px_0_0_#18181b]">
           <p className="text-sm font-semibold text-zinc-900">
-            Edit before commit ({draftNames.length})
+            Draft ({draftNames.length})
           </p>
           <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto text-sm">
             {draftNames.map((n, i) => (
@@ -300,15 +300,14 @@ function ArtistDetailDialog({
           </button>
         </div>
 
-        <p className="mt-2 text-xs text-zinc-600">
-          Group votes:{" "}
+        <p className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-600">
           {TIERS_ORDER.map((t) => {
             const n = group.ratings.filter(
               (r) =>
                 r.artistId === artist.id && tierFromString(r.tier) === t
             ).length;
             return n > 0 ? (
-              <span key={t} className="mr-2 inline-block">
+              <span key={t}>
                 {TIER_EMOJI[t]}
                 {n}
               </span>
@@ -335,8 +334,7 @@ function ArtistDetailDialog({
         </ul>
 
         <div className="mt-4 border-t-2 border-zinc-200 pt-3">
-          <p className="text-xs font-bold uppercase text-zinc-500">Notes</p>
-          <ul className="mt-2 space-y-2 text-sm text-zinc-800">
+          <ul className="space-y-2 text-sm text-zinc-800">
             {comments.map((c) => {
               const author = group.members.find((m) => m.id === c.memberId);
               return (

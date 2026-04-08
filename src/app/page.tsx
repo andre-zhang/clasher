@@ -3,14 +3,9 @@ import Link from "next/link";
 export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-8 px-6 py-16">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-widest text-zinc-600">
-          Clasher
-        </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
-          Lineup, timetable, clash picks
-        </h1>
-      </div>
+      <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
+        Clasher
+      </h1>
       <div className="flex flex-col gap-3">
         <Link
           href="/create"

@@ -25,7 +25,7 @@ export default function JoinEntryPage() {
           className="w-full border-2 border-zinc-900 bg-white px-3 py-2 font-mono text-sm text-zinc-900 outline-none"
           value={token}
           onChange={(e) => setToken(e.target.value)}
-          placeholder="invite token"
+          placeholder="Code"
           onKeyDown={(e) => e.key === "Enter" && go()}
         />
         <button

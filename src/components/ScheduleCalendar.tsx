@@ -633,10 +633,7 @@ export function ScheduleCalendar({
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
               >
-                <p className="text-[10px] font-bold uppercase text-zinc-500">
-                  Your rating
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1">
                   {TIERS_ORDER.map((tier) => {
                     const active =
                       myTierEmoji(group, noteSlot.artistId, memberId) ===
@@ -670,10 +667,7 @@ export function ScheduleCalendar({
                 </div>
               </div>
             ) : null}
-            <p className="mt-3 text-[10px] font-bold uppercase text-zinc-500">
-              Notes
-            </p>
-            <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto border-t border-zinc-200 pt-2 text-xs">
+            <ul className="mt-3 max-h-40 space-y-2 overflow-y-auto border-t border-zinc-200 pt-3 text-xs">
               {slotNotesFor(slotComments, noteSlot.id).map((n) => (
                 <li key={n.id} className="border border-zinc-200 bg-zinc-50 p-2">
                   <span className="font-semibold text-zinc-700">
@@ -690,7 +684,7 @@ export function ScheduleCalendar({
               <div className="mt-3 space-y-2 border-t border-zinc-200 pt-3">
                 <textarea
                   className="min-h-[64px] w-full border-2 border-zinc-900 px-2 py-1 text-sm"
-                  placeholder="Write a note (emoji ok)"
+                  placeholder="Note"
                   value={noteDraft}
                   onChange={(e) => setNoteDraft(e.target.value)}
                 />
