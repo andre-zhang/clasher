@@ -304,6 +304,13 @@ export default function SchedulePage() {
         </button>
       </div>
 
+      {calendarMode === "all" ? (
+        <p className="text-[11px] text-zinc-600">
+          ❤️ and 🔥 match Lineup — they add a set to Your plan. The box pins
+          without a hot rating. + only if the row is too short.
+        </p>
+      ) : null}
+
       <ScheduleCalendar
         schedule={group.schedule}
         memberId={calendarMode === "mine" ? session.memberId : undefined}
@@ -321,11 +328,7 @@ export default function SchedulePage() {
         onToggleScheduleKeep={(slotId, keep) =>
           patchScheduleKeep(slotId, keep)
         }
-        onSetRating={
-          calendarMode === "mine"
-            ? (artistId, tier) => setRating(artistId, tier)
-            : undefined
-        }
+        onSetRating={(artistId, tier) => setRating(artistId, tier)}
       />
 
       {group.schedule.length > 0 ? (

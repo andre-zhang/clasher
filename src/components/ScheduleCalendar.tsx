@@ -82,6 +82,8 @@ export function ScheduleCalendar({
   onToggleScheduleKeep?: (slotId: string, keep: boolean) => Promise<void>;
   onSlotOpenDetail?: (slot: Slot) => void;
 }) {
+  const rateMemberId = memberId ?? scheduleKeepMemberId;
+
   const days = useMemo(() => {
     const d = new Set(schedule.map((s) => s.dayLabel.trim()));
     return [...d].sort();
@@ -245,7 +247,7 @@ export function ScheduleCalendar({
           {stagesToRender.map((stage) => (
             <div
               key={stage}
-              className="relative min-w-[120px] flex-1 border-r-2 border-zinc-900 last:border-r-0"
+              className="relative min-w-[148px] flex-1 border-r-2 border-zinc-900 last:border-r-0"
               style={{ minHeight: timelineHRender }}
             >
               <div className="sticky top-0 z-[1] h-8 border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-8 text-zinc-900">
@@ -271,7 +273,7 @@ export function ScheduleCalendar({
                   const h = Math.max(rawPct, 3);
                   const all =
                     group?.allMemberSlotIntents ?? allMemberSlotIntents ?? [];
-                  const planMember = memberId ?? scheduleKeepMemberId;
+                  const planMember = rateMemberId;
                   const win =
                     group && planMember
                       ? effectiveMemberSlotPlanWindow(
@@ -295,11 +297,12 @@ export function ScheduleCalendar({
                   const notes = slotNotesFor(slotComments, slot.id);
                   const notePreview = notes[0];
                   const showQuickRate = Boolean(
-                    memberId && group && onSetRating
+                    rateMemberId && group && onSetRating
                   );
-                  const myEmoji = group
-                    ? myTierEmoji(group, slot.artistId, memberId!)
-                    : "·";
+                  const myEmoji =
+                    group && rateMemberId
+                      ? myTierEmoji(group, slot.artistId, rateMemberId)
+                      : "·";
                   const squadPills = group
                     ? squadReactionPills(group, slot.artistId)
                     : [];
@@ -332,9 +335,10 @@ export function ScheduleCalendar({
                     onAddSlotComment || showQuickRate
                   );
                   const rawSlotHeightPx = (rawPct / 100) * timelineBodyPx;
+                  /** Only hide chrome when the row is very short; otherwise scroll. */
                   const compact =
                     rawSlotHeightPx > 0 &&
-                    rawSlotHeightPx < 88 &&
+                    rawSlotHeightPx < 40 &&
                     (showQuickRate ||
                       squadPills.length > 0 ||
                       Boolean(onAddSlotComment) ||
@@ -351,7 +355,7 @@ export function ScheduleCalendar({
                   };
 
                   const cardInteractive = Boolean(onSlotOpenDetail);
-                  const shellClass = `absolute left-0.5 right-0.5 border-2 border-zinc-900 bg-indigo-50 px-1 py-0.5 text-left shadow-[2px_2px_0_0_#18181b] ${
+                  const shellClass = `absolute left-0.5 right-0.5 min-w-0 border-2 border-zinc-900 bg-indigo-50 px-1 py-0.5 text-left shadow-[2px_2px_0_0_#18181b] ${
                     cardInteractive
                       ? "cursor-pointer hover:bg-indigo-100"
                       : ""
@@ -388,7 +392,7 @@ export function ScheduleCalendar({
                     >
                       {compact ? (
                         <>
-                          <p className="line-clamp-2 text-[11px] font-semibold leading-tight text-zinc-900">
+                          <p className="line-clamp-2 min-w-0 break-words text-[11px] font-semibold leading-snug text-zinc-900">
                             {slot.artistName}
                           </p>
                           <p className="truncate font-mono text-[9px] text-zinc-600">
@@ -447,7 +451,7 @@ export function ScheduleCalendar({
                       ) : (
                         <>
                           <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-                            <p className="shrink-0 text-[11px] font-semibold leading-tight text-zinc-900">
+                            <p className="shrink-0 break-words text-[11px] font-semibold leading-snug text-zinc-900 [overflow-wrap:anywhere]">
                               {slot.artistName}
                             </p>
 
@@ -627,7 +631,7 @@ export function ScheduleCalendar({
               {noteSlot.dayLabel} · {noteSlot.stageName} · {noteSlot.start}–
               {noteSlot.end}
             </p>
-            {onSetRating && memberId && group ? (
+            {onSetRating && rateMemberId && group ? (
               <div
                 className="mt-3 border-t border-zinc-200 pt-3"
                 onClick={(e) => e.stopPropagation()}
@@ -636,7 +640,7 @@ export function ScheduleCalendar({
                 <div className="flex flex-wrap gap-1">
                   {TIERS_ORDER.map((tier) => {
                     const active =
-                      myTierEmoji(group, noteSlot.artistId, memberId) ===
+                      myTierEmoji(group, noteSlot.artistId, rateMemberId) ===
                       TIER_EMOJI[tier];
                     return (
                       <button

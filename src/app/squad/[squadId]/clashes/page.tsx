@@ -339,9 +339,9 @@ function ClashCard({
         : squadDefaultMode === "set_b"
           ? `Set pick: ${b.artistName}`
           : squadDefaultMode === "split_ab"
-            ? `Split: ${a.artistName} → ${b.artistName}`
+            ? `${a.artistName} first, then ${b.artistName}`
             : squadDefaultMode === "split_ba"
-              ? `Split: ${b.artistName} → ${a.artistName}`
+              ? `${b.artistName} first, then ${a.artistName}`
               : "Set custom times for the group";
 
   return (
@@ -544,7 +544,7 @@ function ClashCard({
                           : "border-zinc-900 bg-white"
                       }`}
                     >
-                      Split: {a.artistName} → {b.artistName}
+                      {a.artistName} first, then {b.artistName}
                     </button>
                     <button
                       type="button"
@@ -556,7 +556,7 @@ function ClashCard({
                           : "border-zinc-900 bg-white"
                       }`}
                     >
-                      Split: {b.artistName} → {a.artistName}
+                      {b.artistName} first, then {a.artistName}
                     </button>
                     <button
                       type="button"
@@ -654,8 +654,14 @@ function ClashCard({
                 [
                   ["pick_a", `All ${a.artistName}`],
                   ["pick_b", `All ${b.artistName}`],
-                  ["ab", `${a.artistName} → ${b.artistName}`],
-                  ["ba", `${b.artistName} → ${a.artistName}`],
+                  [
+                    "ab",
+                    `${a.artistName} first (full), then ${b.artistName}`,
+                  ],
+                  [
+                    "ba",
+                    `${b.artistName} first (full), then ${a.artistName}`,
+                  ],
                   ["custom", "Custom times"],
                 ] as const
               ).map(([id, label]) => (

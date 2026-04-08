@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { PlanWallpaperExport } from "@/components/PlanWallpaperExport";
 import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { useClasher } from "@/context/ClasherContext";
 import {
@@ -189,6 +190,8 @@ export default function PlansPage() {
       >
         Sync from Lineup
       </button>
+
+      <PlanWallpaperExport group={group} sessionMemberId={session.memberId} />
 
       <div className="flex flex-wrap gap-2">
         <button

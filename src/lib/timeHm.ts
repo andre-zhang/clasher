@@ -34,3 +34,56 @@ export function splitSwitchMinutes(
   if (oStart < oEnd) return Math.floor((oStart + oEnd) / 2);
   return Math.floor((Math.min(as, bs) + Math.max(ae, be)) / 2);
 }
+
+/**
+ * Priority split: first gets their full listed window; second gets the non-overlapping
+ * remainder of their window (tail after first ends, or head before first starts).
+ * Same day only; different days → both keep full windows.
+ */
+export function splitPriorityWindows(
+  first: { dayLabel: string; start: string; end: string },
+  second: { dayLabel: string; start: string; end: string }
+): { first: { from: string; to: string }; second: { from: string; to: string } } {
+  if (first.dayLabel.trim().toLowerCase() !== second.dayLabel.trim().toLowerCase()) {
+    return {
+      first: { from: first.start, to: first.end },
+      second: { from: second.start, to: second.end },
+    };
+  }
+  const fs = parseHm(first.start);
+  const fe = parseHm(first.end);
+  const ss = parseHm(second.start);
+  const se = parseHm(second.end);
+  if ([fs, fe, ss, se].some(Number.isNaN)) {
+    return {
+      first: { from: first.start, to: first.end },
+      second: { from: second.start, to: second.end },
+    };
+  }
+  const firstWin = { from: first.start, to: first.end };
+  if (fe <= ss || se <= fs) {
+    return {
+      first: firstWin,
+      second: { from: second.start, to: second.end },
+    };
+  }
+  let s0: number;
+  let s1: number;
+  if (fs <= ss) {
+    s0 = Math.max(ss, fe);
+    s1 = se;
+  } else {
+    s0 = ss;
+    s1 = Math.min(se, fs);
+  }
+  if (s0 >= s1) {
+    return {
+      first: firstWin,
+      second: { from: second.start, to: second.start },
+    };
+  }
+  return {
+    first: firstWin,
+    second: { from: hhmmFromMinutes(s0), to: hhmmFromMinutes(s1) },
+  };
+}

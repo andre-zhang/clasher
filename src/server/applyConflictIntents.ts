@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 
-import { hhmmFromMinutes, parseHm, splitSwitchMinutes } from "@/lib/timeHm";
+import { parseHm, splitPriorityWindows } from "@/lib/timeHm";
 
 import { wantsDeltaFromChoice } from "./memberSlotIntentPatch";
 
@@ -31,16 +31,6 @@ async function upsertIntent(
     },
     update: { wants, planFrom, planTo },
   });
-}
-
-function clampMinutesToSlot(
-  slot: { start: string; end: string },
-  m: number
-): number {
-  const s = parseHm(slot.start);
-  const e = parseHm(slot.end);
-  if (Number.isNaN(s) || Number.isNaN(e)) return m;
-  return Math.min(e, Math.max(s, m));
 }
 
 export async function patchIntentsForConflict(
@@ -85,7 +75,7 @@ export async function patchIntentsForConflict(
     const first = slots.find((s) => s.id === firstId);
     const second = slots.find((s) => s.id === secondId);
     if (!first || !second) return;
-    const mid = splitSwitchMinutes(
+    const wins = splitPriorityWindows(
       {
         dayLabel: first.dayLabel,
         start: first.start,
@@ -97,25 +87,29 @@ export async function patchIntentsForConflict(
         end: second.end,
       }
     );
-    const mFirst = clampMinutesToSlot(first, mid);
-    const mSecond = clampMinutesToSlot(second, mid);
+    const f0 = parseHm(wins.first.from);
+    const f1 = parseHm(wins.first.to);
+    const s0 = parseHm(wins.second.from);
+    const s1 = parseHm(wins.second.to);
+    const firstOk = !Number.isNaN(f0) && !Number.isNaN(f1) && f0 < f1;
+    const secondOk = !Number.isNaN(s0) && !Number.isNaN(s1) && s0 < s1;
     await upsertIntent(
       tx,
       squadId,
       memberId,
       firstId,
-      true,
-      first.start,
-      hhmmFromMinutes(mFirst)
+      firstOk,
+      firstOk ? wins.first.from : first.start,
+      firstOk ? wins.first.to : first.end
     );
     await upsertIntent(
       tx,
       squadId,
       memberId,
       secondId,
-      true,
-      hhmmFromMinutes(mSecond),
-      second.end
+      secondOk,
+      secondOk ? wins.second.from : second.start,
+      secondOk ? wins.second.to : second.end
     );
     return;
   }

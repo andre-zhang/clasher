@@ -1,5 +1,5 @@
 import type { FestivalSnapshot } from "@/lib/types";
-import { hhmmFromMinutes, parseHm, splitSwitchMinutes } from "@/lib/timeHm";
+import { splitPriorityWindows } from "@/lib/timeHm";
 
 function normPair(a: string, b: string): [string, string] {
   return a <= b ? [a, b] : [b, a];
@@ -16,16 +16,6 @@ export function findSquadClashDefault(
   );
 }
 
-function clampMinutesToSlot(
-  slot: { start: string; end: string },
-  m: number
-): number {
-  const s = parseHm(slot.start);
-  const e = parseHm(slot.end);
-  if (Number.isNaN(s) || Number.isNaN(e)) return m;
-  return Math.min(e, Math.max(s, m));
-}
-
 function splitWindowsForPair(
   schedule: FestivalSnapshot["schedule"],
   slotAId: string,
@@ -40,7 +30,7 @@ function splitWindowsForPair(
   const ids = new Set([slotAId, slotBId]);
   if (!ids.has(firstId) || !ids.has(secondId) || firstId === secondId)
     return out;
-  const mid = splitSwitchMinutes(
+  const wins = splitPriorityWindows(
     {
       dayLabel: first.dayLabel,
       start: first.start,
@@ -52,10 +42,8 @@ function splitWindowsForPair(
       end: second.end,
     }
   );
-  const mFirst = clampMinutesToSlot(first, mid);
-  const mSecond = clampMinutesToSlot(second, mid);
-  out[firstId] = { planFrom: first.start, planTo: hhmmFromMinutes(mFirst) };
-  out[secondId] = { planFrom: hhmmFromMinutes(mSecond), planTo: second.end };
+  out[firstId] = { planFrom: wins.first.from, planTo: wins.first.to };
+  out[secondId] = { planFrom: wins.second.from, planTo: wins.second.to };
   return out;
 }
 
