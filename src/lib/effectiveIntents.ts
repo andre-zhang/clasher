@@ -48,7 +48,7 @@ function splitWindowsForPair(
 }
 
 /**
- * Plan window for a slot after squad default (split/custom) for members on "group".
+ * Plan window for a slot after personal or squad clash resolution.
  */
 export function effectiveMemberSlotPlanWindow(
   group: FestivalSnapshot,
@@ -58,6 +58,26 @@ export function effectiveMemberSlotPlanWindow(
   const row = group.allMemberSlotIntents.find(
     (i) => i.memberId === memberId && i.slotId === slot.id
   );
+
+  const personalSplit = group.conflictResolutions.filter(
+    (c) =>
+      c.memberId === memberId &&
+      c.planMode === "split_seq" &&
+      c.splitFirstSlotId &&
+      c.splitSecondSlotId &&
+      (c.slotAId === slot.id || c.slotBId === slot.id)
+  );
+  for (const c of personalSplit) {
+    const wins = splitWindowsForPair(
+      group.schedule,
+      c.slotAId,
+      c.slotBId,
+      c.splitFirstSlotId!,
+      c.splitSecondSlotId!
+    );
+    const w = wins[slot.id];
+    if (w) return { planFrom: w.planFrom, planTo: w.planTo };
+  }
 
   const groupRes = group.conflictResolutions.filter(
     (c) =>
@@ -105,6 +125,15 @@ export function effectiveMemberWantsSlot(
     (i) => i.memberId === memberId && i.slotId === slotId
   );
   const base = row ? row.wants : true;
+
+  for (const c of group.conflictResolutions) {
+    if (c.memberId !== memberId) continue;
+    if (c.planMode === "group") continue;
+    if (c.planMode === "split_seq" || c.planMode === "custom") continue;
+    if (!c.choice) continue;
+    if (c.slotAId !== slotId && c.slotBId !== slotId) continue;
+    return c.choice === slotId;
+  }
 
   const groupRes = group.conflictResolutions.filter(
     (c) =>

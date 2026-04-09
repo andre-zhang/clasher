@@ -10,21 +10,27 @@ import {
 } from "react";
 
 import { SchedulePlannerStrip } from "@/components/SchedulePlannerStrip";
+import { findMyResolution, isMyClashResolved } from "@/lib/clash";
 import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
 } from "@/lib/effectiveIntents";
+import { effectiveWindowMinutes } from "@/lib/planMemberDay";
+import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
-import { clampPlanWindowToSlot } from "@/lib/walkFeasibility";
-
-function snapMinutesTo5(m: number): number {
-  return Math.round(m / 5) * 5;
-}
+import {
+  clampPlanWindowToSlot,
+  memberEffectivePlanWindowsInfeasibleTogether,
+} from "@/lib/walkFeasibility";
 import { myTierEmoji, squadReactionPills } from "@/lib/reactionsUi";
 import { memberKeepsSlotOnScheduleShortlist } from "@/lib/scheduleShortlist";
 import { TIER_EMOJI, TIERS_ORDER } from "@/lib/tiers";
 import type { FestivalSnapshot, RatingTier } from "@/lib/types";
+
+function snapMinutesTo5(m: number): number {
+  return Math.round(m / 5) * 5;
+}
 
 type Slot = FestivalSnapshot["schedule"][0];
 
@@ -160,6 +166,12 @@ export function ScheduleCalendar({
   const [stripResize, setStripResize] = useState<{
     slotId: string;
     edge: "start" | "end";
+    anchorClientY: number;
+    baseFromM: number;
+    baseToM: number;
+  } | null>(null);
+  const [stripMove, setStripMove] = useState<{
+    slotId: string;
     anchorClientY: number;
     baseFromM: number;
     baseToM: number;
@@ -306,6 +318,101 @@ export function ScheduleCalendar({
 
   timelineMetricsRef.current = { minMR, maxMR, timelineBodyPx };
 
+  const useEffectiveSlotLayout = Boolean(
+    group && rateMemberId && visibilityMode === "effectivePlan"
+  );
+
+  const planWalkBands = useMemo(() => {
+    if (!group?.walkTimesEnabled || !activeDay) return [];
+    const dayKey = activeDay.trim();
+    if (buildPlanner && stripIds.length > 0) {
+      const ordered = stripIds
+        .map((id) => schedule.find((s) => s.id === id))
+        .filter((s): s is Slot => Boolean(s));
+      return walkBandsBetweenOrderedActs(group, ordered, stripWindows);
+    }
+    if (rateMemberId && useEffectiveSlotLayout) {
+      const slots = schedule.filter(
+        (s) =>
+          s.dayLabel.trim() === dayKey &&
+          effectiveMemberWantsSlot(group, rateMemberId, s.id)
+      );
+      slots.sort(
+        (a, b) =>
+          effectiveWindowMinutes(group, rateMemberId, a).start -
+          effectiveWindowMinutes(group, rateMemberId, b).start
+      );
+      const wins: Record<string, { planFrom: string; planTo: string }> = {};
+      for (const s of slots) {
+        const eff = effectiveMemberSlotPlanWindow(group, rateMemberId, s);
+        wins[s.id] = {
+          planFrom: eff.planFrom ?? s.start,
+          planTo: eff.planTo ?? s.end,
+        };
+      }
+      return walkBandsBetweenOrderedActs(group, slots, wins);
+    }
+    return [];
+  }, [
+    group,
+    activeDay,
+    buildPlanner,
+    stripIds,
+    stripWindows,
+    schedule,
+    rateMemberId,
+    useEffectiveSlotLayout,
+  ]);
+
+  const clashOverlapIntervalsBySlot = useMemo(() => {
+    const m = new Map<string, { o0: number; o1: number }[]>();
+    if (!group || !rateMemberId || !activeDay || !useEffectiveSlotLayout) {
+      return m;
+    }
+    const dayKey = activeDay.trim();
+    const wanted = schedule.filter(
+      (s) =>
+        s.dayLabel.trim() === dayKey &&
+        effectiveMemberWantsSlot(group, rateMemberId, s.id)
+    );
+    for (let i = 0; i < wanted.length; i++) {
+      for (let j = i + 1; j < wanted.length; j++) {
+        const a = wanted[i]!;
+        const b = wanted[j]!;
+        const x = a.id <= b.id ? a.id : b.id;
+        const y = a.id <= b.id ? b.id : a.id;
+        const r = findMyResolution(group, rateMemberId, x, y);
+        if (isMyClashResolved(r)) continue;
+        if (
+          !memberEffectivePlanWindowsInfeasibleTogether(
+            group,
+            rateMemberId,
+            a,
+            b
+          )
+        ) {
+          continue;
+        }
+        const wa = effectiveWindowMinutes(group, rateMemberId, a);
+        const wb = effectiveWindowMinutes(group, rateMemberId, b);
+        const o0 = Math.max(wa.start, wb.start);
+        const o1 = Math.min(wa.end, wb.end);
+        if (o0 >= o1) continue;
+        const pushSeg = (id: string, ws: number, we: number) => {
+          if (o1 <= ws || o0 >= we) return;
+          const seg0 = Math.max(o0, ws);
+          const seg1 = Math.min(o1, we);
+          const arr = m.get(id) ?? [];
+          arr.push({ o0: seg0, o1: seg1 });
+          m.set(id, arr);
+        };
+        pushSeg(a.id, wa.start, wa.end);
+        pushSeg(b.id, wb.start, wb.end);
+      }
+    }
+    return m;
+  }, [group, rateMemberId, activeDay, schedule, useEffectiveSlotLayout]);
+
   useEffect(() => {
     if (!stripResize || !buildPlanner) return;
     const slot = schedule.find((s) => s.id === stripResize.slotId);
@@ -361,6 +468,57 @@ export function ScheduleCalendar({
     };
   }, [stripResize, schedule, buildPlanner]);
 
+  useEffect(() => {
+    if (!stripMove || !buildPlanner) return;
+    const slot = schedule.find((s) => s.id === stripMove.slotId);
+    if (!slot) {
+      setStripMove(null);
+      return;
+    }
+    const lo = parseHm(slot.start);
+    const hi = parseHm(slot.end);
+    const duration = stripMove.baseToM - stripMove.baseFromM;
+
+    const onMove = (e: MouseEvent) => {
+      const { minMR: loR, maxMR: hiR, timelineBodyPx: tb } =
+        timelineMetricsRef.current;
+      const range = hiR - loR;
+      if (range <= 0 || tb <= 0) return;
+      const deltaY = e.clientY - stripMove.anchorClientY;
+      const deltaMin = (deltaY / tb) * range;
+      let nextFrom = snapMinutesTo5(Math.round(stripMove.baseFromM + deltaMin));
+      let nextTo = snapMinutesTo5(Math.round(nextFrom + duration));
+      const w = clampPlanWindowToSlot(
+        slot,
+        hhmmFromMinutes(nextFrom),
+        hhmmFromMinutes(nextTo)
+      );
+      let sm = parseHm(w.planFrom);
+      let em = parseHm(w.planTo);
+      if (!Number.isNaN(sm)) sm = snapMinutesTo5(sm);
+      if (!Number.isNaN(em)) em = snapMinutesTo5(em);
+      if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
+        if (!Number.isNaN(sm)) sm = Math.max(lo, Math.min(hi, sm));
+        if (!Number.isNaN(em)) em = Math.max(lo, Math.min(hi, em));
+      }
+      if (!Number.isNaN(sm) && !Number.isNaN(em) && em < sm) em = sm;
+      setStripWindows((prev) => ({
+        ...prev,
+        [slot.id]: {
+          planFrom: hhmmFromMinutes(sm),
+          planTo: hhmmFromMinutes(em),
+        },
+      }));
+    };
+    const onUp = () => setStripMove(null);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [stripMove, schedule, buildPlanner]);
+
   function plannerSortStart(slot: Slot): number {
     if (!buildPlanner || !stripIds.includes(slot.id)) {
       return parseHm(slot.start);
@@ -368,6 +526,16 @@ export function ScheduleCalendar({
     const w = stripWindows[slot.id];
     const t = w ? parseHm(w.planFrom) : NaN;
     return Number.isNaN(t) ? parseHm(slot.start) : t;
+  }
+
+  function layoutSortStart(slot: Slot): number {
+    if (buildPlanner && stripIds.includes(slot.id)) {
+      return plannerSortStart(slot);
+    }
+    if (useEffectiveSlotLayout && group && rateMemberId) {
+      return effectiveWindowMinutes(group, rateMemberId, slot).start;
+    }
+    return parseHm(slot.start);
   }
 
   function beginStripResize(
@@ -387,6 +555,24 @@ export function ScheduleCalendar({
     setStripResize({
       slotId: slot.id,
       edge,
+      anchorClientY: e.clientY,
+      baseFromM: sm,
+      baseToM: em,
+    });
+  }
+
+  function beginStripWindowMove(slot: Slot, e: ReactMouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const w = stripWindows[slot.id] ?? {
+      planFrom: slot.start,
+      planTo: slot.end,
+    };
+    const sm = parseHm(w.planFrom);
+    const em = parseHm(w.planTo);
+    if (Number.isNaN(sm) || Number.isNaN(em)) return;
+    setStripMove({
+      slotId: slot.id,
       anchorClientY: e.clientY,
       baseFromM: sm,
       baseToM: em,
@@ -443,9 +629,29 @@ export function ScheduleCalendar({
               </div>
             ))}
           </div>
+          <div className="relative flex min-w-0 flex-1">
+            {planWalkBands.map((band, bi) => {
+              const range = maxMR - minMR;
+              if (range <= 0) return null;
+              const topPx = ((band.fromM - minMR) / range) * timelineBodyPx;
+              const heightPx = Math.max(
+                ((band.toM - band.fromM) / range) * timelineBodyPx,
+                8
+              );
+              return (
+                <div
+                  key={`walk-${bi}`}
+                  className="pointer-events-none absolute left-0 right-0 z-[22] flex items-center justify-center border-y border-sky-700/50 bg-sky-400/45 text-[9px] font-bold text-sky-950"
+                  style={{ top: topPx, height: heightPx }}
+                >
+                  Walk {band.label}
+                </div>
+              );
+            })}
+            <div className="flex min-w-0 flex-1">
           {stagesToRender.map((stage) => {
             const sortedSlots = [...slotsForStage(stage)].sort(
-              (a, b) => plannerSortStart(a) - plannerSortStart(b)
+              (a, b) => layoutSortStart(a) - layoutSortStart(b)
             );
             return (
             <div
@@ -470,6 +676,10 @@ export function ScheduleCalendar({
                 {sortedSlots.map((slot, slotIndex) => {
                   const onStrip =
                     Boolean(buildPlanner && stripIds.includes(slot.id));
+                  const onPlan =
+                    !group ||
+                    !rateMemberId ||
+                    effectiveMemberWantsSlot(group, rateMemberId, slot.id);
                   let topPx: number;
                   let heightPx: number;
                   if (onStrip) {
@@ -485,6 +695,27 @@ export function ScheduleCalendar({
                       em = Math.max(lo, Math.min(hi, em));
                     }
                     if (em < sm) em = sm;
+                    const range = maxMR - minMR;
+                    if (range <= 0 || Number.isNaN(sm) || Number.isNaN(em)) {
+                      topPx = 0;
+                      heightPx = 40;
+                    } else {
+                      topPx = ((sm - minMR) / range) * timelineBodyPx;
+                      heightPx = Math.max(
+                        ((em - sm) / range) * timelineBodyPx,
+                        14
+                      );
+                    }
+                  } else if (useEffectiveSlotLayout && group && rateMemberId) {
+                    const ew = effectiveWindowMinutes(group, rateMemberId, slot);
+                    let sm = ew.start;
+                    let em = ew.end;
+                    const lo = parseHm(slot.start);
+                    const hi = parseHm(slot.end);
+                    if (!onPlan && !Number.isNaN(lo) && !Number.isNaN(hi)) {
+                      sm = lo;
+                      em = hi;
+                    }
                     const range = maxMR - minMR;
                     if (range <= 0 || Number.isNaN(sm) || Number.isNaN(em)) {
                       topPx = 0;
@@ -544,17 +775,55 @@ export function ScheduleCalendar({
                     }
                   };
 
-                  const shellClass = `absolute left-0.5 right-0.5 border-2 border-zinc-900 bg-zinc-50 px-1 py-0.5 text-left flex min-h-0 flex-col overflow-hidden ${
+                  const ghostOffPlan =
+                    useEffectiveSlotLayout &&
+                    group &&
+                    rateMemberId &&
+                    !onPlan;
+                  const shellClass = `absolute left-0.5 right-0.5 border-2 px-1 py-0.5 text-left flex min-h-0 flex-col overflow-hidden ${
+                    ghostOffPlan
+                      ? "border-dashed border-zinc-500 bg-zinc-200/80 opacity-70"
+                      : "border-zinc-900 bg-zinc-50"
+                  } ${
                     openDetailOrPanel
                       ? "cursor-pointer hover:bg-zinc-100"
                       : ""
                   }`;
 
+                  const ovSegs =
+                    clashOverlapIntervalsBySlot.get(slot.id) ?? [];
+                  let smCard = 0;
+                  let emCard = 0;
+                  if (onStrip) {
+                    const w = stripWindows[slot.id];
+                    const lo = parseHm(slot.start);
+                    const hi = parseHm(slot.end);
+                    smCard = w ? parseHm(w.planFrom) : lo;
+                    emCard = w ? parseHm(w.planTo) : hi;
+                    if (Number.isNaN(smCard)) smCard = lo;
+                    if (Number.isNaN(emCard)) emCard = hi;
+                  } else if (useEffectiveSlotLayout && group && rateMemberId) {
+                    const ew = effectiveWindowMinutes(group, rateMemberId, slot);
+                    smCard = ew.start;
+                    emCard = ew.end;
+                    if (ghostOffPlan) {
+                      smCard = parseHm(slot.start);
+                      emCard = parseHm(slot.end);
+                    }
+                  } else {
+                    smCard = parseHm(slot.start);
+                    emCard = parseHm(slot.end);
+                  }
+                  const durMin = emCard - smCard;
+
                   return (
                     <div
                       key={slot.id}
                       draggable={Boolean(
-                        buildPlanner && showAllStages && !stripResize
+                        buildPlanner &&
+                          showAllStages &&
+                          !stripResize &&
+                          !stripMove
                       )}
                       onDragStart={
                         buildPlanner && showAllStages
@@ -585,7 +854,26 @@ export function ScheduleCalendar({
                         zIndex: onStrip ? 40 + slotIndex : 6 + slotIndex,
                       }}
                     >
-                      <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+                      {ovSegs.map((seg, oi) => {
+                        if (durMin <= 0) return null;
+                        const t0 = (seg.o0 - smCard) / durMin;
+                        const t1 = (seg.o1 - smCard) / durMin;
+                        if (t1 <= 0 || t0 >= 1) return null;
+                        const topPct = Math.max(0, t0) * 100;
+                        const hPct =
+                          (Math.min(1, t1) - Math.max(0, t0)) * 100;
+                        return (
+                          <div
+                            key={oi}
+                            className="pointer-events-none absolute left-0 right-0 z-[8] bg-red-500/50 ring-1 ring-red-800"
+                            style={{
+                              top: `${topPct}%`,
+                              height: `${Math.max(hPct, 6)}%`,
+                            }}
+                          />
+                        );
+                      })}
+                      <div className="relative z-[2] flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
                         <p className="shrink-0 break-words text-[11px] font-semibold leading-snug text-zinc-900 [overflow-wrap:anywhere]">
                           {slot.artistName}
                         </p>
@@ -678,6 +966,8 @@ export function ScheduleCalendar({
             </div>
             );
           })}
+            </div>
+          </div>
           {buildPlanner && showAllStages && group && activeDay ? (
             <SchedulePlannerStrip
               group={group}
@@ -692,7 +982,12 @@ export function ScheduleCalendar({
               setStripScope={setStripScope}
               onApply={buildPlanner.onApplyPlan}
               onStripTimeResize={beginStripResize}
+              onStripWindowMoveStart={beginStripWindowMove}
               resizeBusy={Boolean(stripResize)}
+              moveBusy={Boolean(stripMove)}
+              timelineMinM={minMR}
+              timelineMaxM={maxMR}
+              timelineBodyPx={timelineBodyPx}
             />
           ) : null}
           </div>
