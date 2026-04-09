@@ -5,6 +5,17 @@ export function parseHm(s: string): number {
   return parseInt(m[1]!, 10) * 60 + parseInt(m[2]!, 10);
 }
 
+/** Like parseHm but allows single-digit minutes (e.g. 14:5) and normalizes unicode dashes. */
+export function parseHmRelaxed(s: string): number {
+  const t = s.trim().replace(/[–—]/g, "-");
+  const m = t.match(/^(\d{1,2}):(\d{1,2})$/);
+  if (!m) return NaN;
+  const h = parseInt(m[1]!, 10);
+  const mi = parseInt(m[2]!, 10);
+  if (mi < 0 || mi > 59 || h < 0 || h > 30) return NaN;
+  return h * 60 + mi;
+}
+
 export function hhmmFromMinutes(total: number): string {
   const h = Math.floor(total / 60);
   const mi = total % 60;

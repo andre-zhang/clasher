@@ -2,7 +2,7 @@ import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
 } from "@/lib/effectiveIntents";
-import { parseHm } from "@/lib/timeHm";
+import { parseHm, parseHmRelaxed } from "@/lib/timeHm";
 import type { FestivalSnapshot } from "@/lib/types";
 
 export type PlanWallpaperLine = {
@@ -108,7 +108,7 @@ export function buildMemberPlanCalendarSlotsForDay(
         stage: s.stageName.trim(),
       };
     })
-    .sort((a, b) => parseHm(a.start) - parseHm(b.start));
+    .sort((a, b) => parseHmRelaxed(a.start) - parseHmRelaxed(b.start));
 }
 
 export function buildUnionCalendarSlotsForDay(
@@ -130,7 +130,7 @@ export function buildUnionCalendarSlotsForDay(
       act: s.artistName,
       stage: s.stageName.trim(),
     }))
-    .sort((a, b) => parseHm(a.start) - parseHm(b.start));
+    .sort((a, b) => parseHmRelaxed(a.start) - parseHmRelaxed(b.start));
 }
 
 function maxFontForText(
@@ -161,7 +161,7 @@ function maxFontForText(
   return best;
 }
 
-/** Portrait 9:16 calendar grid for one day. */
+/** Portrait 9:16 — zoomed to when you have sets; tuned for lock-screen glance. */
 export function renderPlanWallpaperCalendarPng(
   dayLabel: string,
   title: string,
@@ -170,9 +170,9 @@ export function renderPlanWallpaperCalendarPng(
   const W = 1080;
   const H = 1920;
   const pad = 20;
-  const timeGutter = 56;
-  const headerH = 72;
-  const titleBlock = 56;
+  const timeGutter = 64;
+  const headerH = 80;
+  const titleBlock = 52;
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -188,108 +188,132 @@ export function renderPlanWallpaperCalendarPng(
   ctx.fillRect(0, 0, W, H);
 
   ctx.fillStyle = "#faf5ff";
-  ctx.font = "700 28px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText(title, pad, pad + 24);
+  ctx.font = "700 32px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText(title, pad, pad + 28);
 
-  ctx.font = "600 22px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.font = "600 24px system-ui, -apple-system, Segoe UI, sans-serif";
   ctx.fillStyle = "#e9d5ff";
-  ctx.fillText(dayLabel, pad, pad + 52);
+  ctx.fillText(dayLabel, pad, pad + 58);
 
-  const stages = [...new Set(slots.map((s) => s.stage))].sort();
+  const stages = [...new Set(slots.map((s) => s.stage.trim()))].sort();
   const topY = pad + headerH;
   const bodyH = H - topY - pad;
   const bodyW = W - pad * 2;
   const gridLeft = pad + timeGutter;
   const gridW = bodyW - timeGutter;
   const colW = stages.length ? gridW / stages.length : gridW;
+  const gridBottom = topY + bodyH;
 
-  let minM = 24 * 60;
-  let maxM = 0;
+  let contentMin = Infinity;
+  let contentMax = -Infinity;
   for (const s of slots) {
-    const a = parseHm(s.start);
-    const b = parseHm(s.end);
-    if (!Number.isNaN(a)) {
-      minM = Math.min(minM, a);
-      maxM = Math.max(maxM, b);
+    const a = parseHmRelaxed(s.start);
+    const b = parseHmRelaxed(s.end);
+    if (!Number.isNaN(a) && !Number.isNaN(b)) {
+      contentMin = Math.min(contentMin, a);
+      contentMax = Math.max(contentMax, b);
     }
   }
-  if (maxM <= minM) {
-    minM = 10 * 60;
-    maxM = 26 * 60;
-  }
-  minM = Math.floor(minM / 30) * 30;
-  maxM = Math.ceil(maxM / 30) * 30;
-  const range = Math.max(60, maxM - minM);
-  const pxPerMin = (bodyH - titleBlock) / range;
 
-  ctx.fillStyle = "rgba(255,255,255,0.12)";
-  ctx.fillRect(gridLeft, topY + titleBlock, gridW, bodyH - titleBlock);
+  if (!Number.isFinite(contentMin) || !Number.isFinite(contentMax)) {
+    ctx.fillStyle = "#fce7f3";
+    ctx.font = "600 22px system-ui, sans-serif";
+    ctx.fillText("Nothing planned this day", pad, topY + 80);
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error("toBlob failed"))),
+        "image/png",
+        0.92
+      );
+    });
+  }
+
+  const bufferMin = 15;
+  let minM = contentMin - bufferMin;
+  let maxM = contentMax + bufferMin;
+  const minSpan = 100;
+  if (maxM - minM < minSpan) {
+    const mid = (minM + maxM) / 2;
+    minM = mid - minSpan / 2;
+    maxM = mid + minSpan / 2;
+  }
+  minM = Math.max(0, minM);
+  maxM = Math.min(24 * 60 + 120, maxM);
+
+  const stepM = maxM - minM > 240 ? 60 : maxM - minM > 90 ? 30 : 15;
+  minM = Math.floor(minM / stepM) * stepM;
+  maxM = Math.ceil(maxM / stepM) * stepM;
+  const range = Math.max(stepM, maxM - minM);
+  const timelineH = gridBottom - (topY + titleBlock);
+  const pxPerMin = timelineH / range;
+
+  ctx.fillStyle = "rgba(255,255,255,0.14)";
+  ctx.fillRect(gridLeft, topY + titleBlock, gridW, timelineH);
 
   stages.forEach((st, i) => {
     const x = gridLeft + i * colW;
     ctx.fillStyle = STAGE_BG[i % STAGE_BG.length]!;
-    ctx.fillRect(x, topY, colW, titleBlock - 4);
+    ctx.fillRect(x, topY, colW, titleBlock - 2);
     ctx.fillStyle = "#1e1b4b";
-    ctx.font = "700 13px system-ui, -apple-system, Segoe UI, sans-serif";
-    const label =
-      st.length > 14 ? `${st.slice(0, 12)}…` : st;
-    ctx.fillText(label, x + 4, topY + 22);
-    ctx.strokeStyle = "rgba(0,0,0,0.15)";
+    ctx.font = "700 15px system-ui, -apple-system, Segoe UI, sans-serif";
+    const label = st.length > 16 ? `${st.slice(0, 14)}…` : st;
+    ctx.fillText(label, x + 4, topY + 24);
+    ctx.strokeStyle = "rgba(0,0,0,0.2)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(x + colW, topY);
-    ctx.lineTo(x + colW, H - pad);
+    ctx.lineTo(x + colW, gridBottom);
     ctx.stroke();
   });
 
-  for (let m = minM; m <= maxM; m += 30) {
+  for (let m = minM; m <= maxM; m += stepM) {
     const y = topY + titleBlock + (m - minM) * pxPerMin;
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
     ctx.beginPath();
     ctx.moveTo(gridLeft, y);
     ctx.lineTo(W - pad, y);
     ctx.stroke();
-    ctx.fillStyle = "#e9d5ff";
-    ctx.font = "500 11px ui-monospace, monospace";
-    const hh = Math.floor(m / 60) % 24;
+    ctx.fillStyle = "#fae8ff";
+    ctx.font = "600 13px ui-monospace, monospace";
+    const hh = Math.floor(m / 60);
     const mm = m % 60;
     const label = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-    ctx.fillText(label, pad, y + 4);
+    ctx.fillText(label, pad, y + 5);
   }
 
   const stageIndex = new Map(stages.map((s, i) => [s, i]));
 
   for (const s of slots) {
-    const si = stageIndex.get(s.stage);
+    const si = stageIndex.get(s.stage.trim());
     if (si === undefined) continue;
-    const ss = parseHm(s.start);
-    const ee = parseHm(s.end);
+    const ss = parseHmRelaxed(s.start);
+    const ee = parseHmRelaxed(s.end);
     if (Number.isNaN(ss) || Number.isNaN(ee)) continue;
     const y0 = topY + titleBlock + (ss - minM) * pxPerMin;
     const y1 = topY + titleBlock + (ee - minM) * pxPerMin;
-    const h = Math.max(y1 - y0, 6);
+    const h = Math.max(y1 - y0, 10);
     const x = gridLeft + si * colW + 2;
     const w = colW - 4;
 
     ctx.fillStyle = STAGE_BG[si % STAGE_BG.length]!;
-    ctx.globalAlpha = 0.95;
+    ctx.globalAlpha = 0.98;
     ctx.fillRect(x, y0, w, h);
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = "#1e1b4b";
+    ctx.strokeStyle = "#0f172a";
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y0, w, h);
 
-    const innerPad = 6;
+    const innerPad = 8;
     const maxTextW = w - innerPad * 2;
-    const maxTextH = h - innerPad * 2 - 14;
+    const maxTextH = Math.max(18, h - innerPad * 2 - 18);
     const timeStr = `${s.start}–${s.end}`;
-    const fp = maxFontForText(ctx, s.act, maxTextW, maxTextH, 9, 22);
+    const fp = maxFontForText(ctx, s.act, maxTextW, maxTextH, 11, 30);
     ctx.fillStyle = "#0f172a";
     ctx.font = `700 ${fp}px system-ui, -apple-system, Segoe UI, sans-serif`;
     ctx.fillText(s.act, x + innerPad, y0 + innerPad + fp);
 
-    ctx.font = `500 ${Math.min(11, fp)}px ui-monospace, monospace`;
-    ctx.fillStyle = "#334155";
+    ctx.font = `600 ${Math.min(14, Math.max(10, fp - 4))}px ui-monospace, monospace`;
+    ctx.fillStyle = "#1e293b";
     ctx.fillText(timeStr, x + innerPad, y0 + h - 6);
   }
 

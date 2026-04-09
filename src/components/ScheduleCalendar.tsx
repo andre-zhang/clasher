@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type SyntheticEvent,
 } from "react";
 
@@ -14,6 +15,7 @@ import {
   effectiveMemberWantsSlot,
 } from "@/lib/effectiveIntents";
 import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
+import { clampPlanWindowToSlot } from "@/lib/walkFeasibility";
 import { myTierEmoji, squadReactionPills } from "@/lib/reactionsUi";
 import { memberKeepsSlotOnScheduleShortlist } from "@/lib/scheduleShortlist";
 import { TIER_EMOJI, TIERS_ORDER } from "@/lib/tiers";
@@ -160,6 +162,19 @@ export function ScheduleCalendar({
   const [stripWindows, setStripWindows] = useState<
     Record<string, { planFrom: string; planTo: string }>
   >({});
+  const [stripResize, setStripResize] = useState<{
+    slotId: string;
+    edge: "start" | "end";
+    anchorClientY: number;
+    baseFromM: number;
+    baseToM: number;
+  } | null>(null);
+
+  const timelineMetricsRef = useRef({
+    minMR: 0,
+    maxMR: 60,
+    timelineBodyPx: 100,
+  });
 
   const noteSlot = useMemo(
     () => schedule.find((s) => s.id === noteSlotId) ?? null,
@@ -233,6 +248,93 @@ export function ScheduleCalendar({
   const timelineBodyPx = ticksRender.length * pxPerSlot;
   const { minM: minMR, maxM: maxMR } = minMaxForStages;
 
+  timelineMetricsRef.current = { minMR, maxMR, timelineBodyPx };
+
+  useEffect(() => {
+    if (!stripResize || !buildPlanner) return;
+    const slot = schedule.find((s) => s.id === stripResize.slotId);
+    if (!slot) {
+      setStripResize(null);
+      return;
+    }
+    const lo = parseHm(slot.start);
+    const hi = parseHm(slot.end);
+
+    const onMove = (e: MouseEvent) => {
+      const { minMR: loR, maxMR: hiR, timelineBodyPx: tb } =
+        timelineMetricsRef.current;
+      const range = hiR - loR;
+      if (range <= 0 || tb <= 0) return;
+      const deltaY = e.clientY - stripResize.anchorClientY;
+      const deltaMin = (deltaY / tb) * range;
+      let nextFrom = stripResize.baseFromM;
+      let nextTo = stripResize.baseToM;
+      if (stripResize.edge === "end") {
+        nextTo = stripResize.baseToM + deltaMin;
+      } else {
+        nextFrom = stripResize.baseFromM + deltaMin;
+      }
+      const w = clampPlanWindowToSlot(
+        slot,
+        hhmmFromMinutes(Math.round(nextFrom)),
+        hhmmFromMinutes(Math.round(nextTo))
+      );
+      let sm = parseHm(w.planFrom);
+      let em = parseHm(w.planTo);
+      if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
+        sm = Math.max(lo, Math.min(hi, sm));
+        em = Math.max(lo, Math.min(hi, em));
+      }
+      if (em < sm) em = sm;
+      setStripWindows((prev) => ({
+        ...prev,
+        [slot.id]: {
+          planFrom: hhmmFromMinutes(sm),
+          planTo: hhmmFromMinutes(em),
+        },
+      }));
+    };
+    const onUp = () => setStripResize(null);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [stripResize, schedule, buildPlanner]);
+
+  function plannerSortStart(slot: Slot): number {
+    if (!buildPlanner || !stripIds.includes(slot.id)) {
+      return parseHm(slot.start);
+    }
+    const w = stripWindows[slot.id];
+    const t = w ? parseHm(w.planFrom) : NaN;
+    return Number.isNaN(t) ? parseHm(slot.start) : t;
+  }
+
+  function beginStripResize(
+    slot: Slot,
+    edge: "start" | "end",
+    e: ReactMouseEvent
+  ) {
+    e.stopPropagation();
+    e.preventDefault();
+    const w = stripWindows[slot.id] ?? {
+      planFrom: slot.start,
+      planTo: slot.end,
+    };
+    const sm = parseHm(w.planFrom);
+    const em = parseHm(w.planTo);
+    if (Number.isNaN(sm) || Number.isNaN(em)) return;
+    setStripResize({
+      slotId: slot.id,
+      edge,
+      anchorClientY: e.clientY,
+      baseFromM: sm,
+      baseToM: em,
+    });
+  }
+
   if (!schedule.length) {
     return <p className="text-sm text-zinc-600">No slots.</p>;
   }
@@ -284,7 +386,7 @@ export function ScheduleCalendar({
           </div>
           {stagesToRender.map((stage) => {
             const sortedSlots = [...slotsForStage(stage)].sort(
-              (a, b) => parseHm(a.start) - parseHm(b.start)
+              (a, b) => plannerSortStart(a) - plannerSortStart(b)
             );
             return (
             <div
@@ -307,15 +409,46 @@ export function ScheduleCalendar({
                   />
                 ))}
                 {sortedSlots.map((slot, slotIndex) => {
-                  const layout = slotPixelLayout(
-                    sortedSlots,
-                    slotIndex,
-                    minMR,
-                    maxMR,
-                    timelineBodyPx
-                  );
-                  if (!layout) return null;
-                  const { topPx, heightPx } = layout;
+                  const onStrip =
+                    Boolean(buildPlanner && stripIds.includes(slot.id));
+                  let topPx: number;
+                  let heightPx: number;
+                  if (onStrip) {
+                    const w = stripWindows[slot.id];
+                    const lo = parseHm(slot.start);
+                    const hi = parseHm(slot.end);
+                    let sm = w ? parseHm(w.planFrom) : lo;
+                    let em = w ? parseHm(w.planTo) : hi;
+                    if (Number.isNaN(sm)) sm = lo;
+                    if (Number.isNaN(em)) em = hi;
+                    if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
+                      sm = Math.max(lo, Math.min(hi, sm));
+                      em = Math.max(lo, Math.min(hi, em));
+                    }
+                    if (em < sm) em = sm;
+                    const range = maxMR - minMR;
+                    if (range <= 0 || Number.isNaN(sm) || Number.isNaN(em)) {
+                      topPx = 0;
+                      heightPx = 40;
+                    } else {
+                      topPx = ((sm - minMR) / range) * timelineBodyPx;
+                      heightPx = Math.max(
+                        ((em - sm) / range) * timelineBodyPx,
+                        14
+                      );
+                    }
+                  } else {
+                    const layout = slotPixelLayout(
+                      sortedSlots,
+                      slotIndex,
+                      minMR,
+                      maxMR,
+                      timelineBodyPx
+                    );
+                    if (!layout) return null;
+                    topPx = layout.topPx;
+                    heightPx = layout.heightPx;
+                  }
                   const all =
                     group?.allMemberSlotIntents ?? allMemberSlotIntents ?? [];
                   const planMember = rateMemberId;
@@ -384,7 +517,9 @@ export function ScheduleCalendar({
                   return (
                     <div
                       key={slot.id}
-                      draggable={Boolean(buildPlanner && showAllStages)}
+                      draggable={Boolean(
+                        buildPlanner && showAllStages && !stripResize
+                      )}
                       onDragStart={
                         buildPlanner && showAllStages
                           ? (e) => {
@@ -414,6 +549,24 @@ export function ScheduleCalendar({
                         zIndex: 5 + slotIndex,
                       }}
                     >
+                      {onStrip ? (
+                        <>
+                          <button
+                            type="button"
+                            aria-label="Adjust start time"
+                            data-planner-handle
+                            className="absolute left-0 right-0 top-0 z-20 h-2 cursor-ns-resize border-0 bg-zinc-900/40 p-0 hover:bg-zinc-900/65"
+                            onMouseDown={(e) => beginStripResize(slot, "start", e)}
+                          />
+                          <button
+                            type="button"
+                            aria-label="Adjust end time"
+                            data-planner-handle
+                            className="absolute bottom-0 left-0 right-0 z-20 h-2 cursor-ns-resize border-0 bg-zinc-900/40 p-0 hover:bg-zinc-900/65"
+                            onMouseDown={(e) => beginStripResize(slot, "end", e)}
+                          />
+                        </>
+                      ) : null}
                       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
                         <p className="shrink-0 break-words text-[11px] font-semibold leading-snug text-zinc-900 [overflow-wrap:anywhere]">
                           {slot.artistName}
