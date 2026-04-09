@@ -7,79 +7,32 @@ import { PlanWallpaperExport } from "@/components/PlanWallpaperExport";
 import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { useClasher } from "@/context/ClasherContext";
 import {
-  describeConflictResolution,
-  findMyResolution,
-  isMyClashResolved,
-} from "@/lib/clash";
-import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
 } from "@/lib/effectiveIntents";
-import { planDayTravelLines } from "@/lib/planMemberDay";
-import {
-  memberEffectivePlanWindowsInfeasibleTogether,
-} from "@/lib/walkFeasibility";
 import { buildSlotIntentsFromHotRatings } from "@/lib/syncIntentsFromRatings";
 import type { FestivalSnapshot } from "@/lib/types";
 
-function planDetailBullets(
+function planDetailSummary(
   group: FestivalSnapshot,
   memberId: string,
   slot: FestivalSnapshot["schedule"][0]
-): string[] {
-  const lines: string[] = [
-    `Full listing: ${slot.start}–${slot.end} · ${slot.stageName} · ${slot.dayLabel}`,
-  ];
-  if (effectiveMemberWantsSlot(group, memberId, slot.id)) {
-    const w = effectiveMemberSlotPlanWindow(group, memberId, slot);
-    if (w.planFrom && w.planTo) {
-      lines.push(`Your plan window: ${w.planFrom}–${w.planTo}`);
-    } else {
-      lines.push("Your plan window: full set (no partial time)");
-    }
-  } else {
-    lines.push("Not on your plan for this window (clash / flags).");
+): { listingTime: string; listingWhere: string; planLine: string } {
+  const listingTime = `${slot.start}–${slot.end}`;
+  const listingWhere = `${slot.stageName} · ${slot.dayLabel}`;
+  if (!effectiveMemberWantsSlot(group, memberId, slot.id)) {
+    return {
+      listingTime,
+      listingWhere,
+      planLine: "Not on your plan",
+    };
   }
-
-  const travel = planDayTravelLines(group, memberId, slot.dayLabel);
-  if (travel.length) {
-    lines.push("Travel between your acts this day:");
-    lines.push(...travel);
-  }
-
-  for (const other of group.schedule) {
-    if (other.id === slot.id) continue;
-    if (!effectiveMemberWantsSlot(group, memberId, other.id)) continue;
-    if (
-      !memberEffectivePlanWindowsInfeasibleTogether(
-        group,
-        memberId,
-        slot,
-        other
-      )
-    ) {
-      continue;
-    }
-    const x = slot.id <= other.id ? slot.id : other.id;
-    const y = slot.id <= other.id ? other.id : slot.id;
-    const a = group.schedule.find((s) => s.id === x)!;
-    const b = group.schedule.find((s) => s.id === y)!;
-    const r = findMyResolution(group, memberId, x, y);
-    if (r && isMyClashResolved(r)) {
-      lines.push(
-        `Plan overlap / travel with ${other.artistName}: ${describeConflictResolution(r, a, b)}`
-      );
-    } else if (r) {
-      lines.push(
-        `Plan overlap / travel with ${other.artistName}: in progress / undecided`
-      );
-    } else {
-      lines.push(
-        `Plan overlap or not enough travel with ${other.artistName} (check windows or Options map).`
-      );
-    }
-  }
-  return lines;
+  const w = effectiveMemberSlotPlanWindow(group, memberId, slot);
+  const planLine =
+    w.planFrom && w.planTo
+      ? `${w.planFrom}–${w.planTo}`
+      : "Full slot (no partial window)";
+  return { listingTime, listingWhere, planLine };
 }
 
 export default function PlansPage() {
@@ -94,6 +47,7 @@ export default function PlansPage() {
   );
   const [planNoteDraft, setPlanNoteDraft] = useState("");
   const [planNoteSaving, setPlanNoteSaving] = useState(false);
+  const [planRemoveBusy, setPlanRemoveBusy] = useState(false);
   const planDetailRef = useRef<HTMLDialogElement>(null);
 
   const me = session?.memberId ?? null;
@@ -107,6 +61,19 @@ export default function PlansPage() {
 
   const activeDay = day ?? days[0] ?? null;
 
+  /** Remount calendar when this member's intents change so layout matches Schedule strip / API. */
+  const memberIntentsKey = useMemo(() => {
+    if (!group || !activeMember) return "0";
+    return group.allMemberSlotIntents
+      .filter((i) => i.memberId === activeMember)
+      .map(
+        (i) =>
+          `${i.slotId}:${i.wants ? 1 : 0}:${i.planFrom ?? ""}:${i.planTo ?? ""}`
+      )
+      .sort()
+      .join("|");
+  }, [group, activeMember]);
+
   const detailSlot = useMemo(
     () =>
       group && planDetailSlotId
@@ -114,6 +81,11 @@ export default function PlansPage() {
         : null,
     [group, planDetailSlotId]
   );
+
+  const openPlanSummary = useMemo(() => {
+    if (!group || !activeMember || !detailSlot) return null;
+    return planDetailSummary(group, activeMember, detailSlot);
+  }, [group, activeMember, detailSlot]);
 
   useEffect(() => {
     if (planDetailSlotId) planDetailRef.current?.showModal();
@@ -196,6 +168,7 @@ export default function PlansPage() {
           </label>
           {activeMember ? (
             <ScheduleCalendar
+              key={memberIntentsKey}
               schedule={group.schedule}
               memberId={activeMember}
               allMemberSlotIntents={group.allMemberSlotIntents}
@@ -262,13 +235,57 @@ export default function PlansPage() {
             <h3 className="text-base font-bold text-zinc-900">
               {detailSlot.artistName}
             </h3>
-            <ul className="mt-3 list-disc space-y-2 pl-4 text-sm text-zinc-800">
-              {planDetailBullets(group, activeMember, detailSlot).map(
-                (line, i) => (
-                  <li key={i}>{line}</li>
-                )
-              )}
-            </ul>
+            {openPlanSummary ? (
+              <div className="mt-3 space-y-3">
+                <div className="rounded border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                    Festival listing
+                  </p>
+                  <p className="mt-1 font-mono text-sm font-semibold text-zinc-900">
+                    {openPlanSummary.listingTime}
+                  </p>
+                  <p className="mt-0.5 text-xs text-zinc-600">
+                    {openPlanSummary.listingWhere}
+                  </p>
+                </div>
+                <div className="rounded border-2 border-zinc-900 bg-white px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                    Your plan
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-zinc-900">
+                    {openPlanSummary.planLine}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            {activeMember === session.memberId &&
+            effectiveMemberWantsSlot(group, session.memberId, detailSlot.id) ? (
+              <button
+                type="button"
+                disabled={planRemoveBusy}
+                className="mt-3 w-full border-2 border-red-800 bg-white py-2 text-xs font-semibold text-red-900 hover:bg-red-50 disabled:opacity-40"
+                onClick={() => {
+                  setPlanRemoveBusy(true);
+                  void (async () => {
+                    try {
+                      await putSlotIntents([
+                        {
+                          slotId: detailSlot.id,
+                          wants: false,
+                          planFrom: null,
+                          planTo: null,
+                        },
+                      ]);
+                      planDetailRef.current?.close();
+                    } finally {
+                      setPlanRemoveBusy(false);
+                    }
+                  })();
+                }}
+              >
+                {planRemoveBusy ? "…" : "Remove from my plan"}
+              </button>
+            ) : null}
             <div className="mt-4 border-t border-zinc-200 pt-3">
               <p className="text-xs font-semibold text-zinc-800">Slot notes</p>
               <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto text-xs">

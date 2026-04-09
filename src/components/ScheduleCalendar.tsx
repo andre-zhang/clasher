@@ -628,22 +628,6 @@ export function ScheduleCalendar({
               className="relative shrink-0 overflow-hidden"
               style={{ height: timelineBodyPx }}
             >
-              {planWalkBands.map((band, bi) => {
-                const range = maxMR - minMR;
-                if (range <= 0) return null;
-                const topPx = ((band.fromM - minMR) / range) * timelineBodyPx;
-                const durPx = ((band.toM - band.fromM) / range) * timelineBodyPx;
-                const bandH = Math.max(durPx, 4);
-                const dotTop = topPx + bandH / 2 - 3;
-                return (
-                  <div
-                    key={`walk-dot-${bi}`}
-                    className="pointer-events-none absolute left-1/2 z-10 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-zinc-900"
-                    style={{ top: dotTop }}
-                    aria-hidden
-                  />
-                );
-              })}
               {ticksRender.map((m, i) => (
                 <div
                   key={m}
@@ -656,7 +640,28 @@ export function ScheduleCalendar({
             </div>
           </div>
           <div className="relative flex min-w-0 flex-1">
-            <div className="flex min-w-0 flex-1">
+            <div className="relative flex min-w-0 flex-1">
+              {showEffectivePlanLayer &&
+                planWalkBands.map((band, bi) => {
+                  const range = maxMR - minMR;
+                  if (range <= 0) return null;
+                  const topPx = ((band.fromM - minMR) / range) * timelineBodyPx;
+                  const durPx =
+                    ((band.toM - band.fromM) / range) * timelineBodyPx;
+                  const heightPx = Math.max(durPx, 4);
+                  return (
+                    <div
+                      key={`walk-span-${bi}`}
+                      className="pointer-events-none absolute left-0 right-0 z-[3] bg-zinc-900/20"
+                      style={{
+                        top: 32 + topPx,
+                        height: heightPx,
+                      }}
+                      aria-hidden
+                    />
+                  );
+                })}
+              <div className="flex min-w-0 flex-1">
           {stagesToRender.map((stage) => {
             const sortedSlots = [...slotsForStage(stage)].sort(
               (a, b) => layoutSortStart(a) - layoutSortStart(b)
@@ -938,8 +943,8 @@ export function ScheduleCalendar({
             </div>
             );
           })}
+              </div>
             </div>
-          </div>
           {buildPlanner && showAllStages && group && activeDay ? (
             <SchedulePlannerStrip
               group={group}
@@ -963,6 +968,7 @@ export function ScheduleCalendar({
             />
           ) : null}
           </div>
+        </div>
         </div>
       )}
 

@@ -327,13 +327,12 @@ export function SchedulePlannerStrip({
           const topPx = ((band.fromM - timelineMinM) / range) * timelineBodyPx;
           const durPx =
             ((band.toM - band.fromM) / range) * timelineBodyPx;
-          const bandH = Math.max(durPx, 4);
-          const dotTop = topPx + bandH / 2 - 3;
+          const heightPx = Math.max(durPx, 3);
           return (
             <div
               key={`w-${i}`}
-              className="pointer-events-none absolute left-2 z-[1] h-1.5 w-1.5 rounded-full bg-zinc-900"
-              style={{ top: dotTop }}
+              className="pointer-events-none absolute left-0 right-0 z-[1] bg-zinc-900/25"
+              style={{ top: topPx, height: heightPx }}
               aria-hidden
             />
           );
