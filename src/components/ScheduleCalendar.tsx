@@ -624,32 +624,34 @@ export function ScheduleCalendar({
             style={{ width: 56, minHeight: timelineHRender }}
           >
             <div className="sticky top-0 z-40 h-8 shrink-0 border-b-2 border-zinc-900 bg-zinc-50" />
-            {ticksRender.map((m) => (
-              <div
-                key={m}
-                className="flex shrink-0 items-start border-b border-zinc-200 px-1 pt-0.5 text-[10px] font-mono text-zinc-600"
-                style={{ height: pxPerSlot }}
-              >
-                {hhmmFromMinutes(m)}
-              </div>
-            ))}
+            <div className="relative shrink-0" style={{ height: timelineBodyPx }}>
+              {planWalkBands.map((band, bi) => {
+                const range = maxMR - minMR;
+                if (range <= 0) return null;
+                const topPx = ((band.fromM - minMR) / range) * timelineBodyPx;
+                const durPx = ((band.toM - band.fromM) / range) * timelineBodyPx;
+                const heightPx = Math.max(durPx, 4);
+                return (
+                  <div
+                    key={`walk-rail-${bi}`}
+                    className="pointer-events-none absolute right-0.5 z-10 w-[3px] rounded-full bg-zinc-900 shadow-[0_0_0_1px_rgba(255,255,255,0.85)]"
+                    style={{ top: topPx, height: heightPx }}
+                    aria-hidden
+                  />
+                );
+              })}
+              {ticksRender.map((m, i) => (
+                <div
+                  key={m}
+                  className="pointer-events-none absolute left-0 right-0 flex items-start border-b border-zinc-200 px-1 pt-0.5 text-[10px] font-mono text-zinc-600"
+                  style={{ top: i * pxPerSlot, height: pxPerSlot }}
+                >
+                  {hhmmFromMinutes(m)}
+                </div>
+              ))}
+            </div>
           </div>
           <div className="relative flex min-w-0 flex-1">
-            {planWalkBands.map((band, bi) => {
-              const range = maxMR - minMR;
-              if (range <= 0) return null;
-              const topPx = ((band.fromM - minMR) / range) * timelineBodyPx;
-              const durPx = ((band.toM - band.fromM) / range) * timelineBodyPx;
-              const heightPx = Math.max(durPx, 2);
-              return (
-                <div
-                  key={`walk-${bi}`}
-                  className="pointer-events-none absolute left-0 right-0 z-[22] bg-black"
-                  style={{ top: topPx, height: heightPx }}
-                  aria-hidden
-                />
-              );
-            })}
             <div className="flex min-w-0 flex-1">
           {stagesToRender.map((stage) => {
             const sortedSlots = [...slotsForStage(stage)].sort(

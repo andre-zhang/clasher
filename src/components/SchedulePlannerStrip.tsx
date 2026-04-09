@@ -251,7 +251,12 @@ export function SchedulePlannerStrip({
     if (!onStripWindowMoveStart) return;
     if (e.button !== 0) return;
     const t = e.target as HTMLElement | null;
-    if (t?.closest("button,a,input,textarea,[data-strip-resize]")) return;
+    if (
+      t?.closest(
+        "button,a,input,textarea,[data-strip-resize],[data-strip-drag]"
+      )
+    )
+      return;
     const y0 = e.clientY;
     let moved = false;
     const onMove = (ev: PointerEvent) => {
@@ -322,11 +327,11 @@ export function SchedulePlannerStrip({
           const topPx = ((band.fromM - timelineMinM) / range) * timelineBodyPx;
           const durPx =
             ((band.toM - band.fromM) / range) * timelineBodyPx;
-          const heightPx = Math.max(durPx, 2);
+          const heightPx = Math.max(durPx, 4);
           return (
             <div
               key={`w-${i}`}
-              className="pointer-events-none absolute left-0 right-0 z-[1] bg-black"
+              className="pointer-events-none absolute right-1 z-[1] w-[3px] rounded-full bg-zinc-900 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]"
               style={{ top: topPx, height: heightPx }}
               aria-hidden
             />
@@ -373,24 +378,26 @@ export function SchedulePlannerStrip({
                 syncWindowsForOrder(next);
               }}
             >
-              <button
-                type="button"
+              <div
+                data-strip-drag
                 draggable={!resizeBusy && !moveBusy}
                 aria-label="Reorder in strip"
-                className="h-3.5 shrink-0 cursor-grab border-b border-zinc-300 bg-zinc-200 text-[9px] leading-3 text-zinc-600 active:cursor-grabbing"
+                className="absolute bottom-0 left-0 top-0 z-[26] flex w-2 cursor-grab items-center justify-center border-r border-zinc-200 bg-zinc-100/90 active:cursor-grabbing"
                 onDragStart={(e) => {
                   e.stopPropagation();
                   e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
                   e.dataTransfer.effectAllowed = "move";
                 }}
               >
-                ≡
-              </button>
-              <div className="relative min-h-0 flex-1">
+                <span className="select-none text-[9px] leading-none text-zinc-400">
+                  ⋮
+                </span>
+              </div>
+              <div className="relative min-h-0 flex-1 pl-2">
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="start"
-                    className="absolute left-0 right-0 top-0 z-20 h-2 cursor-ns-resize"
+                    className="absolute left-0 right-0 top-0 z-20 h-1.5 cursor-ns-resize"
                     onMouseDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -399,24 +406,24 @@ export function SchedulePlannerStrip({
                   />
                 ) : null}
                 <div
-                  className={`flex h-full min-h-0 flex-col justify-center gap-0.5 overflow-hidden px-1 pb-2.5 pt-2.5 ${
+                  className={`flex h-full min-h-0 flex-col justify-start gap-px overflow-y-auto overflow-x-hidden px-0.5 pb-1.5 pt-1.5 ${
                     onStripWindowMoveStart
                       ? "cursor-grab active:cursor-grabbing"
                       : ""
                   }`}
                   onPointerDown={(e) => bodyPointerDown(slot, e)}
                 >
-                  <p className="line-clamp-3 text-[11px] font-bold leading-snug text-zinc-900">
+                  <p className="text-[11px] font-bold leading-[1.15] text-zinc-900 [overflow-wrap:anywhere]">
                     {slot.artistName}
                   </p>
-                  <p className="line-clamp-2 text-[9px] leading-tight text-zinc-500">
+                  <p className="text-[8px] leading-tight text-zinc-500 [overflow-wrap:anywhere]">
                     {slot.stageName}
                   </p>
                 </div>
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="end"
-                    className="absolute bottom-0 left-0 right-0 z-20 h-2 cursor-ns-resize"
+                    className="absolute bottom-0 left-0 right-0 z-20 h-1.5 cursor-ns-resize"
                     onMouseDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -427,7 +434,7 @@ export function SchedulePlannerStrip({
               </div>
               <button
                 type="button"
-                className="absolute right-0.5 top-4 z-[25] border border-zinc-400 bg-white px-0.5 text-[9px] leading-none text-red-800"
+                className="absolute right-0.5 top-0.5 z-[25] border border-zinc-400 bg-white px-0.5 text-[9px] leading-none text-red-800"
                 onClick={(e) => {
                   e.stopPropagation();
                   setStripIds((ids) => {
