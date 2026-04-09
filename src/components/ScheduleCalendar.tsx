@@ -644,7 +644,7 @@ export function ScheduleCalendar({
               return (
                 <div
                   key={`walk-${bi}`}
-                  className="pointer-events-none absolute left-0 right-0 z-[22] bg-zinc-950"
+                  className="pointer-events-none absolute left-0 right-0 z-[22] bg-black"
                   style={{ top: topPx, height: heightPx }}
                   aria-hidden
                 />

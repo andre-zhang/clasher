@@ -326,7 +326,7 @@ export function SchedulePlannerStrip({
           return (
             <div
               key={`w-${i}`}
-              className="pointer-events-none absolute left-0 right-0 z-[1] bg-zinc-950"
+              className="pointer-events-none absolute left-0 right-0 z-[1] bg-black"
               style={{ top: topPx, height: heightPx }}
               aria-hidden
             />
