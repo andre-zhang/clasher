@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 
+import { ClasherCheckbox } from "@/components/ClasherCheckbox";
 import { ScanningOverlay } from "@/components/ScanningOverlay";
 import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { useClasher } from "@/context/ClasherContext";
@@ -309,26 +310,24 @@ export default function SchedulePage() {
       </div>
 
       {calendarMode === "all" ? (
-        <label className="flex flex-wrap items-center gap-4 text-xs text-zinc-800">
-          <span className="flex items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={plannerOn}
-              onChange={(e) => setPlannerOn(e.target.checked)}
-            />
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <ClasherCheckbox
+            size="sm"
+            checked={plannerOn}
+            onChange={setPlannerOn}
+          >
             Plan strip
-          </span>
+          </ClasherCheckbox>
           {plannerOn ? (
-            <span className="flex items-center gap-1.5">
-              <input
-                type="checkbox"
-                checked={plannerClashes}
-                onChange={(e) => setPlannerClashes(e.target.checked)}
-              />
+            <ClasherCheckbox
+              size="sm"
+              checked={plannerClashes}
+              onChange={setPlannerClashes}
+            >
               Allow clashes
-            </span>
+            </ClasherCheckbox>
           ) : null}
-        </label>
+        </div>
       ) : null}
 
       <ScheduleCalendar

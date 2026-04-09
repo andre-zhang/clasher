@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { ClasherCheckbox } from "@/components/ClasherCheckbox";
 import { useClasher } from "@/context/ClasherContext";
 import {
   buildWalkMatrixFromStageOrder,
@@ -300,14 +301,12 @@ export default function OptionsPage() {
             </button>
           </div>
         ) : null}
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-800">
-          <input
-            type="checkbox"
-            checked={group.walkTimesEnabled}
-            onChange={(e) => void saveWalkToggle(e.target.checked)}
-          />
+        <ClasherCheckbox
+          checked={group.walkTimesEnabled}
+          onChange={(v) => void saveWalkToggle(v)}
+        >
           Use walk times in clashes and plans
-        </label>
+        </ClasherCheckbox>
       </section>
 
       <section className="border-t border-zinc-300 pt-4">

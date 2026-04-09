@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { ClasherCheckbox } from "@/components/ClasherCheckbox";
 import {
   buildMemberPlanCalendarSlotsForDay,
   buildUnionCalendarSlotsForDay,
@@ -142,21 +143,18 @@ export function PlanWallpaperExport({
         {days.length > 0 ? (
           <fieldset className="space-y-1">
             <legend className="text-xs font-semibold text-zinc-800">Days</legend>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-x-3 gap-y-2">
               {days.map((d) => (
-                <label
+                <ClasherCheckbox
                   key={d}
-                  className="flex cursor-pointer items-center gap-1 text-xs text-zinc-800"
+                  size="sm"
+                  checked={Boolean(selectedDays[d])}
+                  onChange={(v) =>
+                    setSelectedDays((s) => ({ ...s, [d]: v }))
+                  }
                 >
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selectedDays[d])}
-                    onChange={(e) =>
-                      setSelectedDays((s) => ({ ...s, [d]: e.target.checked }))
-                    }
-                  />
                   {d}
-                </label>
+                </ClasherCheckbox>
               ))}
             </div>
           </fieldset>
