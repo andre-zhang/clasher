@@ -218,37 +218,25 @@ export function createFestivalApp(apiBasePath: string): Hono {
     const member = await authMember(c, squadId);
     if (!member) return c.json({ error: "unauthorized" }, 401);
 
-    let buf: Buffer;
-    let mime: string;
     const contentType = c.req.header("content-type") ?? "";
-    if (contentType.includes("multipart/form-data")) {
-      const form = await c.req.formData();
-      const file = form.get("file");
-      if (!(file instanceof File)) {
-        return c.json({ error: "missing_file" }, 400);
-      }
-      buf = Buffer.from(await file.arrayBuffer());
-      mime = file.type || "image/jpeg";
-      if (buf.byteLength > 8 * 1024 * 1024) {
-        return c.json({ error: "file_too_large" }, 400);
-      }
-      await prisma.squad.update({
-        where: { id: member.squadId },
-        data: {
-          festivalMapData: buf.toString("base64"),
-          festivalMapMime: mime,
+    if (!contentType.includes("multipart/form-data")) {
+      return c.json(
+        {
+          error: "multipart_required",
+          message: "Send the map image as multipart field \"file\".",
         },
-      });
-    } else {
-      const squad = await prisma.squad.findUnique({
-        where: { id: member.squadId },
-        select: { festivalMapData: true, festivalMapMime: true },
-      });
-      if (!squad?.festivalMapData) {
-        return c.json({ error: "upload_map_first" }, 400);
-      }
-      buf = Buffer.from(squad.festivalMapData, "base64");
-      mime = squad.festivalMapMime ?? "image/jpeg";
+        400
+      );
+    }
+    const form = await c.req.formData();
+    const file = form.get("file");
+    if (!(file instanceof File)) {
+      return c.json({ error: "missing_file" }, 400);
+    }
+    const buf = Buffer.from(await file.arrayBuffer());
+    const mime = file.type || "image/jpeg";
+    if (buf.byteLength > 8 * 1024 * 1024) {
+      return c.json({ error: "file_too_large" }, 400);
     }
 
     const vision = await runVisionJson(
@@ -297,6 +285,8 @@ export function createFestivalApp(apiBasePath: string): Hono {
         mapStageLabelsJson: labels,
         stageAliasJson: alias as Prisma.InputJsonValue,
         walkMatrixJson: matrix as Prisma.InputJsonValue,
+        festivalMapData: null,
+        festivalMapMime: null,
       },
     });
     const snap = await buildSnapshot(prisma, member.squadId, member.id);

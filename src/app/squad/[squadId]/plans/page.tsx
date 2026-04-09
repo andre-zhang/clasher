@@ -9,13 +9,16 @@ import {
   describeConflictResolution,
   findMyResolution,
   isMyClashResolved,
-  slotsTimeOverlap,
 } from "@/lib/clash";
 import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
 } from "@/lib/effectiveIntents";
 import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
+import {
+  memberEffectivePlanWindowsInfeasibleTogether,
+  walkMinutesBetweenStages,
+} from "@/lib/walkFeasibility";
 import { buildSlotIntentsFromHotRatings } from "@/lib/syncIntentsFromRatings";
 import type { FestivalSnapshot } from "@/lib/types";
 
@@ -66,6 +69,36 @@ function labelAtBucket(
   return "—";
 }
 
+function planDayTravelLines(
+  group: FestivalSnapshot,
+  memberId: string,
+  dayLabel: string
+): string[] {
+  const d = dayLabel.trim();
+  const slots = group.schedule.filter(
+    (s) =>
+      s.dayLabel.trim() === d && effectiveMemberWantsSlot(group, memberId, s.id)
+  );
+  slots.sort(
+    (a, b) =>
+      effectiveWindow(group, memberId, a).start -
+      effectiveWindow(group, memberId, b).start
+  );
+  const out: string[] = [];
+  for (let i = 0; i < slots.length - 1; i++) {
+    const cur = slots[i]!;
+    const nxt = slots[i + 1]!;
+    const w = group.walkTimesEnabled
+      ? walkMinutesBetweenStages(group, cur.stageName, nxt.stageName)
+      : 0;
+    if (w <= 0) continue;
+    out.push(
+      `${cur.artistName} → ${nxt.artistName}: ~${w} min between ${cur.stageName} and ${nxt.stageName}`
+    );
+  }
+  return out;
+}
+
 function planDetailBullets(
   group: FestivalSnapshot,
   memberId: string,
@@ -75,7 +108,7 @@ function planDetailBullets(
     `Full listing: ${slot.start}–${slot.end} · ${slot.stageName} · ${slot.dayLabel}`,
   ];
   if (group.walkTimesEnabled) {
-    lines.push("Travel time between stages is on for clashes.");
+    lines.push("Walk times are on — gaps below use your plan windows.");
   }
   if (effectiveMemberWantsSlot(group, memberId, slot.id)) {
     const w = effectiveMemberSlotPlanWindow(group, memberId, slot);
@@ -88,9 +121,25 @@ function planDetailBullets(
     lines.push("Not on your plan for this window (clash / flags).");
   }
 
+  const travel = planDayTravelLines(group, memberId, slot.dayLabel);
+  if (travel.length) {
+    lines.push("Travel between your acts this day:");
+    lines.push(...travel);
+  }
+
   for (const other of group.schedule) {
     if (other.id === slot.id) continue;
-    if (!slotsTimeOverlap(slot, other)) continue;
+    if (!effectiveMemberWantsSlot(group, memberId, other.id)) continue;
+    if (
+      !memberEffectivePlanWindowsInfeasibleTogether(
+        group,
+        memberId,
+        slot,
+        other
+      )
+    ) {
+      continue;
+    }
     const x = slot.id <= other.id ? slot.id : other.id;
     const y = slot.id <= other.id ? other.id : slot.id;
     const a = group.schedule.find((s) => s.id === x)!;
@@ -98,11 +147,15 @@ function planDetailBullets(
     const r = findMyResolution(group, memberId, x, y);
     if (r && isMyClashResolved(r)) {
       lines.push(
-        `Clash with ${other.artistName}: ${describeConflictResolution(r, a, b)}`
+        `Plan overlap / travel with ${other.artistName}: ${describeConflictResolution(r, a, b)}`
       );
     } else if (r) {
       lines.push(
-        `Clash with ${other.artistName}: in progress / undecided`
+        `Plan overlap / travel with ${other.artistName}: in progress / undecided`
+      );
+    } else {
+      lines.push(
+        `Plan overlap or not enough travel with ${other.artistName} (check windows or Options map).`
       );
     }
   }
@@ -285,12 +338,12 @@ export default function PlansPage() {
           {!activeDay || buckets.length === 0 ? (
             <p className="text-sm text-zinc-600">No schedule for this day.</p>
           ) : (
-            <div className="flex overflow-x-auto border-2 border-zinc-900 bg-white shadow-[2px_2px_0_0_#18181b]">
+            <div className="flex min-w-max overflow-x-auto border-2 border-zinc-900 bg-white shadow-[2px_2px_0_0_#18181b]">
               <div
-                className="flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50"
-                style={{ width: 52, minHeight: buckets.length * 28 + 32 }}
+                className="sticky left-0 z-30 flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 shadow-[6px_0_12px_-4px_rgba(0,0,0,0.12)]"
+                style={{ width: 56, minHeight: buckets.length * 28 + 32 }}
               >
-                <div className="h-8 shrink-0 border-b-2 border-zinc-900" />
+                <div className="sticky top-0 z-40 h-8 shrink-0 border-b-2 border-zinc-900 bg-zinc-50" />
                 {buckets.map((t) => (
                   <div
                     key={t}
@@ -307,7 +360,7 @@ export default function PlansPage() {
                   className="relative min-w-[104px] flex-1 border-r-2 border-zinc-900 last:border-r-0"
                   style={{ minHeight: buckets.length * 28 + 32 }}
                 >
-                  <div className="sticky top-0 z-[1] flex h-8 items-center justify-center border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-none text-zinc-900">
+                  <div className="sticky top-0 z-20 flex h-8 items-center justify-center border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-none text-zinc-900 shadow-[0_6px_10px_-4px_rgba(0,0,0,0.1)]">
                     <span className="line-clamp-2">{m.displayName}</span>
                   </div>
                   <div>

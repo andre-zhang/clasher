@@ -3,7 +3,11 @@
 import type React from "react";
 import { useMemo, useState } from "react";
 
-import { clampPlanWindowToSlot, stripWindowsInfeasiblePair } from "@/lib/walkFeasibility";
+import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
+import {
+  clampPlanWindowToSlot,
+  stripWindowsInfeasiblePair,
+} from "@/lib/walkFeasibility";
 import type { FestivalSnapshot } from "@/lib/types";
 
 type Slot = FestivalSnapshot["schedule"][number];
@@ -17,6 +21,8 @@ export function SchedulePlannerStrip({
   windows,
   setWindows,
   allowClashes,
+  stripScope,
+  setStripScope,
   onApply,
 }: {
   group: FestivalSnapshot;
@@ -29,6 +35,8 @@ export function SchedulePlannerStrip({
     React.SetStateAction<Record<string, { planFrom: string; planTo: string }>>
   >;
   allowClashes: boolean;
+  stripScope: "mine" | "group";
+  setStripScope: (v: "mine" | "group") => void;
   onApply: (
     patches: {
       slotId: string;
@@ -61,14 +69,8 @@ export function SchedulePlannerStrip({
     [group, orderedSlots, windows, allowClashes]
   );
 
-  function ensureWindow(slot: Slot) {
-    setWindows((prev) => {
-      if (prev[slot.id]) return prev;
-      return {
-        ...prev,
-        [slot.id]: { planFrom: slot.start, planTo: slot.end },
-      };
-    });
+  function syncWindowsForOrder(nextIds: string[]) {
+    setWindows(recomputeStripWindowsSequential(group, nextIds, schedule));
   }
 
   function onDropStrip(e: React.DragEvent) {
@@ -80,8 +82,9 @@ export function SchedulePlannerStrip({
     if (stripIds.includes(id)) return;
     const slot = slotsById.get(id);
     if (!slot) return;
-    setStripIds([...stripIds, id]);
-    ensureWindow(slot);
+    const next = [...stripIds, id];
+    setStripIds(next);
+    syncWindowsForOrder(next);
   }
 
   async function save() {
@@ -116,10 +119,34 @@ export function SchedulePlannerStrip({
         setDragOver(true);
       }}
       onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => onDropStrip(e)}
+      onDrop={(e) => void onDropStrip(e)}
     >
-      <div className="sticky top-0 z-[1] h-8 border-b-2 border-zinc-900 bg-amber-100 px-1 text-center text-[10px] font-bold leading-8 text-zinc-900">
+      <div className="sticky top-0 z-[1] border-b-2 border-zinc-900 bg-amber-100 px-1 py-1 text-center text-[10px] font-bold leading-tight text-zinc-900">
         Plan strip
+        <div className="mt-1 flex gap-0.5">
+          <button
+            type="button"
+            className={`flex-1 border px-0.5 py-px text-[9px] font-semibold ${
+              stripScope === "mine"
+                ? "border-zinc-900 bg-zinc-900 text-white"
+                : "border-zinc-600 bg-white text-zinc-800"
+            }`}
+            onClick={() => setStripScope("mine")}
+          >
+            My plan
+          </button>
+          <button
+            type="button"
+            className={`flex-1 border px-0.5 py-px text-[9px] font-semibold ${
+              stripScope === "group"
+                ? "border-zinc-900 bg-zinc-900 text-white"
+                : "border-zinc-600 bg-white text-zinc-800"
+            }`}
+            onClick={() => setStripScope("group")}
+          >
+            Group
+          </button>
+        </div>
       </div>
       <div className="flex max-h-[min(70vh,520px)] flex-1 flex-col gap-1 overflow-y-auto p-1">
         {stripIds.length === 0 ? (
@@ -153,6 +180,7 @@ export function SchedulePlannerStrip({
                 next.splice(from, 1);
                 next.splice(to, 0, dragId);
                 setStripIds(next);
+                syncWindowsForOrder(next);
               }}
               className="border border-zinc-800 bg-white p-1 text-[10px] shadow-none"
             >
@@ -196,9 +224,15 @@ export function SchedulePlannerStrip({
               <button
                 type="button"
                 className="mt-1 text-[9px] text-red-800 underline"
-                onClick={() =>
-                  setStripIds((ids) => ids.filter((x) => x !== slot.id))
-                }
+                onClick={() => {
+                  setStripIds((ids) => {
+                    const next = ids.filter((x) => x !== slot.id);
+                    setWindows(
+                      recomputeStripWindowsSequential(group, next, schedule)
+                    );
+                    return next;
+                  });
+                }}
               >
                 Remove
               </button>

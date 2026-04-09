@@ -1,3 +1,7 @@
+import {
+  effectiveMemberSlotPlanWindow,
+  effectiveMemberWantsSlot,
+} from "@/lib/effectiveIntents";
 import type { FestivalSnapshot } from "@/lib/types";
 import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
 
@@ -137,4 +141,50 @@ export function clampPlanWindowToSlot(
   }
   if (em < sm) em = sm;
   return { planFrom: hhmmFromMinutes(sm), planTo: hhmmFromMinutes(em) };
+}
+
+function minuteWindowFromMemberEffectivePlan(
+  group: FestivalSnapshot,
+  memberId: string,
+  s: FestivalSnapshot["schedule"][0]
+): MinuteWindow {
+  const dk = s.dayLabel.trim().toLowerCase();
+  const w = effectiveMemberSlotPlanWindow(group, memberId, s);
+  const rawS = w.planFrom ?? s.start;
+  const rawE = w.planTo ?? s.end;
+  let sm = parseHm(rawS);
+  let em = parseHm(rawE);
+  const lo = parseHm(s.start);
+  const hi = parseHm(s.end);
+  if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
+    if (!Number.isNaN(sm)) sm = Math.max(lo, Math.min(hi, sm));
+    if (!Number.isNaN(em)) em = Math.max(lo, Math.min(hi, em));
+  }
+  if (!Number.isNaN(sm) && !Number.isNaN(em) && em < sm) em = sm;
+  return {
+    dayKey: dk,
+    stageName: s.stageName.trim(),
+    startM: sm,
+    endM: em,
+  };
+}
+
+/** True if this member’s effective plan windows for both slots cannot both be attended. */
+export function memberEffectivePlanWindowsInfeasibleTogether(
+  group: FestivalSnapshot,
+  memberId: string,
+  a: FestivalSnapshot["schedule"][0],
+  b: FestivalSnapshot["schedule"][0]
+): boolean {
+  if (
+    !effectiveMemberWantsSlot(group, memberId, a.id) ||
+    !effectiveMemberWantsSlot(group, memberId, b.id)
+  ) {
+    return false;
+  }
+  return windowInfeasibleTogether(
+    group,
+    minuteWindowFromMemberEffectivePlan(group, memberId, a),
+    minuteWindowFromMemberEffectivePlan(group, memberId, b)
+  );
 }

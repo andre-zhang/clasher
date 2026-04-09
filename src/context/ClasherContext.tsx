@@ -102,7 +102,7 @@ type ClasherContextValue = {
   /** One or more timetable screenshots; results merged and deduped server-side. */
   parseScheduleFiles: (files: File[]) => Promise<ScheduleDraftSlot[]>;
   uploadFestivalMap: (file: File) => Promise<void>;
-  analyzeFestivalMap: (file?: File) => Promise<void>;
+  analyzeFestivalMap: (file: File) => Promise<void>;
   patchSquadOptions: (patch: {
     walkTimesEnabled?: boolean;
     stageAliasJson?: Record<string, string>;
@@ -295,7 +295,7 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
   );
 
   const analyzeFestivalMap = useCallback(
-    async (file?: File) => {
+    async (file: File) => {
       const s = requireSession();
       const g = await apiAnalyzeFestivalMap(s, file);
       setGroup(g);

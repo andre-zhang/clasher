@@ -14,6 +14,7 @@ import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
 } from "@/lib/effectiveIntents";
+import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
 import { clampPlanWindowToSlot } from "@/lib/walkFeasibility";
 import { myTierEmoji, squadReactionPills } from "@/lib/reactionsUi";
@@ -30,18 +31,6 @@ function memberWantsSlotRaw(
 ): boolean {
   const row = all.find((i) => i.memberId === memberId && i.slotId === slotId);
   return row ? row.wants : true;
-}
-
-function intentWindow(
-  all: FestivalSnapshot["allMemberSlotIntents"],
-  memberId: string,
-  slotId: string
-): { from: string | null; to: string | null } {
-  const row = all.find((i) => i.memberId === memberId && i.slotId === slotId);
-  return {
-    from: row?.planFrom ?? null,
-    to: row?.planTo ?? null,
-  };
 }
 
 function slotNotesFor(
@@ -107,6 +96,8 @@ export function ScheduleCalendar({
   buildPlanner?: {
     memberId: string;
     allowClashes: boolean;
+    /** Bump after a successful strip apply so the strip reloads from server intents. */
+    stripHydrateKey?: number;
     onApplyPlan: (
       patches: {
         slotId: string;
@@ -169,6 +160,12 @@ export function ScheduleCalendar({
     baseFromM: number;
     baseToM: number;
   } | null>(null);
+  const [stripScope, setStripScope] = useState<"mine" | "group">("mine");
+
+  const groupRef = useRef(group);
+  groupRef.current = group;
+  const scheduleRef = useRef(schedule);
+  scheduleRef.current = schedule;
 
   const timelineMetricsRef = useRef({
     minMR: 0,
@@ -186,9 +183,64 @@ export function ScheduleCalendar({
   }, [noteSlotId]);
 
   useEffect(() => {
-    setStripIds([]);
-    setStripWindows({});
-  }, [activeDay]);
+    if (!buildPlanner) {
+      setStripIds([]);
+      setStripWindows({});
+    }
+  }, [buildPlanner]);
+
+  const stripHydrateKey = buildPlanner?.stripHydrateKey ?? 0;
+  const plannerMemberId = buildPlanner?.memberId;
+
+  useEffect(() => {
+    if (!plannerMemberId || !activeDay) return;
+    const g = groupRef.current;
+    if (!g) return;
+    const sched = scheduleRef.current;
+    const dayKey = activeDay.trim();
+    const daySlots = sched.filter((s) => s.dayLabel.trim() === dayKey);
+    if (stripScope === "mine") {
+      const wanted = daySlots.filter((s) =>
+        effectiveMemberWantsSlot(g, plannerMemberId, s.id)
+      );
+      wanted.sort((a, b) => {
+        const wa = effectiveMemberSlotPlanWindow(g, plannerMemberId, a);
+        const wb = effectiveMemberSlotPlanWindow(g, plannerMemberId, b);
+        const ta = parseHm(wa.planFrom ?? a.start);
+        const tb = parseHm(wb.planFrom ?? b.start);
+        const fa = Number.isNaN(ta) ? parseHm(a.start) : ta;
+        const fb = Number.isNaN(tb) ? parseHm(b.start) : tb;
+        return fa - fb;
+      });
+      const ids = wanted.map((s) => s.id);
+      const wins: Record<string, { planFrom: string; planTo: string }> = {};
+      for (const s of wanted) {
+        const w = effectiveMemberSlotPlanWindow(g, plannerMemberId, s);
+        wins[s.id] = {
+          planFrom: w.planFrom ?? s.start,
+          planTo: w.planTo ?? s.end,
+        };
+      }
+      setStripIds(ids);
+      setStripWindows(wins);
+      return;
+    }
+    const idSet = new Set<string>();
+    for (const m of g.members) {
+      for (const s of daySlots) {
+        const row = g.allMemberSlotIntents.find(
+          (i) => i.memberId === m.id && i.slotId === s.id
+        );
+        if (row?.wants) idSet.add(s.id);
+      }
+    }
+    const ids = daySlots
+      .filter((s) => idSet.has(s.id))
+      .sort((a, b) => parseHm(a.start) - parseHm(b.start))
+      .map((s) => s.id);
+    setStripIds(ids);
+    setStripWindows(recomputeStripWindowsSequential(g, ids, sched));
+  }, [stripHydrateKey, activeDay, stripScope, plannerMemberId]);
 
   const allStagesForDay = useMemo(() => {
     const rows = schedule.filter((s) => s.dayLabel.trim() === activeDay);
@@ -368,12 +420,12 @@ export function ScheduleCalendar({
       ) : showAllStages && !allStagesForDay.length ? (
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : (
-        <div className="flex overflow-x-auto border-2 border-zinc-900 bg-white">
+        <div className="flex min-w-max overflow-x-auto border-2 border-zinc-900 bg-white">
           <div
-            className="flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50"
-            style={{ width: 52, minHeight: timelineHRender }}
+            className="sticky left-0 z-30 flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 shadow-[6px_0_12px_-4px_rgba(0,0,0,0.12)]"
+            style={{ width: 56, minHeight: timelineHRender }}
           >
-            <div className="h-8 border-b-2 border-zinc-900" />
+            <div className="sticky top-0 z-40 h-8 shrink-0 border-b-2 border-zinc-900 bg-zinc-50" />
             {ticksRender.map((m) => (
               <div
                 key={m}
@@ -394,7 +446,7 @@ export function ScheduleCalendar({
               className="relative min-w-[148px] flex-1 border-r-2 border-zinc-900"
               style={{ minHeight: timelineHRender }}
             >
-              <div className="sticky top-0 z-[1] h-8 border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-8 text-zinc-900">
+              <div className="sticky top-0 z-20 h-8 border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-8 text-zinc-900 shadow-[0_6px_10px_-4px_rgba(0,0,0,0.1)]">
                 {stage}
               </div>
               <div
@@ -449,29 +501,6 @@ export function ScheduleCalendar({
                     topPx = layout.topPx;
                     heightPx = layout.heightPx;
                   }
-                  const all =
-                    group?.allMemberSlotIntents ?? allMemberSlotIntents ?? [];
-                  const planMember = rateMemberId;
-                  const win =
-                    group && planMember
-                      ? effectiveMemberSlotPlanWindow(
-                          group,
-                          planMember,
-                          slot
-                        )
-                      : planMember
-                        ? (() => {
-                            const w = intentWindow(all, planMember, slot.id);
-                            return {
-                              planFrom: w.from,
-                              planTo: w.to,
-                            };
-                          })()
-                        : { planFrom: null, planTo: null };
-                  const sub =
-                    win.planFrom && win.planTo
-                      ? `${win.planFrom}–${win.planTo}`
-                      : null;
                   const notes = slotNotesFor(slotComments, slot.id);
                   const notePreview = notes[0];
                   const showQuickRate = Boolean(
@@ -631,15 +660,6 @@ export function ScheduleCalendar({
                           </div>
                         ) : null}
 
-                        <p className="shrink-0 font-mono text-[10px] text-zinc-600">
-                          {slot.start}–{slot.end}
-                        </p>
-                        {sub ? (
-                          <p className="shrink-0 text-[10px] text-zinc-700">
-                            {sub}
-                          </p>
-                        ) : null}
-
                         {notes.length > 0 ? (
                           <p
                             className="mt-0.5 shrink-0 truncate text-[9px] text-zinc-700"
@@ -679,6 +699,8 @@ export function ScheduleCalendar({
               windows={stripWindows}
               setWindows={setStripWindows}
               allowClashes={buildPlanner.allowClashes}
+              stripScope={stripScope}
+              setStripScope={setStripScope}
               onApply={buildPlanner.onApplyPlan}
             />
           ) : null}

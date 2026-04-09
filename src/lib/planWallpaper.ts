@@ -170,7 +170,6 @@ export function renderPlanWallpaperCalendarPng(
   const W = 1080;
   const H = 1920;
   const pad = 20;
-  const timeGutter = 64;
   const headerH = 80;
   const titleBlock = 52;
 
@@ -199,9 +198,6 @@ export function renderPlanWallpaperCalendarPng(
   const topY = pad + headerH;
   const bodyH = H - topY - pad;
   const bodyW = W - pad * 2;
-  const gridLeft = pad + timeGutter;
-  const gridW = bodyW - timeGutter;
-  const colW = stages.length ? gridW / stages.length : gridW;
   const gridBottom = topY + bodyH;
 
   let contentMin = Infinity;
@@ -247,6 +243,14 @@ export function renderPlanWallpaperCalendarPng(
   const timelineH = gridBottom - (topY + titleBlock);
   const pxPerMin = timelineH / range;
 
+  const tickCount = Math.floor((maxM - minM) / stepM) + 1;
+  const tickFontPx =
+    tickCount > 28 ? 11 : tickCount > 18 ? 13 : tickCount > 12 ? 16 : 20;
+  const timeGutter = tickFontPx >= 16 ? 82 : tickFontPx >= 13 ? 72 : 62;
+  const gridLeft = pad + timeGutter;
+  const gridW = bodyW - timeGutter;
+  const colW = stages.length ? gridW / stages.length : gridW;
+
   ctx.fillStyle = "rgba(255,255,255,0.14)";
   ctx.fillRect(gridLeft, topY + titleBlock, gridW, timelineH);
 
@@ -274,7 +278,7 @@ export function renderPlanWallpaperCalendarPng(
     ctx.lineTo(W - pad, y);
     ctx.stroke();
     ctx.fillStyle = "#fae8ff";
-    ctx.font = "600 13px ui-monospace, monospace";
+    ctx.font = `600 ${tickFontPx}px ui-monospace, monospace`;
     const hh = Math.floor(m / 60);
     const mm = m % 60;
     const label = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
@@ -306,15 +310,10 @@ export function renderPlanWallpaperCalendarPng(
     const innerPad = 8;
     const maxTextW = w - innerPad * 2;
     const maxTextH = Math.max(18, h - innerPad * 2 - 18);
-    const timeStr = `${s.start}–${s.end}`;
     const fp = maxFontForText(ctx, s.act, maxTextW, maxTextH, 11, 30);
     ctx.fillStyle = "#0f172a";
     ctx.font = `700 ${fp}px system-ui, -apple-system, Segoe UI, sans-serif`;
     ctx.fillText(s.act, x + innerPad, y0 + innerPad + fp);
-
-    ctx.font = `600 ${Math.min(14, Math.max(10, fp - 4))}px ui-monospace, monospace`;
-    ctx.fillStyle = "#1e293b";
-    ctx.fillText(timeStr, x + innerPad, y0 + h - 6);
   }
 
   return new Promise((resolve, reject) => {

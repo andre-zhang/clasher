@@ -147,32 +147,16 @@ export async function apiUploadFestivalMap(
 
 export async function apiAnalyzeFestivalMap(
   session: ClasherSession,
-  file?: File
+  file: File
 ): Promise<FestivalSnapshot> {
-  if (file) {
-    const fd = new FormData();
-    fd.set("file", file);
-    const r = await fetch(
-      apiUrl(`/squads/${session.squadId}/festival-map/analyze`),
-      {
-        method: "POST",
-        headers: bearer(session.memberSecret),
-        body: fd,
-      }
-    );
-    await ensureOk(r);
-    const j = await r.json();
-    return j.group as FestivalSnapshot;
-  }
+  const fd = new FormData();
+  fd.set("file", file);
   const r = await fetch(
     apiUrl(`/squads/${session.squadId}/festival-map/analyze`),
     {
       method: "POST",
-      headers: {
-        ...(bearer(session.memberSecret) as Record<string, string>),
-        "Content-Type": "application/json",
-      },
-      body: "{}",
+      headers: bearer(session.memberSecret),
+      body: fd,
     }
   );
   await ensureOk(r);

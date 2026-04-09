@@ -15,7 +15,6 @@ export default function OptionsPage() {
     session,
     loadDemoFull,
     deleteSquad,
-    uploadFestivalMap,
     analyzeFestivalMap,
     patchSquadOptions,
   } = useClasher();
@@ -25,12 +24,7 @@ export default function OptionsPage() {
   const [demoBusy, setDemoBusy] = useState(false);
   const [delBusy, setDelBusy] = useState(false);
   const [mapBusy, setMapBusy] = useState(false);
-  const [mapPreview, setMapPreview] = useState<{
-    mime: string;
-    data: string;
-  } | null>(null);
-  const mapRef = useRef<HTMLInputElement>(null);
-  const analyzeRef = useRef<HTMLInputElement>(null);
+  const mapAnalyzeRef = useRef<HTMLInputElement>(null);
 
   const [aliasEdit, setAliasEdit] = useState<Record<string, string>>({});
 
@@ -50,26 +44,6 @@ export default function OptionsPage() {
     if (!group) return;
     setAliasEdit({ ...group.stageMapAlias });
   }, [group]);
-
-  useEffect(() => {
-    if (!group?.hasFestivalMap || !session) {
-      setMapPreview(null);
-      return;
-    }
-    void (async () => {
-      try {
-        const r = await fetch(
-          `/api/squads/${session.squadId}/festival-map`,
-          { headers: { Authorization: `Bearer ${session.memberSecret}` } }
-        );
-        if (!r.ok) return;
-        const j = (await r.json()) as { mime?: string; data?: string };
-        if (j.data && j.mime) setMapPreview({ mime: j.mime, data: j.data });
-      } catch {
-        /* ignore */
-      }
-    })();
-  }, [group?.hasFestivalMap, group?.id, session]);
 
   if (!group || !session) return null;
 
@@ -121,30 +95,17 @@ export default function OptionsPage() {
     }
   }
 
-  async function onMapPick(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onMapUploadAndAnalyze(
+    e: React.ChangeEvent<HTMLInputElement>
+  ) {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
     setMapBusy(true);
     setErr(null);
     try {
-      await uploadFestivalMap(f);
-      setMsg("Map saved.");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setMapBusy(false);
-    }
-  }
-
-  async function onAnalyzePick(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    e.target.value = "";
-    setMapBusy(true);
-    setErr(null);
-    try {
-      await analyzeFestivalMap(f ?? undefined);
-      setMsg(f ? "Analyzed map." : "Re-analyzed saved map.");
+      await analyzeFestivalMap(f);
+      setMsg("Map analyzed — match stages below, then save walk times.");
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -209,55 +170,27 @@ export default function OptionsPage() {
 
       <section className="space-y-3 border-t border-zinc-300 pt-4">
         <h2 className="text-sm font-bold text-zinc-900">Festival map</h2>
+        <p className="text-xs text-zinc-600">
+          The image is analyzed once and not stored — only stage labels and your
+          matches are kept.
+        </p>
         <input
-          ref={mapRef}
+          ref={mapAnalyzeRef}
           type="file"
           accept="image/*"
           className="hidden"
-          onChange={(e) => void onMapPick(e)}
-        />
-        <input
-          ref={analyzeRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => void onAnalyzePick(e)}
+          onChange={(e) => void onMapUploadAndAnalyze(e)}
         />
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             disabled={mapBusy}
-            onClick={() => mapRef.current?.click()}
-            className="border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-900 disabled:opacity-40"
-          >
-            Upload map
-          </button>
-          <button
-            type="button"
-            disabled={mapBusy}
-            onClick={() => analyzeRef.current?.click()}
+            onClick={() => mapAnalyzeRef.current?.click()}
             className="border-2 border-zinc-900 bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
           >
-            Analyze (new photo)
-          </button>
-          <button
-            type="button"
-            disabled={mapBusy || !group.hasFestivalMap}
-            onClick={() => void analyzeFestivalMap()}
-            className="border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-900 disabled:opacity-40"
-          >
-            Analyze saved map
+            {mapBusy ? "Working…" : "Upload & analyze map"}
           </button>
         </div>
-        {mapPreview ? (
-          // Base64 preview; next/image is not a fit for large data URLs.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            alt=""
-            className="max-h-48 max-w-full border border-zinc-400 object-contain"
-            src={`data:${mapPreview.mime};base64,${mapPreview.data}`}
-          />
-        ) : null}
         {group.mapStageLabels.length > 0 ? (
           <div className="space-y-2">
             <p className="text-xs font-semibold text-zinc-800">

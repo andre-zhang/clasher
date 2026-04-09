@@ -24,10 +24,10 @@ export default function SchedulePage() {
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [calendarMode, setCalendarMode] = useState<"mine" | "all">("mine");
   const [plannerOn, setPlannerOn] = useState(false);
   const [plannerClashes, setPlannerClashes] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [stripHydrateKey, setStripHydrateKey] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   if (!group || !session) return null;
@@ -136,33 +136,40 @@ export default function SchedulePage() {
 
       <h1 className="text-xl font-bold text-zinc-900">Schedule</h1>
 
-      <button
-        type="button"
-        disabled={syncBusy || !group.schedule.length}
-        onClick={() => void syncHotToShortlist()}
-        className="border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40"
-      >
-        Sync from Lineup
-      </button>
+      <section className="rounded-lg border-2 border-indigo-900/30 bg-indigo-50/80 p-4 shadow-[2px_2px_0_0_rgba(49,46,129,0.25)]">
+        <h2 className="text-sm font-bold text-indigo-950">Lineup & timetable</h2>
+        <p className="mt-1 text-xs text-indigo-900/80">
+          Pull acts from your ratings into your shortlist, or scan posters to edit
+          the grid.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={syncBusy || !group.schedule.length}
+            onClick={() => void syncHotToShortlist()}
+            className="border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40"
+          >
+            Sync from Lineup
+          </button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            className="border-2 border-zinc-900 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-50"
+          >
+            Scan timetable
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={onFiles}
+          />
+        </div>
+      </section>
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={busy}
-          className="border-2 border-zinc-900 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-50"
-        >
-          Scan timetable
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={onFiles}
-        />
-      </div>
       {parseErr ? (
         <p className="border-2 border-red-800 bg-red-50 px-3 py-2 text-sm text-red-900">
           {parseErr}
@@ -170,8 +177,10 @@ export default function SchedulePage() {
       ) : null}
 
       {draft && draft.length > 0 ? (
-        <div className="border-2 border-zinc-900 bg-indigo-50 p-4 shadow-[3px_3px_0_0_#18181b]">
-          <p className="text-sm font-semibold text-zinc-900">Draft ({draft.length})</p>
+        <div className="border-2 border-zinc-900 bg-amber-50/90 p-4 shadow-[3px_3px_0_0_#18181b]">
+          <p className="text-sm font-semibold text-zinc-900">
+            Draft ({draft.length})
+          </p>
           <div className="mt-2 max-h-72 overflow-auto text-xs">
             <table className="w-full border-collapse border border-zinc-900 text-left">
               <thead>
@@ -281,36 +290,13 @@ export default function SchedulePage() {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setCalendarMode("mine");
-            setPlannerOn(false);
-          }}
-          className={`border-2 px-2 py-1 text-xs font-semibold ${
-            calendarMode === "mine"
-              ? "border-zinc-900 bg-zinc-900 text-white"
-              : "border-zinc-900 bg-white text-zinc-900"
-          }`}
-        >
-          Your plan
-        </button>
-        <button
-          type="button"
-          onClick={() => setCalendarMode("all")}
-          className={`border-2 px-2 py-1 text-xs font-semibold ${
-            calendarMode === "all"
-              ? "border-zinc-900 bg-zinc-900 text-white"
-              : "border-zinc-900 bg-white text-zinc-900"
-          }`}
-        >
-          Full timetable
-        </button>
-      </div>
-
-      {calendarMode === "all" ? (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+      <section className="rounded-lg border-2 border-zinc-900 bg-emerald-50/50 p-4 shadow-[2px_2px_0_0_#18181b]">
+        <h2 className="text-sm font-bold text-emerald-950">Full timetable</h2>
+        <p className="mt-1 text-xs text-emerald-900/85">
+          All stages for the squad. Turn on the plan strip to queue acts and set
+          arrival windows (with walk time between stages when enabled in Options).
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
           <ClasherCheckbox
             size="sm"
             checked={plannerOn}
@@ -328,29 +314,26 @@ export default function SchedulePage() {
             </ClasherCheckbox>
           ) : null}
         </div>
-      ) : null}
+      </section>
 
       <ScheduleCalendar
         schedule={group.schedule}
-        memberId={calendarMode === "mine" ? session.memberId : undefined}
         allMemberSlotIntents={group.allMemberSlotIntents}
         group={group}
         slotComments={group.slotComments}
         onAddSlotComment={addSlotComment}
-        visibilityMode={
-          calendarMode === "mine" ? "scheduleShortlist" : "effectivePlan"
-        }
-        scheduleViewerMemberId={
-          calendarMode === "all" ? session.memberId : undefined
-        }
+        visibilityMode="effectivePlan"
+        scheduleViewerMemberId={session.memberId}
         onSetRating={(artistId, tier) => setRating(artistId, tier)}
         buildPlanner={
-          calendarMode === "all" && plannerOn
+          plannerOn
             ? {
                 memberId: session.memberId,
                 allowClashes: plannerClashes,
+                stripHydrateKey,
                 onApplyPlan: async (patches) => {
                   await putSlotIntents(patches);
+                  setStripHydrateKey((k) => k + 1);
                 },
               }
             : undefined
