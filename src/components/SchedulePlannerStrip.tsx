@@ -318,7 +318,7 @@ export function SchedulePlannerStrip({
       </div>
 
       <div
-        className="relative w-full border-b border-zinc-200"
+        className="relative w-full overflow-hidden border-b border-zinc-200"
         style={{ height: timelineBodyPx, minHeight: 120 }}
       >
         {walkBands.map((band, i) => {
@@ -327,12 +327,13 @@ export function SchedulePlannerStrip({
           const topPx = ((band.fromM - timelineMinM) / range) * timelineBodyPx;
           const durPx =
             ((band.toM - band.fromM) / range) * timelineBodyPx;
-          const heightPx = Math.max(durPx, 4);
+          const bandH = Math.max(durPx, 4);
+          const dotTop = topPx + bandH / 2 - 3;
           return (
             <div
               key={`w-${i}`}
-              className="pointer-events-none absolute right-1 z-[1] w-[3px] rounded-full bg-zinc-900 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]"
-              style={{ top: topPx, height: heightPx }}
+              className="pointer-events-none absolute left-2 z-[1] h-1.5 w-1.5 rounded-full bg-zinc-900"
+              style={{ top: dotTop }}
               aria-hidden
             />
           );

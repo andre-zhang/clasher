@@ -624,18 +624,22 @@ export function ScheduleCalendar({
             style={{ width: 56, minHeight: timelineHRender }}
           >
             <div className="sticky top-0 z-40 h-8 shrink-0 border-b-2 border-zinc-900 bg-zinc-50" />
-            <div className="relative shrink-0" style={{ height: timelineBodyPx }}>
+            <div
+              className="relative shrink-0 overflow-hidden"
+              style={{ height: timelineBodyPx }}
+            >
               {planWalkBands.map((band, bi) => {
                 const range = maxMR - minMR;
                 if (range <= 0) return null;
                 const topPx = ((band.fromM - minMR) / range) * timelineBodyPx;
                 const durPx = ((band.toM - band.fromM) / range) * timelineBodyPx;
-                const heightPx = Math.max(durPx, 4);
+                const bandH = Math.max(durPx, 4);
+                const dotTop = topPx + bandH / 2 - 3;
                 return (
                   <div
-                    key={`walk-rail-${bi}`}
-                    className="pointer-events-none absolute right-0.5 z-10 w-[3px] rounded-full bg-zinc-900 shadow-[0_0_0_1px_rgba(255,255,255,0.85)]"
-                    style={{ top: topPx, height: heightPx }}
+                    key={`walk-dot-${bi}`}
+                    className="pointer-events-none absolute left-1/2 z-10 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-zinc-900"
+                    style={{ top: dotTop }}
                     aria-hidden
                   />
                 );
@@ -796,29 +800,6 @@ export function ScheduleCalendar({
 
                   const ovSegs =
                     clashOverlapIntervalsBySlot.get(slot.id) ?? [];
-                  let smCard = 0;
-                  let emCard = 0;
-                  if (onStrip) {
-                    const w = stripWindows[slot.id];
-                    const lo = parseHm(slot.start);
-                    const hi = parseHm(slot.end);
-                    smCard = w ? parseHm(w.planFrom) : lo;
-                    emCard = w ? parseHm(w.planTo) : hi;
-                    if (Number.isNaN(smCard)) smCard = lo;
-                    if (Number.isNaN(emCard)) emCard = hi;
-                  } else if (useEffectiveSlotLayout && group && rateMemberId) {
-                    const ew = effectiveWindowMinutes(group, rateMemberId, slot);
-                    smCard = ew.start;
-                    emCard = ew.end;
-                    if (ghostOffPlan) {
-                      smCard = parseHm(slot.start);
-                      emCard = parseHm(slot.end);
-                    }
-                  } else {
-                    smCard = parseHm(slot.start);
-                    emCard = parseHm(slot.end);
-                  }
-                  const durMin = emCard - smCard;
 
                   return (
                     <div
@@ -858,25 +839,12 @@ export function ScheduleCalendar({
                         zIndex: onStrip ? 40 + slotIndex : 6 + slotIndex,
                       }}
                     >
-                      {ovSegs.map((seg, oi) => {
-                        if (durMin <= 0) return null;
-                        const t0 = (seg.o0 - smCard) / durMin;
-                        const t1 = (seg.o1 - smCard) / durMin;
-                        if (t1 <= 0 || t0 >= 1) return null;
-                        const topPct = Math.max(0, t0) * 100;
-                        const hPct =
-                          (Math.min(1, t1) - Math.max(0, t0)) * 100;
-                        return (
-                          <div
-                            key={oi}
-                            className="pointer-events-none absolute left-0 right-0 z-[8] bg-red-500/50 ring-1 ring-red-800"
-                            style={{
-                              top: `${topPct}%`,
-                              height: `${Math.max(hPct, 6)}%`,
-                            }}
-                          />
-                        );
-                      })}
+                      {ovSegs.length > 0 ? (
+                        <div
+                          className="pointer-events-none absolute bottom-0 left-0 top-0 z-[8] w-1 bg-red-600/75"
+                          aria-hidden
+                        />
+                      ) : null}
                       <div className="relative z-[2] flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
                         <p className="shrink-0 break-words text-[11px] font-semibold leading-snug text-zinc-900 [overflow-wrap:anywhere]">
                           {slot.artistName}
