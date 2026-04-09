@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EveryonePlansCalendar } from "@/components/EveryonePlansCalendar";
-import { PlanWalkBanner } from "@/components/PlanWalkBanner";
 import { PlanWallpaperExport } from "@/components/PlanWallpaperExport";
 import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { useClasher } from "@/context/ClasherContext";
@@ -195,12 +194,6 @@ export default function PlansPage() {
               ))}
             </select>
           </label>
-          <PlanWalkBanner
-            group={group}
-            activeDay={activeDay}
-            memberId={activeMember}
-            variant="person"
-          />
           {activeMember ? (
             <ScheduleCalendar
               schedule={group.schedule}
@@ -239,13 +232,6 @@ export default function PlansPage() {
               ))}
             </div>
           ) : null}
-
-          <PlanWalkBanner
-            group={group}
-            activeDay={activeDay}
-            memberId={null}
-            variant="everyone"
-          />
 
           {!activeDay ? (
             <p className="text-sm text-zinc-600">No schedule for this day.</p>

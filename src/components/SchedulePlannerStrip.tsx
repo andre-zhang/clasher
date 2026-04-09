@@ -251,7 +251,7 @@ export function SchedulePlannerStrip({
     if (!onStripWindowMoveStart) return;
     if (e.button !== 0) return;
     const t = e.target as HTMLElement | null;
-    if (t?.closest("button,a,input,textarea")) return;
+    if (t?.closest("button,a,input,textarea,[data-strip-resize]")) return;
     const y0 = e.clientY;
     let moved = false;
     const onMove = (ev: PointerEvent) => {
@@ -320,18 +320,16 @@ export function SchedulePlannerStrip({
           const range = timelineMaxM - timelineMinM;
           if (range <= 0) return null;
           const topPx = ((band.fromM - timelineMinM) / range) * timelineBodyPx;
-          const heightPx = Math.max(
-            ((band.toM - band.fromM) / range) * timelineBodyPx,
-            6
-          );
+          const durPx =
+            ((band.toM - band.fromM) / range) * timelineBodyPx;
+          const heightPx = Math.max(durPx, 2);
           return (
             <div
               key={`w-${i}`}
-              className="pointer-events-none absolute left-0 right-0 z-[1] flex items-center justify-center border-y border-sky-600/50 bg-sky-200/70 text-[8px] font-bold text-sky-950"
+              className="pointer-events-none absolute left-0 right-0 z-[1] bg-zinc-950"
               style={{ top: topPx, height: heightPx }}
-            >
-              {band.label}
-            </div>
+              aria-hidden
+            />
           );
         })}
 
@@ -347,10 +345,6 @@ export function SchedulePlannerStrip({
           const gap = 3;
           const widthPct = 100 / cols;
           const leftPct = col * widthPct;
-          const w = windows[slot.id] ?? {
-            planFrom: slot.start,
-            planTo: slot.end,
-          };
           return (
             <div
               key={slot.id}
@@ -392,49 +386,48 @@ export function SchedulePlannerStrip({
               >
                 ≡
               </button>
-              {onStripTimeResize ? (
+              <div className="relative min-h-0 flex-1">
+                {onStripTimeResize ? (
+                  <div
+                    data-strip-resize="start"
+                    className="absolute left-0 right-0 top-0 z-20 h-2 cursor-ns-resize"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onStripTimeResize(slot, "start", e);
+                    }}
+                  />
+                ) : null}
                 <div
-                  role="separator"
-                  aria-orientation="horizontal"
-                  className="h-2 shrink-0 cursor-ns-resize bg-sky-100/90 hover:bg-sky-200"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onStripTimeResize(slot, "start", e);
-                  }}
-                />
-              ) : null}
-              <div
-                className={`flex min-h-0 flex-1 flex-col justify-center gap-0.5 overflow-hidden px-1 py-0.5 ${
-                  onStripWindowMoveStart ? "cursor-grab active:cursor-grabbing" : ""
-                }`}
-                onPointerDown={(e) => bodyPointerDown(slot, e)}
-              >
-                <p className="line-clamp-2 text-[10px] font-semibold leading-tight text-zinc-900">
-                  {slot.artistName}
-                </p>
-                <p className="truncate text-[9px] text-zinc-600">
-                  {slot.stageName}
-                </p>
-                <p className="font-mono text-[9px] text-zinc-700">
-                  {w.planFrom}–{w.planTo}
-                </p>
+                  className={`flex h-full min-h-0 flex-col justify-center gap-0.5 overflow-hidden px-1 pb-2.5 pt-2.5 ${
+                    onStripWindowMoveStart
+                      ? "cursor-grab active:cursor-grabbing"
+                      : ""
+                  }`}
+                  onPointerDown={(e) => bodyPointerDown(slot, e)}
+                >
+                  <p className="line-clamp-3 text-[11px] font-bold leading-snug text-zinc-900">
+                    {slot.artistName}
+                  </p>
+                  <p className="line-clamp-2 text-[9px] leading-tight text-zinc-500">
+                    {slot.stageName}
+                  </p>
+                </div>
+                {onStripTimeResize ? (
+                  <div
+                    data-strip-resize="end"
+                    className="absolute bottom-0 left-0 right-0 z-20 h-2 cursor-ns-resize"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onStripTimeResize(slot, "end", e);
+                    }}
+                  />
+                ) : null}
               </div>
-              {onStripTimeResize ? (
-                <div
-                  role="separator"
-                  aria-orientation="horizontal"
-                  className="h-2 shrink-0 cursor-ns-resize bg-sky-100/90 hover:bg-sky-200"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onStripTimeResize(slot, "end", e);
-                  }}
-                />
-              ) : null}
               <button
                 type="button"
-                className="absolute right-0.5 top-4 z-10 border border-zinc-400 bg-white px-0.5 text-[9px] leading-none text-red-800"
+                className="absolute right-0.5 top-4 z-[25] border border-zinc-400 bg-white px-0.5 text-[9px] leading-none text-red-800"
                 onClick={(e) => {
                   e.stopPropagation();
                   setStripIds((ids) => {

@@ -639,18 +639,15 @@ export function ScheduleCalendar({
               const range = maxMR - minMR;
               if (range <= 0) return null;
               const topPx = ((band.fromM - minMR) / range) * timelineBodyPx;
-              const heightPx = Math.max(
-                ((band.toM - band.fromM) / range) * timelineBodyPx,
-                8
-              );
+              const durPx = ((band.toM - band.fromM) / range) * timelineBodyPx;
+              const heightPx = Math.max(durPx, 2);
               return (
                 <div
                   key={`walk-${bi}`}
-                  className="pointer-events-none absolute left-0 right-0 z-[22] flex items-center justify-center border-y border-sky-700/50 bg-sky-400/45 text-[9px] font-bold text-sky-950"
+                  className="pointer-events-none absolute left-0 right-0 z-[22] bg-zinc-950"
                   style={{ top: topPx, height: heightPx }}
-                >
-                  Walk {band.label}
-                </div>
+                  aria-hidden
+                />
               );
             })}
             <div className="flex min-w-0 flex-1">
