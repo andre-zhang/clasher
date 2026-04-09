@@ -486,8 +486,10 @@ export function ScheduleCalendar({
       if (range <= 0 || tb <= 0) return;
       const deltaY = e.clientY - stripMove.anchorClientY;
       const deltaMin = (deltaY / tb) * range;
-      let nextFrom = snapMinutesTo5(Math.round(stripMove.baseFromM + deltaMin));
-      let nextTo = snapMinutesTo5(Math.round(nextFrom + duration));
+      const nextFrom = snapMinutesTo5(
+        Math.round(stripMove.baseFromM + deltaMin)
+      );
+      const nextTo = snapMinutesTo5(Math.round(nextFrom + duration));
       const w = clampPlanWindowToSlot(
         slot,
         hhmmFromMinutes(nextFrom),
