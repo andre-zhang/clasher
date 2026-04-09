@@ -51,9 +51,6 @@ export function PlanWallpaperExport({
   return (
     <div className="space-y-3 border-2 border-zinc-900 bg-indigo-50/40 p-4 shadow-[2px_2px_0_0_#18181b]">
       <p className="text-sm font-semibold text-zinc-900">Wallpaper (16:9 PNG)</p>
-      <p className="text-[11px] text-zinc-600">
-        Top third left empty for your lock screen. Lines: time · act · stage.
-      </p>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"

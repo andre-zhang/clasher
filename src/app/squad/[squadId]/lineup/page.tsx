@@ -5,10 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ScanningOverlay } from "@/components/ScanningOverlay";
 import { useClasher } from "@/context/ClasherContext";
 import { normalizeImportedArtistNames } from "@/lib/importNormalize";
-import {
-  compactSquadTierStrip,
-  myTierEmoji,
-} from "@/lib/reactionsUi";
+import { compactSquadTierStrip } from "@/lib/reactionsUi";
 import { TIER_EMOJI, TIERS_ORDER, tierFromString } from "@/lib/tiers";
 import type { FestivalSnapshot, RatingTier } from "@/lib/types";
 
@@ -194,11 +191,8 @@ export default function LineupPage() {
               <h2 className="font-semibold text-zinc-900">{a.name}</h2>
               <p
                 className="mt-1 truncate text-[10px] text-zinc-600"
-                title={`You ${myTierEmoji(group, a.id, session.memberId)} · Others ${compactSquadTierStrip(group, a.id, session.memberId)}`}
+                title={compactSquadTierStrip(group, a.id, session.memberId)}
               >
-                <span className="font-semibold text-zinc-800">You</span>{" "}
-                {myTierEmoji(group, a.id, session.memberId)}
-                <span className="text-zinc-400"> · </span>
                 <span className="font-semibold text-zinc-800">Others</span>{" "}
                 {compactSquadTierStrip(group, a.id, session.memberId)}
               </p>

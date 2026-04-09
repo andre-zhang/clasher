@@ -17,7 +17,6 @@ export default function SchedulePage() {
     parseScheduleFiles,
     addSlotComment,
     setRating,
-    patchScheduleKeep,
     putSlotIntents,
   } = useClasher();
   const [draft, setDraft] = useState<ScheduleDraftSlot[] | null>(null);
@@ -304,13 +303,6 @@ export default function SchedulePage() {
         </button>
       </div>
 
-      {calendarMode === "all" ? (
-        <p className="text-[11px] text-zinc-600">
-          ❤️ and 🔥 match Lineup — they add a set to Your plan. The box pins
-          without a hot rating. + only if the row is too short.
-        </p>
-      ) : null}
-
       <ScheduleCalendar
         schedule={group.schedule}
         memberId={calendarMode === "mine" ? session.memberId : undefined}
@@ -321,12 +313,8 @@ export default function SchedulePage() {
         visibilityMode={
           calendarMode === "mine" ? "scheduleShortlist" : "effectivePlan"
         }
-        scheduleKeepMemberId={
+        scheduleViewerMemberId={
           calendarMode === "all" ? session.memberId : undefined
-        }
-        showScheduleKeepToggle={calendarMode === "all"}
-        onToggleScheduleKeep={(slotId, keep) =>
-          patchScheduleKeep(slotId, keep)
         }
         onSetRating={(artistId, tier) => setRating(artistId, tier)}
       />

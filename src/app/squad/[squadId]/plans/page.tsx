@@ -116,6 +116,8 @@ export default function PlansPage() {
   const [planDetailSlotId, setPlanDetailSlotId] = useState<string | null>(
     null
   );
+  const [planNoteDraft, setPlanNoteDraft] = useState("");
+  const [planNoteSaving, setPlanNoteSaving] = useState(false);
   const planDetailRef = useRef<HTMLDialogElement>(null);
 
   const me = session?.memberId ?? null;
@@ -162,6 +164,10 @@ export default function PlansPage() {
 
   useEffect(() => {
     if (planDetailSlotId) planDetailRef.current?.showModal();
+  }, [planDetailSlotId]);
+
+  useEffect(() => {
+    setPlanNoteDraft("");
   }, [planDetailSlotId]);
 
   if (!group || !session) return null;
@@ -242,7 +248,6 @@ export default function PlansPage() {
               allMemberSlotIntents={group.allMemberSlotIntents}
               group={group}
               slotComments={group.slotComments}
-              onAddSlotComment={addSlotComment}
               visibilityMode="effectivePlan"
               onSetRating={
                 activeMember === session.memberId
@@ -337,7 +342,10 @@ export default function PlansPage() {
       <dialog
         ref={planDetailRef}
         className="max-w-md border-2 border-zinc-900 bg-white p-4 shadow-[4px_4px_0_0_#18181b] backdrop:bg-black/40"
-        onClose={() => setPlanDetailSlotId(null)}
+        onClose={() => {
+          setPlanDetailSlotId(null);
+          setPlanNoteDraft("");
+        }}
       >
         {detailSlot && activeMember ? (
           <>
@@ -351,6 +359,49 @@ export default function PlansPage() {
                 )
               )}
             </ul>
+            <div className="mt-4 border-t border-zinc-200 pt-3">
+              <p className="text-xs font-semibold text-zinc-800">Slot notes</p>
+              <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto text-xs">
+                {group.slotComments
+                  .filter((c) => c.slotId === detailSlot.id)
+                  .map((c) => (
+                    <li key={c.id} className="text-zinc-700">
+                      <span className="font-medium">
+                        {group.members.find((m) => m.id === c.memberId)
+                          ?.displayName ?? "?"}
+                        :
+                      </span>{" "}
+                      {c.body}
+                    </li>
+                  ))}
+              </ul>
+              <textarea
+                className="mt-2 min-h-[56px] w-full border-2 border-zinc-900 px-2 py-1 text-sm"
+                placeholder="Note"
+                value={planNoteDraft}
+                onChange={(e) => setPlanNoteDraft(e.target.value)}
+              />
+              <button
+                type="button"
+                disabled={planNoteSaving || !planNoteDraft.trim()}
+                className="mt-2 border-2 border-zinc-900 bg-indigo-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                onClick={() => {
+                  const t = planNoteDraft.trim();
+                  if (!t) return;
+                  setPlanNoteSaving(true);
+                  void (async () => {
+                    try {
+                      await addSlotComment(detailSlot.id, t);
+                      setPlanNoteDraft("");
+                    } finally {
+                      setPlanNoteSaving(false);
+                    }
+                  })();
+                }}
+              >
+                Add note
+              </button>
+            </div>
             <button
               type="button"
               className="mt-4 text-xs text-zinc-600 underline"
