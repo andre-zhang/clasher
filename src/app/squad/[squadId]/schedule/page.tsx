@@ -136,12 +136,8 @@ export default function SchedulePage() {
 
       <h1 className="text-xl font-bold text-zinc-900">Schedule</h1>
 
-      <section className="rounded-lg border-2 border-indigo-900/30 bg-indigo-50/80 p-4 shadow-[2px_2px_0_0_rgba(49,46,129,0.25)]">
-        <h2 className="text-sm font-bold text-indigo-950">Lineup & timetable</h2>
-        <p className="mt-1 text-xs text-indigo-900/80">
-          Pull acts from your ratings into your shortlist, or scan posters to edit
-          the grid.
-        </p>
+      <section className="border-2 border-zinc-900 bg-white p-4 shadow-[2px_2px_0_0_#18181b]">
+        <h2 className="text-sm font-bold text-zinc-900">Import</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
@@ -177,7 +173,7 @@ export default function SchedulePage() {
       ) : null}
 
       {draft && draft.length > 0 ? (
-        <div className="border-2 border-zinc-900 bg-amber-50/90 p-4 shadow-[3px_3px_0_0_#18181b]">
+        <div className="border-2 border-zinc-900 bg-white p-4 shadow-[3px_3px_0_0_#18181b]">
           <p className="text-sm font-semibold text-zinc-900">
             Draft ({draft.length})
           </p>
@@ -275,7 +271,7 @@ export default function SchedulePage() {
               type="button"
               onClick={() => void commitDraft()}
               disabled={busy}
-              className="border-2 border-zinc-900 bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-50"
+              className="border-2 border-zinc-900 bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-50"
             >
               Commit
             </button>
@@ -290,12 +286,8 @@ export default function SchedulePage() {
         </div>
       ) : null}
 
-      <section className="rounded-lg border-2 border-zinc-900 bg-emerald-50/50 p-4 shadow-[2px_2px_0_0_#18181b]">
-        <h2 className="text-sm font-bold text-emerald-950">Full timetable</h2>
-        <p className="mt-1 text-xs text-emerald-900/85">
-          All stages for the squad. Turn on the plan strip to queue acts and set
-          arrival windows (with walk time between stages when enabled in Options).
-        </p>
+      <section className="border-2 border-zinc-900 bg-white p-4 shadow-[2px_2px_0_0_#18181b]">
+        <h2 className="text-sm font-bold text-zinc-900">Timetable</h2>
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
           <ClasherCheckbox
             size="sm"

@@ -17,6 +17,10 @@ import {
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
 import { clampPlanWindowToSlot } from "@/lib/walkFeasibility";
+
+function snapMinutesTo5(m: number): number {
+  return Math.round(m / 5) * 5;
+}
 import { myTierEmoji, squadReactionPills } from "@/lib/reactionsUi";
 import { memberKeepsSlotOnScheduleShortlist } from "@/lib/scheduleShortlist";
 import { TIER_EMOJI, TIERS_ORDER } from "@/lib/tiers";
@@ -328,16 +332,18 @@ export function ScheduleCalendar({
       }
       const w = clampPlanWindowToSlot(
         slot,
-        hhmmFromMinutes(Math.round(nextFrom)),
-        hhmmFromMinutes(Math.round(nextTo))
+        hhmmFromMinutes(snapMinutesTo5(Math.round(nextFrom))),
+        hhmmFromMinutes(snapMinutesTo5(Math.round(nextTo)))
       );
       let sm = parseHm(w.planFrom);
       let em = parseHm(w.planTo);
+      if (!Number.isNaN(sm)) sm = snapMinutesTo5(sm);
+      if (!Number.isNaN(em)) em = snapMinutesTo5(em);
       if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
-        sm = Math.max(lo, Math.min(hi, sm));
-        em = Math.max(lo, Math.min(hi, em));
+        if (!Number.isNaN(sm)) sm = Math.max(lo, Math.min(hi, sm));
+        if (!Number.isNaN(em)) em = Math.max(lo, Math.min(hi, em));
       }
-      if (em < sm) em = sm;
+      if (!Number.isNaN(sm) && !Number.isNaN(em) && em < sm) em = sm;
       setStripWindows((prev) => ({
         ...prev,
         [slot.id]: {
@@ -420,7 +426,8 @@ export function ScheduleCalendar({
       ) : showAllStages && !allStagesForDay.length ? (
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : (
-        <div className="flex min-w-max overflow-x-auto border-2 border-zinc-900 bg-white">
+        <div className="max-h-[min(72vh,calc(100vh-10rem))] overflow-auto border-2 border-zinc-900 bg-white">
+          <div className="flex min-w-max">
           <div
             className="sticky left-0 z-30 flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 shadow-[6px_0_12px_-4px_rgba(0,0,0,0.12)]"
             style={{ width: 56, minHeight: timelineHRender }}
@@ -537,9 +544,9 @@ export function ScheduleCalendar({
                     }
                   };
 
-                  const shellClass = `absolute left-0.5 right-0.5 border-2 border-zinc-900 bg-indigo-50 px-1 py-0.5 text-left flex min-h-0 flex-col overflow-hidden ${
+                  const shellClass = `absolute left-0.5 right-0.5 border-2 border-zinc-900 bg-zinc-50 px-1 py-0.5 text-left flex min-h-0 flex-col overflow-hidden ${
                     openDetailOrPanel
-                      ? "cursor-pointer hover:bg-indigo-100"
+                      ? "cursor-pointer hover:bg-zinc-100"
                       : ""
                   }`;
 
@@ -575,27 +582,9 @@ export function ScheduleCalendar({
                       style={{
                         top: topPx,
                         height: heightPx,
-                        zIndex: 5 + slotIndex,
+                        zIndex: onStrip ? 40 + slotIndex : 6 + slotIndex,
                       }}
                     >
-                      {onStrip ? (
-                        <>
-                          <button
-                            type="button"
-                            aria-label="Adjust start time"
-                            data-planner-handle
-                            className="absolute left-0 right-0 top-0 z-20 h-2 cursor-ns-resize border-0 bg-zinc-900/40 p-0 hover:bg-zinc-900/65"
-                            onMouseDown={(e) => beginStripResize(slot, "start", e)}
-                          />
-                          <button
-                            type="button"
-                            aria-label="Adjust end time"
-                            data-planner-handle
-                            className="absolute bottom-0 left-0 right-0 z-20 h-2 cursor-ns-resize border-0 bg-zinc-900/40 p-0 hover:bg-zinc-900/65"
-                            onMouseDown={(e) => beginStripResize(slot, "end", e)}
-                          />
-                        </>
-                      ) : null}
                       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
                         <p className="shrink-0 break-words text-[11px] font-semibold leading-snug text-zinc-900 [overflow-wrap:anywhere]">
                           {slot.artistName}
@@ -632,7 +621,7 @@ export function ScheduleCalendar({
                                           }
                                         })();
                                       }}
-                                      className={`min-h-[18px] min-w-[18px] rounded border px-0.5 text-[11px] leading-none transition-colors ${
+                                      className={`min-h-[18px] min-w-[18px] border px-0.5 text-[11px] leading-none transition-colors ${
                                         active
                                           ? "border-zinc-900 bg-zinc-900 text-white"
                                           : "border-zinc-300 bg-white text-zinc-800 hover:border-zinc-900"
@@ -649,7 +638,7 @@ export function ScheduleCalendar({
                                 {squadPills.map(({ tier, emoji, count }) => (
                                   <span
                                     key={tier}
-                                    className="rounded-full border border-zinc-300 bg-white/90 px-1 py-px text-[9px] font-medium tabular-nums text-zinc-700"
+                                    className="border border-zinc-300 bg-white px-1 py-px text-[9px] font-medium tabular-nums text-zinc-700"
                                   >
                                     {emoji}
                                     {count}
@@ -702,8 +691,11 @@ export function ScheduleCalendar({
               stripScope={stripScope}
               setStripScope={setStripScope}
               onApply={buildPlanner.onApplyPlan}
+              onStripTimeResize={beginStripResize}
+              resizeBusy={Boolean(stripResize)}
             />
           ) : null}
+          </div>
         </div>
       )}
 
@@ -751,7 +743,7 @@ export function ScheduleCalendar({
                             }
                           })();
                         }}
-                        className={`min-h-[28px] min-w-[28px] rounded border px-1 text-sm leading-none transition-colors ${
+                        className={`min-h-[28px] min-w-[28px] border px-1 text-sm leading-none transition-colors ${
                           active
                             ? "border-zinc-900 bg-zinc-900 text-white"
                             : "border-zinc-300 bg-white text-zinc-800 hover:border-zinc-900"
@@ -788,7 +780,7 @@ export function ScheduleCalendar({
                 <button
                   type="button"
                   disabled={noteSaving || !noteDraft.trim()}
-                  className="border-2 border-zinc-900 bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                  className="border-2 border-zinc-900 bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
                   onClick={() => {
                     const t = noteDraft.trim();
                     if (!t || !noteSlot) return;

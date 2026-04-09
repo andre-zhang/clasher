@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import {
@@ -24,6 +24,8 @@ export function SchedulePlannerStrip({
   stripScope,
   setStripScope,
   onApply,
+  onStripTimeResize,
+  resizeBusy,
 }: {
   group: FestivalSnapshot;
   activeDay: string;
@@ -37,6 +39,12 @@ export function SchedulePlannerStrip({
   allowClashes: boolean;
   stripScope: "mine" | "group";
   setStripScope: (v: "mine" | "group") => void;
+  onStripTimeResize?: (
+    slot: Slot,
+    edge: "start" | "end",
+    e: ReactMouseEvent
+  ) => void;
+  resizeBusy?: boolean;
   onApply: (
     patches: {
       slotId: string;
@@ -111,8 +119,8 @@ export function SchedulePlannerStrip({
 
   return (
     <div
-      className={`flex w-[200px] shrink-0 flex-col border-l-2 border-zinc-900 bg-amber-50 ${
-        dragOver ? "ring-2 ring-indigo-500" : ""
+      className={`flex w-[200px] shrink-0 flex-col border-l-2 border-zinc-900 bg-zinc-50 ${
+        dragOver ? "ring-2 ring-zinc-900 ring-offset-1" : ""
       }`}
       onDragOver={(e) => {
         e.preventDefault();
@@ -121,7 +129,7 @@ export function SchedulePlannerStrip({
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => void onDropStrip(e)}
     >
-      <div className="sticky top-0 z-[1] border-b-2 border-zinc-900 bg-amber-100 px-1 py-1 text-center text-[10px] font-bold leading-tight text-zinc-900">
+      <div className="sticky top-0 z-[1] border-b-2 border-zinc-900 bg-zinc-100 px-1 py-1 text-center text-[10px] font-bold leading-tight text-zinc-900">
         Plan strip
         <div className="mt-1 flex gap-0.5">
           <button
@@ -160,7 +168,7 @@ export function SchedulePlannerStrip({
           return (
             <div
               key={slot.id}
-              draggable
+              draggable={!resizeBusy}
               onDragStart={(e) => {
                 e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
                 e.dataTransfer.effectAllowed = "move";
@@ -187,6 +195,18 @@ export function SchedulePlannerStrip({
               <p className="font-semibold leading-tight text-zinc-900">
                 {slot.artistName}
               </p>
+              {onStripTimeResize ? (
+                <button
+                  type="button"
+                  aria-label="Drag to adjust plan start (5 min steps)"
+                  className="mt-0.5 h-2 w-full cursor-ns-resize border-0 bg-zinc-800/45 p-0 hover:bg-zinc-800/70"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onStripTimeResize(slot, "start", e);
+                  }}
+                />
+              ) : null}
               <div className="mt-1 flex flex-col gap-0.5 font-mono">
                 <label className="flex items-center gap-0.5">
                   <span className="text-zinc-500">In</span>
@@ -221,6 +241,18 @@ export function SchedulePlannerStrip({
                   />
                 </label>
               </div>
+              {onStripTimeResize ? (
+                <button
+                  type="button"
+                  aria-label="Drag to adjust plan end (5 min steps)"
+                  className="mt-0.5 h-2 w-full cursor-ns-resize border-0 bg-zinc-800/45 p-0 hover:bg-zinc-800/70"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onStripTimeResize(slot, "end", e);
+                  }}
+                />
+              ) : null}
               <button
                 type="button"
                 className="mt-1 text-[9px] text-red-800 underline"
@@ -254,7 +286,7 @@ export function SchedulePlannerStrip({
             (Boolean(clash) && !allowClashes)
           }
           onClick={() => void save()}
-          className="w-full border-2 border-zinc-900 bg-indigo-600 py-1 text-[10px] font-semibold text-white disabled:opacity-40"
+          className="w-full border-2 border-zinc-900 bg-[var(--accent)] py-1 text-[10px] font-semibold text-white disabled:opacity-40"
         >
           {busy ? "…" : "Apply to plan"}
         </button>

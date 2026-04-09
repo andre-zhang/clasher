@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { EveryonePlansCalendar } from "@/components/EveryonePlansCalendar";
+import { PlanWalkBanner } from "@/components/PlanWalkBanner";
 import { PlanWallpaperExport } from "@/components/PlanWallpaperExport";
 import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { useClasher } from "@/context/ClasherContext";
@@ -14,90 +16,12 @@ import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
 } from "@/lib/effectiveIntents";
-import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
+import { planDayTravelLines } from "@/lib/planMemberDay";
 import {
   memberEffectivePlanWindowsInfeasibleTogether,
-  walkMinutesBetweenStages,
 } from "@/lib/walkFeasibility";
 import { buildSlotIntentsFromHotRatings } from "@/lib/syncIntentsFromRatings";
 import type { FestivalSnapshot } from "@/lib/types";
-
-function effectiveWindow(
-  group: FestivalSnapshot,
-  memberId: string,
-  slot: FestivalSnapshot["schedule"][0]
-): { start: number; end: number } {
-  const s0 = parseHm(slot.start);
-  const e0 = parseHm(slot.end);
-  if (Number.isNaN(s0) || Number.isNaN(e0)) return { start: 0, end: 0 };
-  if (!effectiveMemberWantsSlot(group, memberId, slot.id)) {
-    return { start: s0, end: s0 };
-  }
-  const row = group.allMemberSlotIntents.find(
-    (i) => i.memberId === memberId && i.slotId === slot.id
-  );
-  const eff = effectiveMemberSlotPlanWindow(group, memberId, slot);
-  const fromS = eff.planFrom ?? row?.planFrom ?? null;
-  const toS = eff.planTo ?? row?.planTo ?? null;
-  if (!fromS && !toS && (!row || !row.wants)) {
-    return { start: s0, end: e0 };
-  }
-  const fs = fromS ? parseHm(fromS) : s0;
-  const fe = toS ? parseHm(toS) : e0;
-  const ss = Number.isNaN(fs) ? s0 : Math.max(s0, fs);
-  const ee = Number.isNaN(fe) ? e0 : Math.min(e0, fe);
-  return { start: ss, end: Math.max(ss, ee) };
-}
-
-function labelAtBucket(
-  group: FestivalSnapshot,
-  memberId: string,
-  day: string,
-  bucket: number
-): string {
-  const bucketEnd = bucket + 30;
-  for (const s of group.schedule) {
-    if (s.dayLabel.trim() !== day) continue;
-    if (!effectiveMemberWantsSlot(group, memberId, s.id)) continue;
-    const { start, end } = effectiveWindow(group, memberId, s);
-    if (start < bucketEnd && end > bucket) {
-      return s.artistName.length > 14
-        ? `${s.artistName.slice(0, 12)}…`
-        : s.artistName;
-    }
-  }
-  return "—";
-}
-
-function planDayTravelLines(
-  group: FestivalSnapshot,
-  memberId: string,
-  dayLabel: string
-): string[] {
-  const d = dayLabel.trim();
-  const slots = group.schedule.filter(
-    (s) =>
-      s.dayLabel.trim() === d && effectiveMemberWantsSlot(group, memberId, s.id)
-  );
-  slots.sort(
-    (a, b) =>
-      effectiveWindow(group, memberId, a).start -
-      effectiveWindow(group, memberId, b).start
-  );
-  const out: string[] = [];
-  for (let i = 0; i < slots.length - 1; i++) {
-    const cur = slots[i]!;
-    const nxt = slots[i + 1]!;
-    const w = group.walkTimesEnabled
-      ? walkMinutesBetweenStages(group, cur.stageName, nxt.stageName)
-      : 0;
-    if (w <= 0) continue;
-    out.push(
-      `${cur.artistName} → ${nxt.artistName}: ~${w} min between ${cur.stageName} and ${nxt.stageName}`
-    );
-  }
-  return out;
-}
 
 function planDetailBullets(
   group: FestivalSnapshot,
@@ -107,9 +31,6 @@ function planDetailBullets(
   const lines: string[] = [
     `Full listing: ${slot.start}–${slot.end} · ${slot.stageName} · ${slot.dayLabel}`,
   ];
-  if (group.walkTimesEnabled) {
-    lines.push("Walk times are on — gaps below use your plan windows.");
-  }
   if (effectiveMemberWantsSlot(group, memberId, slot.id)) {
     const w = effectiveMemberSlotPlanWindow(group, memberId, slot);
     if (w.planFrom && w.planTo) {
@@ -186,29 +107,6 @@ export default function PlansPage() {
   }, [group]);
 
   const activeDay = day ?? days[0] ?? null;
-
-  const { buckets, members } = useMemo(() => {
-    if (!group || !activeDay) {
-      return {
-        buckets: [] as number[],
-        members: [] as { id: string; displayName: string }[],
-      };
-    }
-    const mins: number[] = [];
-    for (const s of group.schedule) {
-      if (s.dayLabel.trim() !== activeDay) continue;
-      const a = parseHm(s.start);
-      const b = parseHm(s.end);
-      if (!Number.isNaN(a)) mins.push(a);
-      if (!Number.isNaN(b)) mins.push(b);
-    }
-    if (!mins.length) return { buckets: [], members: group.members };
-    const lo = Math.floor(Math.min(...mins) / 30) * 30;
-    const hi = Math.ceil(Math.max(...mins) / 30) * 30;
-    const b: number[] = [];
-    for (let t = lo; t < hi; t += 30) b.push(t);
-    return { buckets: b, members: group.members };
-  }, [group, activeDay]);
 
   const detailSlot = useMemo(
     () =>
@@ -297,6 +195,12 @@ export default function PlansPage() {
               ))}
             </select>
           </label>
+          <PlanWalkBanner
+            group={group}
+            activeDay={activeDay}
+            memberId={activeMember}
+            variant="person"
+          />
           {activeMember ? (
             <ScheduleCalendar
               schedule={group.schedule}
@@ -315,7 +219,7 @@ export default function PlansPage() {
           ) : null}
         </div>
       ) : (
-        <div className="space-y-3 overflow-x-auto">
+        <div className="space-y-3">
           {days.length > 1 ? (
             <div className="flex flex-wrap gap-1">
               {days.map((d) => (
@@ -335,62 +239,25 @@ export default function PlansPage() {
             </div>
           ) : null}
 
-          {!activeDay || buckets.length === 0 ? (
+          <PlanWalkBanner
+            group={group}
+            activeDay={activeDay}
+            memberId={null}
+            variant="everyone"
+          />
+
+          {!activeDay ? (
             <p className="text-sm text-zinc-600">No schedule for this day.</p>
           ) : (
-            <div className="flex min-w-max overflow-x-auto border-2 border-zinc-900 bg-white shadow-[2px_2px_0_0_#18181b]">
-              <div
-                className="sticky left-0 z-30 flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 shadow-[6px_0_12px_-4px_rgba(0,0,0,0.12)]"
-                style={{ width: 56, minHeight: buckets.length * 28 + 32 }}
-              >
-                <div className="sticky top-0 z-40 h-8 shrink-0 border-b-2 border-zinc-900 bg-zinc-50" />
-                {buckets.map((t) => (
-                  <div
-                    key={t}
-                    className="flex shrink-0 items-start border-b border-zinc-200 px-1 pt-0.5 text-[10px] font-mono text-zinc-600"
-                    style={{ height: 28 }}
-                  >
-                    {hhmmFromMinutes(t)}
-                  </div>
-                ))}
-              </div>
-              {members.map((m) => (
-                <div
-                  key={m.id}
-                  className="relative min-w-[104px] flex-1 border-r-2 border-zinc-900 last:border-r-0"
-                  style={{ minHeight: buckets.length * 28 + 32 }}
-                >
-                  <div className="sticky top-0 z-20 flex h-8 items-center justify-center border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-none text-zinc-900 shadow-[0_6px_10px_-4px_rgba(0,0,0,0.1)]">
-                    <span className="line-clamp-2">{m.displayName}</span>
-                  </div>
-                  <div>
-                    {buckets.map((t) => {
-                      const label = labelAtBucket(group, m.id, activeDay, t);
-                      const empty = label === "—";
-                      return (
-                        <div
-                          key={t}
-                          className={`flex items-center border-b border-zinc-100 px-1 ${
-                            empty ? "bg-white" : "bg-indigo-50"
-                          }`}
-                          style={{ minHeight: 28 }}
-                        >
-                          <span
-                            className={`text-[10px] leading-tight ${
-                              empty
-                                ? "text-zinc-400"
-                                : "font-semibold text-zinc-900"
-                            }`}
-                          >
-                            {label}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <EveryonePlansCalendar
+              group={group}
+              activeDay={activeDay}
+              onSlotOpenDetail={(slot, forMemberId) => {
+                setMemberId(forMemberId);
+                setTab("person");
+                setPlanDetailSlotId(slot.id);
+              }}
+            />
           )}
         </div>
       )}
@@ -440,7 +307,7 @@ export default function PlansPage() {
               <button
                 type="button"
                 disabled={planNoteSaving || !planNoteDraft.trim()}
-                className="mt-2 border-2 border-zinc-900 bg-indigo-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                className="mt-2 border-2 border-zinc-900 bg-[var(--accent)] px-2 py-1 text-xs font-semibold text-white disabled:opacity-40"
                 onClick={() => {
                   const t = planNoteDraft.trim();
                   if (!t) return;
