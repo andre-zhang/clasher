@@ -1,7 +1,13 @@
 "use client";
 
 import type React from "react";
-import { useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
@@ -13,6 +19,25 @@ import {
 import type { FestivalSnapshot } from "@/lib/types";
 
 type Slot = FestivalSnapshot["schedule"][number];
+
+function stripBoxLayout(
+  slot: Slot,
+  wins: Record<string, { planFrom: string; planTo: string }>,
+  timelineMinM: number,
+  timelineMaxM: number,
+  timelineBodyPx: number
+): { topPx: number; heightPx: number } {
+  const range = timelineMaxM - timelineMinM;
+  const w = wins[slot.id] ?? { planFrom: slot.start, planTo: slot.end };
+  const sm = parseHm(w.planFrom);
+  const em = parseHm(w.planTo);
+  if (Number.isNaN(sm) || Number.isNaN(em) || range <= 0) {
+    return { topPx: 0, heightPx: 28 };
+  }
+  const topPx = ((sm - timelineMinM) / range) * timelineBodyPx;
+  const heightPx = Math.max(((em - sm) / range) * timelineBodyPx, 20);
+  return { topPx, heightPx };
+}
 
 export function SchedulePlannerStrip({
   group,
@@ -51,7 +76,7 @@ export function SchedulePlannerStrip({
     edge: "start" | "end",
     e: ReactMouseEvent
   ) => void;
-  onStripWindowMoveStart?: (slot: Slot, e: ReactMouseEvent) => void;
+  onStripWindowMoveStart?: (slot: Slot, anchorClientY: number) => void;
   resizeBusy?: boolean;
   moveBusy?: boolean;
   timelineMinM: number;
@@ -68,6 +93,10 @@ export function SchedulePlannerStrip({
 }) {
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [draftFrom, setDraftFrom] = useState("");
+  const [draftTo, setDraftTo] = useState("");
+  const editDialogRef = useRef<HTMLDialogElement>(null);
 
   const slotsById = useMemo(() => {
     const m = new Map(schedule.map((s) => [s.id, s]));
@@ -94,7 +123,77 @@ export function SchedulePlannerStrip({
     [group, orderedSlots, windows]
   );
 
-  const range = timelineMaxM - timelineMinM;
+  const stripColumnPack = useMemo(() => {
+    const items = orderedSlots.map((slot) => {
+      const { topPx, heightPx } = stripBoxLayout(
+        slot,
+        windows,
+        timelineMinM,
+        timelineMaxM,
+        timelineBodyPx
+      );
+      return { slot, topPx, heightPx, bot: topPx + heightPx };
+    });
+    const n = items.length;
+    const parent = items.map((_, i) => i);
+    function find(i: number): number {
+      let x = i;
+      while (parent[x] !== x) x = parent[x]!;
+      return x;
+    }
+    function union(a: number, b: number) {
+      const ra = find(a);
+      const rb = find(b);
+      if (ra !== rb) parent[rb] = ra;
+    }
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const A = items[i]!;
+        const B = items[j]!;
+        if (A.topPx < B.bot && B.topPx < A.bot) union(i, j);
+      }
+    }
+    const clusters = new Map<number, number[]>();
+    for (let i = 0; i < n; i++) {
+      const r = find(i);
+      const arr = clusters.get(r) ?? [];
+      arr.push(i);
+      clusters.set(r, arr);
+    }
+    const colOf = new Map<string, { col: number; cols: number }>();
+    for (const idxs of clusters.values()) {
+      idxs.sort((a, b) => items[a]!.topPx - items[b]!.topPx);
+      const cols = idxs.length;
+      idxs.forEach((idx, ord) => {
+        colOf.set(items[idx]!.slot.id, { col: ord, cols });
+      });
+    }
+    return { items, colOf };
+  }, [orderedSlots, windows, timelineMinM, timelineMaxM, timelineBodyPx]);
+
+  const itemById = useMemo(
+    () => new Map(stripColumnPack.items.map((x) => [x.slot.id, x])),
+    [stripColumnPack.items]
+  );
+
+  useEffect(() => {
+    if (!editId) {
+      editDialogRef.current?.close();
+      return;
+    }
+    const slot = slotsById.get(editId);
+    if (!slot) {
+      setEditId(null);
+      return;
+    }
+    const w = windows[slot.id] ?? {
+      planFrom: slot.start,
+      planTo: slot.end,
+    };
+    setDraftFrom(w.planFrom);
+    setDraftTo(w.planTo);
+    editDialogRef.current?.showModal();
+  }, [editId, windows, slotsById]);
 
   function syncWindowsForOrder(nextIds: string[]) {
     setWindows(recomputeStripWindowsSequential(group, nextIds, schedule));
@@ -136,21 +235,46 @@ export function SchedulePlannerStrip({
     }
   }
 
-  function boxLayout(slot: Slot): { topPx: number; heightPx: number } {
-    const w = windows[slot.id] ?? { planFrom: slot.start, planTo: slot.end };
-    const sm = parseHm(w.planFrom);
-    const em = parseHm(w.planTo);
-    if (Number.isNaN(sm) || Number.isNaN(em) || range <= 0) {
-      return { topPx: 0, heightPx: 28 };
-    }
-    const topPx = ((sm - timelineMinM) / range) * timelineBodyPx;
-    const heightPx = Math.max(((em - sm) / range) * timelineBodyPx, 16);
-    return { topPx, heightPx };
+  function applyDraftTimes() {
+    if (!editId) return;
+    const slot = slotsById.get(editId);
+    if (!slot) return;
+    const c = clampPlanWindowToSlot(slot, draftFrom.trim(), draftTo.trim());
+    setWindows((prev) => ({
+      ...prev,
+      [slot.id]: { planFrom: c.planFrom, planTo: c.planTo },
+    }));
+    setEditId(null);
   }
+
+  function bodyPointerDown(slot: Slot, e: React.PointerEvent) {
+    if (!onStripWindowMoveStart) return;
+    if (e.button !== 0) return;
+    const t = e.target as HTMLElement | null;
+    if (t?.closest("button,a,input,textarea")) return;
+    const y0 = e.clientY;
+    let moved = false;
+    const onMove = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientY - y0) < 8) return;
+      moved = true;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      onStripWindowMoveStart(slot, y0);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      if (!moved) setEditId(slot.id);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
+
+  const dialogSlot = editId ? slotsById.get(editId) ?? null : null;
 
   return (
     <div
-      className={`flex w-[200px] shrink-0 flex-col border-l-2 border-zinc-900 bg-zinc-50 ${
+      className={`flex w-[min(280px,32vw)] min-w-[220px] shrink-0 flex-col border-l-2 border-zinc-900 bg-zinc-50 ${
         dragOver ? "ring-2 ring-zinc-900 ring-offset-1" : ""
       }`}
       onDragOver={(e) => {
@@ -193,6 +317,7 @@ export function SchedulePlannerStrip({
         style={{ height: timelineBodyPx, minHeight: 120 }}
       >
         {walkBands.map((band, i) => {
+          const range = timelineMaxM - timelineMinM;
           if (range <= 0) return null;
           const topPx = ((band.fromM - timelineMinM) / range) * timelineBodyPx;
           const heightPx = Math.max(
@@ -202,7 +327,7 @@ export function SchedulePlannerStrip({
           return (
             <div
               key={`w-${i}`}
-              className="pointer-events-none absolute left-0 right-0 z-[1] flex items-center justify-center border-y border-sky-700/40 bg-sky-300/50 text-[8px] font-bold text-sky-950"
+              className="pointer-events-none absolute left-0 right-0 z-[1] flex items-center justify-center border-y border-sky-600/50 bg-sky-200/70 text-[8px] font-bold text-sky-950"
               style={{ top: topPx, height: heightPx }}
             >
               {band.label}
@@ -210,14 +335,18 @@ export function SchedulePlannerStrip({
           );
         })}
 
-        {stripIds.length === 0 ? (
-          <p className="absolute inset-0 flex items-center justify-center p-1 text-center text-[9px] text-zinc-500">
-            Drop acts from the grid
-          </p>
-        ) : null}
-
         {orderedSlots.map((slot, idx) => {
-          const { topPx, heightPx } = boxLayout(slot);
+          const packItem = itemById.get(slot.id);
+          if (!packItem) return null;
+          const { topPx, heightPx } = packItem;
+          const pack = stripColumnPack.colOf.get(slot.id) ?? {
+            col: 0,
+            cols: 1,
+          };
+          const { col, cols } = pack;
+          const gap = 3;
+          const widthPct = 100 / cols;
+          const leftPct = col * widthPct;
           const w = windows[slot.id] ?? {
             planFrom: slot.start,
             planTo: slot.end,
@@ -225,8 +354,13 @@ export function SchedulePlannerStrip({
           return (
             <div
               key={slot.id}
-              className="absolute left-0.5 right-0.5 z-[4] flex flex-col overflow-visible border-2 border-zinc-900 bg-white shadow-sm"
-              style={{ top: topPx, height: heightPx }}
+              className="absolute z-[4] flex flex-col overflow-visible border-2 border-zinc-900 bg-white shadow-sm"
+              style={{
+                top: topPx,
+                height: heightPx,
+                left: `calc(${leftPct}% + ${gap}px)`,
+                width: `calc(${widthPct}% - ${gap * 2}px)`,
+              }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
@@ -249,7 +383,7 @@ export function SchedulePlannerStrip({
                 type="button"
                 draggable={!resizeBusy && !moveBusy}
                 aria-label="Reorder in strip"
-                className="h-3 shrink-0 cursor-grab border-b border-zinc-300 bg-zinc-200 text-[8px] leading-3 text-zinc-600 active:cursor-grabbing"
+                className="h-3.5 shrink-0 cursor-grab border-b border-zinc-300 bg-zinc-200 text-[9px] leading-3 text-zinc-600 active:cursor-grabbing"
                 onDragStart={(e) => {
                   e.stopPropagation();
                   e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
@@ -259,10 +393,10 @@ export function SchedulePlannerStrip({
                 ≡
               </button>
               {onStripTimeResize ? (
-                <button
-                  type="button"
-                  aria-label="Resize plan start"
-                  className="h-1.5 shrink-0 cursor-ns-resize border-0 bg-zinc-800/50 p-0 hover:bg-zinc-800/75"
+                <div
+                  role="separator"
+                  aria-orientation="horizontal"
+                  className="h-2 shrink-0 cursor-ns-resize bg-sky-100/90 hover:bg-sky-200"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -271,35 +405,26 @@ export function SchedulePlannerStrip({
                 />
               ) : null}
               <div
-                className={`flex min-h-0 flex-1 flex-col overflow-hidden px-0.5 py-px ${
+                className={`flex min-h-0 flex-1 flex-col justify-center gap-0.5 overflow-hidden px-1 py-0.5 ${
                   onStripWindowMoveStart ? "cursor-grab active:cursor-grabbing" : ""
                 }`}
-                onMouseDown={(e) => {
-                  if (
-                    !onStripWindowMoveStart ||
-                    (e.target as HTMLElement).closest("button,a,input")
-                  ) {
-                    return;
-                  }
-                  if (e.button !== 0) return;
-                  onStripWindowMoveStart(slot, e);
-                }}
+                onPointerDown={(e) => bodyPointerDown(slot, e)}
               >
-                <p className="truncate text-[9px] font-semibold leading-tight text-zinc-900">
+                <p className="line-clamp-2 text-[10px] font-semibold leading-tight text-zinc-900">
                   {slot.artistName}
                 </p>
-                <p className="truncate text-[8px] text-zinc-600">
+                <p className="truncate text-[9px] text-zinc-600">
                   {slot.stageName}
                 </p>
-                <p className="mt-auto font-mono text-[8px] text-zinc-700">
+                <p className="font-mono text-[9px] text-zinc-700">
                   {w.planFrom}–{w.planTo}
                 </p>
               </div>
               {onStripTimeResize ? (
-                <button
-                  type="button"
-                  aria-label="Resize plan end"
-                  className="h-1.5 shrink-0 cursor-ns-resize border-0 bg-zinc-800/50 p-0 hover:bg-zinc-800/75"
+                <div
+                  role="separator"
+                  aria-orientation="horizontal"
+                  className="h-2 shrink-0 cursor-ns-resize bg-sky-100/90 hover:bg-sky-200"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -309,8 +434,7 @@ export function SchedulePlannerStrip({
               ) : null}
               <button
                 type="button"
-                className="absolute right-0 top-3 z-10 border border-zinc-400 bg-white px-0.5 text-[8px] leading-none text-red-800"
-                title="Remove from strip"
+                className="absolute right-0.5 top-4 z-10 border border-zinc-400 bg-white px-0.5 text-[9px] leading-none text-red-800"
                 onClick={(e) => {
                   e.stopPropagation();
                   setStripIds((ids) => {
@@ -341,11 +465,6 @@ export function SchedulePlannerStrip({
         >
           Clear strip
         </button>
-        {clash && !allowClashes ? (
-          <p className="mb-1 border border-red-300 bg-red-50 p-1 text-[9px] text-red-900">
-            Overlap or not enough travel time.
-          </p>
-        ) : null}
         <button
           type="button"
           disabled={
@@ -359,6 +478,62 @@ export function SchedulePlannerStrip({
           {busy ? "…" : "Apply to plan"}
         </button>
       </div>
+
+      <dialog
+        ref={editDialogRef}
+        className="max-w-sm border-2 border-zinc-900 bg-white p-3 shadow-[4px_4px_0_0_#18181b]"
+        onClose={() => setEditId(null)}
+      >
+        {dialogSlot ? (
+          <form
+            className="space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              applyDraftTimes();
+            }}
+          >
+            <p className="text-xs font-bold text-zinc-900">
+              {dialogSlot.artistName}
+            </p>
+            <p className="font-mono text-[10px] text-zinc-600">
+              {dialogSlot.start}–{dialogSlot.end} · {dialogSlot.stageName}
+            </p>
+            <label className="block text-[10px] font-medium text-zinc-800">
+              From
+              <input
+                className="mt-0.5 w-full border-2 border-zinc-900 px-1 py-0.5 font-mono text-xs"
+                value={draftFrom}
+                onChange={(e) => setDraftFrom(e.target.value)}
+                autoComplete="off"
+              />
+            </label>
+            <label className="block text-[10px] font-medium text-zinc-800">
+              To
+              <input
+                className="mt-0.5 w-full border-2 border-zinc-900 px-1 py-0.5 font-mono text-xs"
+                value={draftTo}
+                onChange={(e) => setDraftTo(e.target.value)}
+                autoComplete="off"
+              />
+            </label>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                className="border border-zinc-400 px-2 py-1 text-[10px]"
+                onClick={() => setEditId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="border-2 border-zinc-900 bg-zinc-900 px-2 py-1 text-[10px] font-semibold text-white"
+              >
+                OK
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </dialog>
     </div>
   );
 }

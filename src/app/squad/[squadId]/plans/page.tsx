@@ -209,6 +209,7 @@ export default function PlansPage() {
               group={group}
               slotComments={group.slotComments}
               visibilityMode="effectivePlan"
+              showEffectivePlanLayer
               onSetRating={
                 activeMember === session.memberId
                   ? (artistId, tier) => setRating(artistId, tier)

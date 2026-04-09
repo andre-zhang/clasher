@@ -87,6 +87,7 @@ export function ScheduleCalendar({
   onSetRating,
   /** Schedule “Your plan” uses shortlist (lineup + pins); Plans uses effective (clashes). */
   visibilityMode = "effectivePlan",
+  showEffectivePlanLayer = false,
   /** Full timetable: viewer for ratings when memberId is not set (e.g. “all stages” view). */
   scheduleViewerMemberId,
   onSlotOpenDetail,
@@ -101,6 +102,7 @@ export function ScheduleCalendar({
   onAddSlotComment?: (slotId: string, body: string) => Promise<void>;
   onSetRating?: (artistId: string, tier: RatingTier) => Promise<void>;
   visibilityMode?: "effectivePlan" | "scheduleShortlist";
+  showEffectivePlanLayer?: boolean;
   scheduleViewerMemberId?: string;
   onSlotOpenDetail?: (slot: Slot) => void;
   buildPlanner?: {
@@ -319,7 +321,10 @@ export function ScheduleCalendar({
   timelineMetricsRef.current = { minMR, maxMR, timelineBodyPx };
 
   const useEffectiveSlotLayout = Boolean(
-    group && rateMemberId && visibilityMode === "effectivePlan"
+    group &&
+      rateMemberId &&
+      visibilityMode === "effectivePlan" &&
+      showEffectivePlanLayer
   );
 
   const planWalkBands = useMemo(() => {
@@ -563,9 +568,7 @@ export function ScheduleCalendar({
     });
   }
 
-  function beginStripWindowMove(slot: Slot, e: ReactMouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
+  function beginStripWindowMove(slot: Slot, anchorClientY: number) {
     const w = stripWindows[slot.id] ?? {
       planFrom: slot.start,
       planTo: slot.end,
@@ -575,7 +578,7 @@ export function ScheduleCalendar({
     if (Number.isNaN(sm) || Number.isNaN(em)) return;
     setStripMove({
       slotId: slot.id,
-      anchorClientY: e.clientY,
+      anchorClientY,
       baseFromM: sm,
       baseToM: em,
     });
