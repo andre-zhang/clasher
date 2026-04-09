@@ -69,6 +69,13 @@ export interface FestivalSnapshot {
     customWindows: { slotId: string; planFrom: string; planTo: string }[] | null;
     setByMemberId: string;
   }[];
+  walkTimesEnabled: boolean;
+  hasFestivalMap: boolean;
+  mapStageLabels: string[];
+  /** Map label → schedule stage name (editable). */
+  stageMapAlias: Record<string, string>;
+  /** Minutes between schedule stage names (symmetric entries may be omitted). */
+  walkMatrix: Record<string, Record<string, number>> | null;
 }
 
 export interface ClasherSession {

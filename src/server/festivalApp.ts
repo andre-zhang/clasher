@@ -17,8 +17,14 @@ import { patchIntentsForConflict } from "./applyConflictIntents";
 import { wantsDeltaFromChoice } from "./memberSlotIntentPatch";
 import { normalizeScheduleTimesForImport } from "@/lib/scheduleTimeNormalize";
 
+import {
+  buildWalkMatrixFromStageOrder,
+  orderScheduleStagesByMap,
+  parseMatchesFromVision,
+  parseStageLabelsFromVision,
+} from "./mapStages";
 import { buildSnapshot } from "./snapshot";
-import { runVisionJson } from "./vision";
+import { runClaudeTextJson, runVisionJson } from "./vision";
 
 function randomToken(): string {
   return (
@@ -162,6 +168,176 @@ export function createFestivalApp(apiBasePath: string): Hono {
     const squadId = c.req.param("squadId");
     const member = await authMember(c, squadId);
     if (!member) return c.json({ error: "unauthorized" }, 401);
+    const snap = await buildSnapshot(prisma, member.squadId, member.id);
+    return c.json({ group: snap });
+  });
+
+  app.get("/squads/:squadId/festival-map", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    const squad = await prisma.squad.findUnique({
+      where: { id: member.squadId },
+      select: { festivalMapData: true, festivalMapMime: true },
+    });
+    if (!squad?.festivalMapData) {
+      return c.json({ error: "no_map" }, 404);
+    }
+    return c.json({
+      mime: squad.festivalMapMime ?? "image/jpeg",
+      data: squad.festivalMapData,
+    });
+  });
+
+  app.post("/squads/:squadId/festival-map", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    const form = await c.req.formData();
+    const file = form.get("file");
+    if (!(file instanceof File)) {
+      return c.json({ error: "missing_file" }, 400);
+    }
+    const buf = Buffer.from(await file.arrayBuffer());
+    if (buf.byteLength > 8 * 1024 * 1024) {
+      return c.json({ error: "file_too_large" }, 400);
+    }
+    await prisma.squad.update({
+      where: { id: member.squadId },
+      data: {
+        festivalMapData: buf.toString("base64"),
+        festivalMapMime: file.type || "image/jpeg",
+      },
+    });
+    const snap = await buildSnapshot(prisma, member.squadId, member.id);
+    return c.json({ group: snap });
+  });
+
+  app.post("/squads/:squadId/festival-map/analyze", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+
+    let buf: Buffer;
+    let mime: string;
+    const contentType = c.req.header("content-type") ?? "";
+    if (contentType.includes("multipart/form-data")) {
+      const form = await c.req.formData();
+      const file = form.get("file");
+      if (!(file instanceof File)) {
+        return c.json({ error: "missing_file" }, 400);
+      }
+      buf = Buffer.from(await file.arrayBuffer());
+      mime = file.type || "image/jpeg";
+      if (buf.byteLength > 8 * 1024 * 1024) {
+        return c.json({ error: "file_too_large" }, 400);
+      }
+      await prisma.squad.update({
+        where: { id: member.squadId },
+        data: {
+          festivalMapData: buf.toString("base64"),
+          festivalMapMime: mime,
+        },
+      });
+    } else {
+      const squad = await prisma.squad.findUnique({
+        where: { id: member.squadId },
+        select: { festivalMapData: true, festivalMapMime: true },
+      });
+      if (!squad?.festivalMapData) {
+        return c.json({ error: "upload_map_first" }, 400);
+      }
+      buf = Buffer.from(squad.festivalMapData, "base64");
+      mime = squad.festivalMapMime ?? "image/jpeg";
+    }
+
+    const vision = await runVisionJson(
+      buf,
+      mime,
+      'Schema: {"stageLabels":["string"]} — distinct stage / tent / arena names on the map.',
+      'List every performance stage or named area on this festival map. Return JSON only: {"stageLabels":["..."]}'
+    );
+    if (!vision.ok) {
+      return c.json({ error: "vision_failed", message: vision.message }, 503);
+    }
+    const labels = parseStageLabelsFromVision(vision.json);
+    if (!labels.length) {
+      return c.json({ error: "no_stages_found" }, 422);
+    }
+
+    const slots = await prisma.scheduleSlot.findMany({
+      where: { squadId: member.squadId },
+      select: { stageName: true },
+    });
+    const schedStages = [
+      ...new Set(slots.map((s) => s.stageName.trim()).filter(Boolean)),
+    ].sort();
+    if (!schedStages.length) {
+      return c.json({ error: "no_schedule_stages" }, 400);
+    }
+
+    const textRes = await runClaudeTextJson(
+      "You match noisy map text to canonical stage names. Reply with valid JSON only (no markdown).",
+      `Canonical schedule stage names (exact strings):\n${JSON.stringify(
+        schedStages
+      )}\n\nLabels read from the map:\n${JSON.stringify(
+        labels
+      )}\n\nReturn JSON: {"matches":[{"mapLabel":"...","scheduleStage":"..."}]}\nOne entry per map label. scheduleStage must be one of the canonical strings.`
+    );
+    if (!textRes.ok) {
+      return c.json({ error: "match_failed", message: textRes.message }, 503);
+    }
+    const alias = parseMatchesFromVision(textRes.json);
+    const ordered = orderScheduleStagesByMap(schedStages, labels, alias);
+    const matrix = buildWalkMatrixFromStageOrder(ordered);
+
+    await prisma.squad.update({
+      where: { id: member.squadId },
+      data: {
+        mapStageLabelsJson: labels,
+        stageAliasJson: alias as Prisma.InputJsonValue,
+        walkMatrixJson: matrix as Prisma.InputJsonValue,
+      },
+    });
+    const snap = await buildSnapshot(prisma, member.squadId, member.id);
+    return c.json({ group: snap });
+  });
+
+  app.patch("/squads/:squadId/squad-options", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    let body: {
+      walkTimesEnabled?: boolean;
+      stageAliasJson?: Record<string, string>;
+      walkMatrixJson?: Record<string, Record<string, number>>;
+      mapStageLabelsJson?: string[];
+    };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid_json" }, 400);
+    }
+    const data: Prisma.SquadUpdateInput = {};
+    if (typeof body.walkTimesEnabled === "boolean") {
+      data.walkTimesEnabled = body.walkTimesEnabled;
+    }
+    if (body.stageAliasJson && typeof body.stageAliasJson === "object") {
+      data.stageAliasJson = body.stageAliasJson as Prisma.InputJsonValue;
+    }
+    if (body.walkMatrixJson && typeof body.walkMatrixJson === "object") {
+      data.walkMatrixJson = body.walkMatrixJson as Prisma.InputJsonValue;
+    }
+    if (Array.isArray(body.mapStageLabelsJson)) {
+      data.mapStageLabelsJson = body.mapStageLabelsJson as Prisma.InputJsonValue;
+    }
+    if (Object.keys(data).length === 0) {
+      return c.json({ error: "no_updates" }, 400);
+    }
+    await prisma.squad.update({
+      where: { id: member.squadId },
+      data,
+    });
     const snap = await buildSnapshot(prisma, member.squadId, member.id);
     return c.json({ group: snap });
   });

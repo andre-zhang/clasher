@@ -13,12 +13,14 @@ import { useRouter } from "next/navigation";
 import {
   apiAddComment,
   apiAddSlotComment,
+  apiAnalyzeFestivalMap,
   apiBulkArtists,
   apiDeleteSquad,
   apiDemoFull,
   apiParseLineupImage,
   apiParseScheduleImages,
   apiPatchScheduleKeep,
+  apiPatchSquadOptions,
   apiPeekInvite,
   apiPutSlotIntents,
   apiReplaceSchedule,
@@ -27,6 +29,7 @@ import {
   apiSetRating,
   apiSnapshot,
   type ScheduleDraftSlot,
+  apiUploadFestivalMap,
 } from "@/lib/api";
 import {
   SESSION_STORAGE_KEY,
@@ -98,6 +101,14 @@ type ClasherContextValue = {
   parseLineupFile: (file: File) => Promise<string[]>;
   /** One or more timetable screenshots; results merged and deduped server-side. */
   parseScheduleFiles: (files: File[]) => Promise<ScheduleDraftSlot[]>;
+  uploadFestivalMap: (file: File) => Promise<void>;
+  analyzeFestivalMap: (file?: File) => Promise<void>;
+  patchSquadOptions: (patch: {
+    walkTimesEnabled?: boolean;
+    stageAliasJson?: Record<string, string>;
+    walkMatrixJson?: Record<string, Record<string, number>>;
+    mapStageLabelsJson?: string[];
+  }) => Promise<void>;
 };
 
 const ClasherContext = createContext<ClasherContextValue | null>(null);
@@ -274,6 +285,38 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
     return apiParseScheduleImages(files);
   }, []);
 
+  const uploadFestivalMap = useCallback(
+    async (file: File) => {
+      const s = requireSession();
+      const g = await apiUploadFestivalMap(s, file);
+      setGroup(g);
+    },
+    [requireSession]
+  );
+
+  const analyzeFestivalMap = useCallback(
+    async (file?: File) => {
+      const s = requireSession();
+      const g = await apiAnalyzeFestivalMap(s, file);
+      setGroup(g);
+    },
+    [requireSession]
+  );
+
+  const patchSquadOptions = useCallback(
+    async (patch: {
+      walkTimesEnabled?: boolean;
+      stageAliasJson?: Record<string, string>;
+      walkMatrixJson?: Record<string, Record<string, number>>;
+      mapStageLabelsJson?: string[];
+    }) => {
+      const s = requireSession();
+      const g = await apiPatchSquadOptions(s, patch);
+      setGroup(g);
+    },
+    [requireSession]
+  );
+
   const value = useMemo<ClasherContextValue>(
     () => ({
       session,
@@ -296,6 +339,9 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       deleteSquad,
       parseLineupFile,
       parseScheduleFiles,
+      uploadFestivalMap,
+      analyzeFestivalMap,
+      patchSquadOptions,
     }),
     [
       session,
@@ -318,6 +364,9 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       deleteSquad,
       parseLineupFile,
       parseScheduleFiles,
+      uploadFestivalMap,
+      analyzeFestivalMap,
+      patchSquadOptions,
     ]
   );
 

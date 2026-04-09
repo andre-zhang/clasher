@@ -8,6 +8,7 @@ import {
   type SyntheticEvent,
 } from "react";
 
+import { SchedulePlannerStrip } from "@/components/SchedulePlannerStrip";
 import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
@@ -63,14 +64,14 @@ function slotPixelLayout(
   const next = sorted[index + 1];
   const nextStart = next ? parseHm(next.start) : maxMR;
   const range = maxMR - minMR;
-  if (range <= 0) return { topPx: 0, heightPx: 72 };
+  if (range <= 0) return { topPx: 0, heightPx: 40 };
   const topPx = ((ss - minMR) / range) * timelineBodyPx;
   const naturalEndPx = ((ee - minMR) / range) * timelineBodyPx;
   const naturalH = Math.max(0, naturalEndPx - topPx);
   const maxBottomPx = ((nextStart - minMR) / range) * timelineBodyPx;
-  const targetH = Math.max(naturalH, 72);
+  const targetH = Math.max(naturalH, 40);
   const rawH = Math.min(targetH, Math.max(0, maxBottomPx - topPx));
-  const heightPx = Math.max(rawH, 24);
+  const heightPx = Math.max(rawH, 20);
   return { topPx, heightPx };
 }
 
@@ -88,6 +89,7 @@ export function ScheduleCalendar({
   /** Full timetable: viewer for ratings when memberId is not set (e.g. “all stages” view). */
   scheduleViewerMemberId,
   onSlotOpenDetail,
+  buildPlanner,
 }: {
   schedule: Slot[];
   memberId?: string;
@@ -100,6 +102,18 @@ export function ScheduleCalendar({
   visibilityMode?: "effectivePlan" | "scheduleShortlist";
   scheduleViewerMemberId?: string;
   onSlotOpenDetail?: (slot: Slot) => void;
+  buildPlanner?: {
+    memberId: string;
+    allowClashes: boolean;
+    onApplyPlan: (
+      patches: {
+        slotId: string;
+        wants: boolean;
+        planFrom: string | null;
+        planTo: string | null;
+      }[]
+    ) => Promise<void>;
+  };
 }) {
   const rateMemberId = memberId ?? scheduleViewerMemberId;
 
@@ -142,6 +156,10 @@ export function ScheduleCalendar({
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [ratingBusy, setRatingBusy] = useState<string | null>(null);
+  const [stripIds, setStripIds] = useState<string[]>([]);
+  const [stripWindows, setStripWindows] = useState<
+    Record<string, { planFrom: string; planTo: string }>
+  >({});
 
   const noteSlot = useMemo(
     () => schedule.find((s) => s.id === noteSlotId) ?? null,
@@ -151,6 +169,11 @@ export function ScheduleCalendar({
   useEffect(() => {
     if (noteSlotId) noteDialogRef.current?.showModal();
   }, [noteSlotId]);
+
+  useEffect(() => {
+    setStripIds([]);
+    setStripWindows({});
+  }, [activeDay]);
 
   const allStagesForDay = useMemo(() => {
     const rows = schedule.filter((s) => s.dayLabel.trim() === activeDay);
@@ -266,7 +289,7 @@ export function ScheduleCalendar({
             return (
             <div
               key={stage}
-              className="relative min-w-[148px] flex-1 border-r-2 border-zinc-900 last:border-r-0"
+              className="relative min-w-[148px] flex-1 border-r-2 border-zinc-900"
               style={{ minHeight: timelineHRender }}
             >
               <div className="sticky top-0 z-[1] h-8 border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-8 text-zinc-900">
@@ -333,7 +356,8 @@ export function ScheduleCalendar({
                     onAddSlotComment || showQuickRate
                   );
                   const openDetailOrPanel = Boolean(
-                    onSlotOpenDetail || canOpenPanel
+                    !buildPlanner &&
+                      (onSlotOpenDetail || canOpenPanel)
                   );
 
                   const stopBubble = (e: SyntheticEvent) => {
@@ -351,7 +375,7 @@ export function ScheduleCalendar({
                     }
                   };
 
-                  const shellClass = `absolute left-0.5 right-0.5 border-2 border-zinc-900 bg-indigo-50 px-1 py-0.5 text-left shadow-[2px_2px_0_0_#18181b] flex min-h-0 flex-col overflow-hidden ${
+                  const shellClass = `absolute left-0.5 right-0.5 border-2 border-zinc-900 bg-indigo-50 px-1 py-0.5 text-left flex min-h-0 flex-col overflow-hidden ${
                     openDetailOrPanel
                       ? "cursor-pointer hover:bg-indigo-100"
                       : ""
@@ -360,6 +384,15 @@ export function ScheduleCalendar({
                   return (
                     <div
                       key={slot.id}
+                      draggable={Boolean(buildPlanner && showAllStages)}
+                      onDragStart={
+                        buildPlanner && showAllStages
+                          ? (e) => {
+                              e.dataTransfer.setData("text/plain", slot.id);
+                              e.dataTransfer.effectAllowed = "copyMove";
+                            }
+                          : undefined
+                      }
                       title={`${slot.artistName} ${slot.start}–${slot.end}`}
                       role={openDetailOrPanel ? "button" : undefined}
                       tabIndex={openDetailOrPanel ? 0 : undefined}
@@ -393,10 +426,7 @@ export function ScheduleCalendar({
                             onKeyDown={stopBubble}
                           >
                             {showQuickRate ? (
-                              <span
-                                className="inline-flex flex-wrap gap-0.5"
-                                title="Your rating"
-                              >
+                              <span className="inline-flex flex-wrap gap-0.5">
                                 {TIERS_ORDER.map((tier) => {
                                   const active =
                                     myEmoji === TIER_EMOJI[tier];
@@ -486,6 +516,19 @@ export function ScheduleCalendar({
             </div>
             );
           })}
+          {buildPlanner && showAllStages && group && activeDay ? (
+            <SchedulePlannerStrip
+              group={group}
+              activeDay={activeDay}
+              schedule={schedule}
+              stripIds={stripIds}
+              setStripIds={setStripIds}
+              windows={stripWindows}
+              setWindows={setStripWindows}
+              allowClashes={buildPlanner.allowClashes}
+              onApply={buildPlanner.onApplyPlan}
+            />
+          ) : null}
         </div>
       )}
 

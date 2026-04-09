@@ -100,6 +100,35 @@ export type VisionUnconfigured = { ok: false; message: string };
 export type VisionOk = { ok: true; json: Record<string, unknown> };
 export type VisionResult = VisionOk | VisionUnconfigured;
 
+/** Text-only JSON extraction (stage matching, etc.). */
+export async function runClaudeTextJson(
+  systemText: string,
+  userPrompt: string
+): Promise<VisionResult> {
+  if (!anthropic) {
+    return {
+      ok: false,
+      message: "Set ANTHROPIC_API_KEY on the server for text matching.",
+    };
+  }
+  try {
+    const msg = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 4096,
+      system: systemText,
+      messages: [{ role: "user", content: userPrompt }],
+    });
+    const block = msg.content.find((b) => b.type === "text");
+    if (!block || block.type !== "text") {
+      return { ok: false, message: "empty_model" };
+    }
+    return { ok: true, json: extractJsonObject(block.text) };
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : String(e);
+    return { ok: false, message: raw };
+  }
+}
+
 export async function runVisionJson(
   buf: Buffer,
   mime: string,

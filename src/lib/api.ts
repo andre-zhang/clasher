@@ -129,6 +129,79 @@ export async function apiSnapshot(
   return j.group as FestivalSnapshot;
 }
 
+export async function apiUploadFestivalMap(
+  session: ClasherSession,
+  file: File
+): Promise<FestivalSnapshot> {
+  const fd = new FormData();
+  fd.set("file", file);
+  const r = await fetch(apiUrl(`/squads/${session.squadId}/festival-map`), {
+    method: "POST",
+    headers: bearer(session.memberSecret),
+    body: fd,
+  });
+  await ensureOk(r);
+  const j = await r.json();
+  return j.group as FestivalSnapshot;
+}
+
+export async function apiAnalyzeFestivalMap(
+  session: ClasherSession,
+  file?: File
+): Promise<FestivalSnapshot> {
+  if (file) {
+    const fd = new FormData();
+    fd.set("file", file);
+    const r = await fetch(
+      apiUrl(`/squads/${session.squadId}/festival-map/analyze`),
+      {
+        method: "POST",
+        headers: bearer(session.memberSecret),
+        body: fd,
+      }
+    );
+    await ensureOk(r);
+    const j = await r.json();
+    return j.group as FestivalSnapshot;
+  }
+  const r = await fetch(
+    apiUrl(`/squads/${session.squadId}/festival-map/analyze`),
+    {
+      method: "POST",
+      headers: {
+        ...(bearer(session.memberSecret) as Record<string, string>),
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    }
+  );
+  await ensureOk(r);
+  const j = await r.json();
+  return j.group as FestivalSnapshot;
+}
+
+export async function apiPatchSquadOptions(
+  session: ClasherSession,
+  patch: {
+    walkTimesEnabled?: boolean;
+    stageAliasJson?: Record<string, string>;
+    walkMatrixJson?: Record<string, Record<string, number>>;
+    mapStageLabelsJson?: string[];
+  }
+): Promise<FestivalSnapshot> {
+  const r = await fetch(apiUrl(`/squads/${session.squadId}/squad-options`), {
+    method: "PATCH",
+    headers: {
+      ...bearer(session.memberSecret),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(patch),
+  });
+  await ensureOk(r);
+  const j = await r.json();
+  return j.group as FestivalSnapshot;
+}
+
 export async function apiSetRating(
   session: ClasherSession,
   artistId: string,

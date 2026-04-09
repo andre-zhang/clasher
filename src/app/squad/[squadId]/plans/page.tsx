@@ -74,6 +74,9 @@ function planDetailBullets(
   const lines: string[] = [
     `Full listing: ${slot.start}–${slot.end} · ${slot.stageName} · ${slot.dayLabel}`,
   ];
+  if (group.walkTimesEnabled) {
+    lines.push("Travel time between stages is on for clashes.");
+  }
   if (effectiveMemberWantsSlot(group, memberId, slot.id)) {
     const w = effectiveMemberSlotPlanWindow(group, memberId, slot);
     if (w.planFrom && w.planTo) {

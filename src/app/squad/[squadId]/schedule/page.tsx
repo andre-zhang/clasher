@@ -24,6 +24,8 @@ export default function SchedulePage() {
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [calendarMode, setCalendarMode] = useState<"mine" | "all">("mine");
+  const [plannerOn, setPlannerOn] = useState(false);
+  const [plannerClashes, setPlannerClashes] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -281,7 +283,10 @@ export default function SchedulePage() {
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => setCalendarMode("mine")}
+          onClick={() => {
+            setCalendarMode("mine");
+            setPlannerOn(false);
+          }}
           className={`border-2 px-2 py-1 text-xs font-semibold ${
             calendarMode === "mine"
               ? "border-zinc-900 bg-zinc-900 text-white"
@@ -303,6 +308,29 @@ export default function SchedulePage() {
         </button>
       </div>
 
+      {calendarMode === "all" ? (
+        <label className="flex flex-wrap items-center gap-4 text-xs text-zinc-800">
+          <span className="flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={plannerOn}
+              onChange={(e) => setPlannerOn(e.target.checked)}
+            />
+            Plan strip
+          </span>
+          {plannerOn ? (
+            <span className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={plannerClashes}
+                onChange={(e) => setPlannerClashes(e.target.checked)}
+              />
+              Allow clashes
+            </span>
+          ) : null}
+        </label>
+      ) : null}
+
       <ScheduleCalendar
         schedule={group.schedule}
         memberId={calendarMode === "mine" ? session.memberId : undefined}
@@ -317,6 +345,17 @@ export default function SchedulePage() {
           calendarMode === "all" ? session.memberId : undefined
         }
         onSetRating={(artistId, tier) => setRating(artistId, tier)}
+        buildPlanner={
+          calendarMode === "all" && plannerOn
+            ? {
+                memberId: session.memberId,
+                allowClashes: plannerClashes,
+                onApplyPlan: async (patches) => {
+                  await putSlotIntents(patches);
+                },
+              }
+            : undefined
+        }
       />
 
       {group.schedule.length > 0 ? (

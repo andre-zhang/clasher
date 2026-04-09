@@ -15,6 +15,12 @@ model Squad {
   festivalDate       DateTime?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  walkTimesEnabled   Boolean             @default(false)
+  festivalMapMime    String?
+  festivalMapData    String?             @db.Text
+  mapStageLabelsJson Json?
+  stageAliasJson     Json?
+  walkMatrixJson     Json?
   members            Member[]
   artists            Artist[]
   comments           Comment[]

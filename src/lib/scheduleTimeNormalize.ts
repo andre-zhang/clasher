@@ -71,6 +71,26 @@ function fixMisreadAfternoonEnd(start: string, end: string): string {
   return hhmmFromMinutes(em2);
 }
 
+/**
+ * Misread start as early AM when the set is really afternoon (e.g. 02:00–14:25 → 14:00–14:25).
+ * If end is clearly PM, start is before noon, and the span is unrealistically long, shift start +12h
+ * when that yields a plausible duration.
+ */
+function fixMisreadMorningStart(start: string, end: string): string {
+  const sm = parseHm(start);
+  const em = parseHm(end);
+  if (Number.isNaN(sm) || Number.isNaN(em) || em < 12 * 60 || sm >= 12 * 60)
+    return start;
+  if (em <= sm) return start;
+  const dur = em - sm;
+  if (dur <= 5 * 60) return start;
+  const sm2 = sm + 12 * 60;
+  if (sm2 >= em) return start;
+  const dur2 = em - sm2;
+  if (dur2 > 8 * 60) return start;
+  return hhmmFromMinutes(sm2);
+}
+
 /** Apply PM-first ambiguous rules to parsed timetable rows (order preserved). */
 export function normalizeScheduleTimesForImport(
   slots: ScheduleDraftSlot[]
@@ -86,8 +106,9 @@ export function normalizeScheduleTimesForImport(
       end: normalizeOneTime(slot.end, scopePrefix, ambiguousCount),
     };
   });
-  return normalized.map((slot) => ({
-    ...slot,
-    end: fixMisreadAfternoonEnd(slot.start, slot.end),
-  }));
+  return normalized.map((slot) => {
+    const end = fixMisreadAfternoonEnd(slot.start, slot.end);
+    const start = fixMisreadMorningStart(slot.start, end);
+    return { ...slot, start, end };
+  });
 }

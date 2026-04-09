@@ -1,4 +1,5 @@
 import type { FestivalSnapshot } from "@/lib/types";
+import { slotsInfeasibleTogether } from "@/lib/walkFeasibility";
 
 function parseHm(s: string): number {
   const m = s.trim().match(/^(\d{1,2}):(\d{2})$/);
@@ -66,10 +67,25 @@ export function pairHasSquadInterest(
   return false;
 }
 
+function findAttendabilityConflictPairs(
+  group: FestivalSnapshot
+): SlotPair[] {
+  const schedule = group.schedule;
+  const pairs: SlotPair[] = [];
+  for (let i = 0; i < schedule.length; i++) {
+    for (let j = i + 1; j < schedule.length; j++) {
+      const a = schedule[i]!;
+      const b = schedule[j]!;
+      if (slotsInfeasibleTogether(group, a, b)) pairs.push({ a, b });
+    }
+  }
+  return pairs;
+}
+
 export function findEngagedOverlappingPairs(
   group: FestivalSnapshot
 ): SlotPair[] {
-  return findOverlappingPairs(group.schedule).filter(({ a, b }) =>
+  return findAttendabilityConflictPairs(group).filter(({ a, b }) =>
     pairHasSquadInterest(group, a, b)
   );
 }

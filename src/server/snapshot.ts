@@ -2,6 +2,43 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 
 import type { FestivalSnapshot } from "@/lib/types";
 
+function parseWalkMatrix(
+  raw: Prisma.JsonValue | null
+): Record<string, Record<string, number>> | null {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const out: Record<string, Record<string, number>> = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (!v || typeof v !== "object" || Array.isArray(v)) continue;
+    const inner: Record<string, number> = {};
+    for (const [k2, n] of Object.entries(v as Record<string, unknown>)) {
+      if (typeof n === "number" && Number.isFinite(n)) inner[k2] = n;
+    }
+    if (Object.keys(inner).length) out[k] = inner;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function parseStringStringRecord(
+  raw: Prisma.JsonValue | null
+): Record<string, string> {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const o = raw as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (typeof v === "string" && v.trim()) out[k] = v.trim();
+  }
+  return out;
+}
+
+function parseStringArrayJson(raw: Prisma.JsonValue | null): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((x): x is string => typeof x === "string")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 function parseCustomWindows(
   raw: Prisma.JsonValue | null
 ): { slotId: string; planFrom: string; planTo: string }[] | null {
@@ -149,5 +186,12 @@ export async function buildSnapshot(
       customWindows: parseCustomWindows(d.customWindows),
       setByMemberId: d.setByMemberId,
     })),
+    walkTimesEnabled: squad.walkTimesEnabled ?? false,
+    hasFestivalMap: Boolean(
+      squad.festivalMapData && squad.festivalMapData.length > 0
+    ),
+    mapStageLabels: parseStringArrayJson(squad.mapStageLabelsJson),
+    stageMapAlias: parseStringStringRecord(squad.stageAliasJson),
+    walkMatrix: parseWalkMatrix(squad.walkMatrixJson),
   };
 }

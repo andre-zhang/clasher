@@ -1,0 +1,140 @@
+import type { FestivalSnapshot } from "@/lib/types";
+import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
+
+export type MinuteWindow = {
+  dayKey: string;
+  stageName: string;
+  startM: number;
+  endM: number;
+};
+
+export function walkMinutesBetweenStages(
+  group: FestivalSnapshot,
+  stageA: string,
+  stageB: string
+): number {
+  const a = stageA.trim();
+  const b = stageB.trim();
+  if (a === b) return 0;
+  const m = group.walkMatrix;
+  if (!m) return 0;
+  const ab = m[a]?.[b];
+  if (typeof ab === "number" && Number.isFinite(ab)) return ab;
+  const ba = m[b]?.[a];
+  if (typeof ba === "number" && Number.isFinite(ba)) return ba;
+  return 0;
+}
+
+function windowInfeasibleTogether(
+  group: FestivalSnapshot,
+  a: MinuteWindow,
+  b: MinuteWindow
+): boolean {
+  if (a.dayKey !== b.dayKey) return false;
+  const as = a.startM;
+  const ae = a.endM;
+  const bs = b.startM;
+  const be = b.endM;
+  if ([as, ae, bs, be].some(Number.isNaN)) return false;
+  if (as < be && bs < ae) return true;
+  if (ae <= bs) {
+    const w = group.walkTimesEnabled
+      ? walkMinutesBetweenStages(group, a.stageName, b.stageName)
+      : 0;
+    return ae + w > bs;
+  }
+  if (be <= as) {
+    const w = group.walkTimesEnabled
+      ? walkMinutesBetweenStages(group, b.stageName, a.stageName)
+      : 0;
+    return be + w > as;
+  }
+  return true;
+}
+
+/** True if one person cannot attend both full slots (overlap or insufficient travel gap). */
+export function slotsInfeasibleTogether(
+  group: FestivalSnapshot,
+  a: FestivalSnapshot["schedule"][0],
+  b: FestivalSnapshot["schedule"][0]
+): boolean {
+  const dk = (s: FestivalSnapshot["schedule"][0]) =>
+    s.dayLabel.trim().toLowerCase();
+  return windowInfeasibleTogether(
+    group,
+    {
+      dayKey: dk(a),
+      stageName: a.stageName,
+      startM: parseHm(a.start),
+      endM: parseHm(a.end),
+    },
+    {
+      dayKey: dk(b),
+      stageName: b.stageName,
+      startM: parseHm(b.start),
+      endM: parseHm(b.end),
+    }
+  );
+}
+
+/** Plan strip: custom from/to per slot id (HH:mm), clamped to slot bounds by caller. */
+export function stripWindowsInfeasiblePair(
+  group: FestivalSnapshot,
+  orderedSlots: FestivalSnapshot["schedule"][number][],
+  windows: Record<string, { planFrom: string; planTo: string }>,
+  allowClashes: boolean
+): { a: string; b: string } | null {
+  if (allowClashes) return null;
+  const minsFor = (s: FestivalSnapshot["schedule"][0]): MinuteWindow => {
+    const w = windows[s.id];
+    const rawS = w?.planFrom ?? s.start;
+    const rawE = w?.planTo ?? s.end;
+    let sm = parseHm(rawS);
+    let em = parseHm(rawE);
+    const lo = parseHm(s.start);
+    const hi = parseHm(s.end);
+    if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
+      if (!Number.isNaN(sm)) sm = Math.max(lo, Math.min(hi, sm));
+      if (!Number.isNaN(em)) em = Math.max(lo, Math.min(hi, em));
+    }
+    if (!Number.isNaN(sm) && !Number.isNaN(em) && em < sm) {
+      em = sm;
+    }
+    return {
+      dayKey: s.dayLabel.trim().toLowerCase(),
+      stageName: s.stageName,
+      startM: sm,
+      endM: em,
+    };
+  };
+  for (let i = 0; i < orderedSlots.length; i++) {
+    for (let j = i + 1; j < orderedSlots.length; j++) {
+      const a = orderedSlots[i]!;
+      const b = orderedSlots[j]!;
+      if (windowInfeasibleTogether(group, minsFor(a), minsFor(b))) {
+        return { a: a.id, b: b.id };
+      }
+    }
+  }
+  return null;
+}
+
+export function clampPlanWindowToSlot(
+  slot: FestivalSnapshot["schedule"][0],
+  planFrom: string,
+  planTo: string
+): { planFrom: string; planTo: string } {
+  const lo = parseHm(slot.start);
+  const hi = parseHm(slot.end);
+  let sm = parseHm(planFrom);
+  let em = parseHm(planTo);
+  if (Number.isNaN(sm) || Number.isNaN(em)) {
+    return { planFrom: slot.start, planTo: slot.end };
+  }
+  if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
+    sm = Math.max(lo, Math.min(hi, sm));
+    em = Math.max(lo, Math.min(hi, em));
+  }
+  if (em < sm) em = sm;
+  return { planFrom: hhmmFromMinutes(sm), planTo: hhmmFromMinutes(em) };
+}
