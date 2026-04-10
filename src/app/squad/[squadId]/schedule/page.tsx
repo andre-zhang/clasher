@@ -138,7 +138,8 @@ export default function SchedulePage() {
 
       <section className="border-2 border-zinc-900 bg-white p-4 shadow-[2px_2px_0_0_#18181b]">
         <h2 className="text-sm font-bold text-zinc-900">Import</h2>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 space-y-2">
+          <div className="flex flex-wrap gap-2">
           <button
             type="button"
             disabled={syncBusy || !group.schedule.length}
@@ -163,6 +164,13 @@ export default function SchedulePage() {
             className="hidden"
             onChange={onFiles}
           />
+          </div>
+          <p className="max-w-xl text-xs leading-relaxed text-zinc-600">
+            Copies <span className="font-semibold text-zinc-800">Hot</span>{" "}
+            lineup picks into your timetable flags. Your real plan is built with
+            the <span className="font-semibold text-zinc-800">plan strip</span>{" "}
+            below (turn it on under Timetable).
+          </p>
         </div>
       </section>
 
@@ -306,6 +314,12 @@ export default function SchedulePage() {
             </ClasherCheckbox>
           ) : null}
         </div>
+        <p className="mt-2 max-w-xl text-xs leading-relaxed text-zinc-600">
+          The strip (next to the times) is the main way to add acts to your plan:
+          drag from the grid, reorder, resize windows, then{" "}
+          <span className="font-semibold text-zinc-800">Apply to plan</span>.
+          Emoji ratings on cards are optional; they do not replace the strip.
+        </p>
       </section>
 
       <ScheduleCalendar

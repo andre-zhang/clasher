@@ -637,13 +637,12 @@ export function ScheduleCalendar({
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : (
         <div className="max-h-[min(72vh,calc(100vh-10rem))] overflow-auto border-2 border-zinc-900 bg-white">
-          <div className="flex min-w-0 flex-col lg:flex-row lg:min-w-max lg:items-stretch">
-          <div className="flex min-w-max min-h-0 flex-1">
+          <div className="flex min-w-max min-h-0 items-stretch">
           <div
-            className="sticky left-0 z-30 flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 shadow-[6px_0_12px_-4px_rgba(0,0,0,0.12)]"
+            className="sticky left-0 z-[100] flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 shadow-[6px_0_12px_-4px_rgba(0,0,0,0.12)]"
             style={{ width: 56, minHeight: timelineHRender }}
           >
-            <div className="sticky top-0 z-40 h-8 shrink-0 border-b-2 border-zinc-900 bg-zinc-50" />
+            <div className="sticky top-0 z-[110] h-8 shrink-0 border-b-2 border-zinc-900 bg-zinc-50" />
             <div
               className="relative shrink-0 overflow-hidden"
               style={{ height: timelineBodyPx }}
@@ -659,7 +658,29 @@ export function ScheduleCalendar({
               ))}
             </div>
           </div>
-          <div className="relative flex min-w-0 flex-1">
+          {buildPlanner && showAllStages && group && activeDay ? (
+            <SchedulePlannerStrip
+              group={group}
+              activeDay={activeDay}
+              schedule={schedule}
+              stripIds={stripIds}
+              setStripIds={setStripIds}
+              windows={stripWindows}
+              setWindows={setStripWindows}
+              allowClashes={buildPlanner.allowClashes}
+              stripScope={stripScope}
+              setStripScope={setStripScope}
+              onApply={buildPlanner.onApplyPlan}
+              onStripTimeResize={beginStripResize}
+              onStripWindowMoveStart={beginStripWindowMove}
+              resizeBusy={Boolean(stripResize)}
+              moveBusy={Boolean(stripMove)}
+              timelineMinM={minMR}
+              timelineMaxM={maxMR}
+              timelineBodyPx={timelineBodyPx}
+            />
+          ) : null}
+          <div className="relative flex min-h-0 min-w-0 flex-1">
             <div className="relative flex min-w-0 flex-1">
               {showEffectivePlanLayer &&
                 planWalkBands.map((band, bi) => {
@@ -839,7 +860,7 @@ export function ScheduleCalendar({
                       style={{
                         top: topPx,
                         height: heightPx,
-                        zIndex: onStrip ? 40 + slotIndex : 6 + slotIndex,
+                        zIndex: onStrip ? 12 + slotIndex : 5 + slotIndex,
                       }}
                     >
                       {showClashStripe ? (
@@ -952,29 +973,6 @@ export function ScheduleCalendar({
               </div>
             </div>
           </div>
-          </div>
-          {buildPlanner && showAllStages && group && activeDay ? (
-            <SchedulePlannerStrip
-              group={group}
-              activeDay={activeDay}
-              schedule={schedule}
-              stripIds={stripIds}
-              setStripIds={setStripIds}
-              windows={stripWindows}
-              setWindows={setStripWindows}
-              allowClashes={buildPlanner.allowClashes}
-              stripScope={stripScope}
-              setStripScope={setStripScope}
-              onApply={buildPlanner.onApplyPlan}
-              onStripTimeResize={beginStripResize}
-              onStripWindowMoveStart={beginStripWindowMove}
-              resizeBusy={Boolean(stripResize)}
-              moveBusy={Boolean(stripMove)}
-              timelineMinM={minMR}
-              timelineMaxM={maxMR}
-              timelineBodyPx={timelineBodyPx}
-            />
-          ) : null}
           </div>
         </div>
       )}

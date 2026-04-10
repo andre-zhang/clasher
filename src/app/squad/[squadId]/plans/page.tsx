@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EveryonePlansCalendar } from "@/components/EveryonePlansCalendar";
@@ -10,7 +11,6 @@ import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
 } from "@/lib/effectiveIntents";
-import { buildSlotIntentsFromHotRatings } from "@/lib/syncIntentsFromRatings";
 import type { FestivalSnapshot } from "@/lib/types";
 
 function planDetailSummary(
@@ -39,7 +39,6 @@ export default function PlansPage() {
   const { session, group, putSlotIntents, addSlotComment, setRating } =
     useClasher();
   const [tab, setTab] = useState<"person" | "everyone">("person");
-  const [syncBusy, setSyncBusy] = useState(false);
   const [memberId, setMemberId] = useState<string | null>(null);
   const [day, setDay] = useState<string | null>(null);
   const [planDetailSlotId, setPlanDetailSlotId] = useState<string | null>(
@@ -97,30 +96,23 @@ export default function PlansPage() {
 
   if (!group || !session) return null;
 
-  async function syncHotFlags() {
-    if (!group || !session) return;
-    setSyncBusy(true);
-    try {
-      await putSlotIntents(
-        buildSlotIntentsFromHotRatings(group, session.memberId)
-      );
-    } finally {
-      setSyncBusy(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-zinc-900">Plans</h1>
 
-      <button
-        type="button"
-        disabled={syncBusy || !group.schedule.length}
-        onClick={() => void syncHotFlags()}
-        className="border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40"
-      >
-        Sync from Lineup
-      </button>
+      <p className="max-w-xl text-sm leading-relaxed text-zinc-600">
+        Your plan is driven from the{" "}
+        <Link
+          href={`/squad/${session.squadId}/schedule`}
+          className="font-semibold text-zinc-900 underline decoration-zinc-900 underline-offset-2"
+        >
+          Schedule
+        </Link>{" "}
+        plan strip (drag sets in, adjust windows, then Apply). To copy Hot
+        picks from Lineup into the timetable as a starting point, use{" "}
+        <span className="font-medium text-zinc-800">Sync from Lineup</span> on
+        that page. Reactions here are mainly for comparing with the squad.
+      </p>
 
       <PlanWallpaperExport group={group} sessionMemberId={session.memberId} />
 

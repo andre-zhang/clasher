@@ -124,7 +124,8 @@ export function effectiveMemberWantsSlot(
   const row = group.allMemberSlotIntents.find(
     (i) => i.memberId === memberId && i.slotId === slotId
   );
-  const base = row ? row.wants : true;
+  /** No row = not on plan; use plan strip or Sync from Lineup to add slots explicitly. */
+  const base = row?.wants ?? false;
 
   // Intent row is authoritative after pick resolutions (server updates it).
   // Inferring from the first matching pick row broke when one slot was in multiple pairs.

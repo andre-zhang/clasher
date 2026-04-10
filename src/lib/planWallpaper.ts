@@ -19,16 +19,23 @@ export type PlanCalendarSlot = {
   stage: string;
 };
 
+/** Muted column tints (no loud primaries) — readable on lock screen. */
 const STAGE_BG = [
-  "#bae6fd",
-  "#fde68a",
-  "#86efac",
-  "#fbcfe8",
-  "#a5f3fc",
-  "#fcd34d",
-  "#99f6e4",
-  "#fed7aa",
+  "rgba(148,163,184,0.38)",
+  "rgba(148,163,184,0.22)",
+  "rgba(100,116,139,0.32)",
+  "rgba(100,116,139,0.18)",
+  "rgba(71,85,105,0.28)",
+  "rgba(71,85,105,0.16)",
+  "rgba(120,113,108,0.26)",
+  "rgba(120,113,108,0.14)",
 ];
+
+function formatMinutesClock(m: number): string {
+  const hh = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
 
 function slotSortKey(s: FestivalSnapshot["schedule"][0]): number {
   const d = s.dayLabel.trim().toLowerCase();
@@ -161,7 +168,7 @@ function maxFontForText(
   return best;
 }
 
-/** Portrait 9:16 — top third left clear for lock-screen clock; readable stage/act type. */
+/** Portrait 9:16 — top third shows day + span for lock screen; muted calendar grid. */
 export function renderPlanWallpaperCalendarPng(
   dayLabel: string,
   title: string,
@@ -170,10 +177,9 @@ export function renderPlanWallpaperCalendarPng(
   const W = 1080;
   const H = 1920;
   const pad = 24;
-  /** Empty region for phone date/time (top ~⅓). */
   const lockReserveY = Math.floor(H / 3);
-  const headerBlock = 56;
-  const titleBlock = 44;
+  const headerBlock = 52;
+  const titleBlock = 42;
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -181,40 +187,12 @@ export function renderPlanWallpaperCalendarPng(
   const ctx = canvas.getContext("2d");
   if (!ctx) return Promise.reject(new Error("Canvas unsupported"));
 
-  ctx.fillStyle = "#f8fafc";
-  ctx.fillRect(0, 0, W, lockReserveY);
-
-  const grad = ctx.createLinearGradient(0, lockReserveY, W, H);
-  grad.addColorStop(0, "#f1f5f9");
-  grad.addColorStop(0.55, "#e2e8f0");
-  grad.addColorStop(1, "#cbd5e1");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, lockReserveY, W, H - lockReserveY);
-
-  ctx.strokeStyle = "rgba(15,23,42,0.08)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, lockReserveY);
-  ctx.lineTo(W, lockReserveY);
-  ctx.stroke();
-
-  const contentTop = lockReserveY + pad;
-  let headerY = contentTop;
-  if (title.trim()) {
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "700 28px system-ui, -apple-system, Segoe UI, sans-serif";
-    ctx.fillText(title.trim(), pad, headerY + 26);
-    headerY += 34;
-  }
-  ctx.font = "600 22px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillStyle = "#334155";
-  ctx.fillText(dayLabel, pad, headerY + 22);
-
-  const stages = [...new Set(slots.map((s) => s.stage.trim()))].sort();
-  const topY = headerY + headerBlock;
-  const bodyH = H - topY - pad;
-  const bodyW = W - pad * 2;
-  const gridBottom = topY + bodyH;
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0, "#f4f4f5");
+  bgGrad.addColorStop(0.33, "#f0f0f2");
+  bgGrad.addColorStop(1, "#e4e4e7");
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
 
   let contentMin = Infinity;
   let contentMax = -Infinity;
@@ -226,6 +204,37 @@ export function renderPlanWallpaperCalendarPng(
       contentMax = Math.max(contentMax, b);
     }
   }
+
+  const headerY = lockReserveY + pad;
+  if (Number.isFinite(contentMin) && Number.isFinite(contentMax)) {
+    const spanStr = `${formatMinutesClock(contentMin)} – ${formatMinutesClock(contentMax)}`;
+    ctx.fillStyle = "rgba(15,23,42,0.88)";
+    ctx.font = "700 52px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.fillText(spanStr, pad, lockReserveY * 0.52);
+    ctx.font = "600 26px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctx.fillStyle = "rgba(51,65,85,0.92)";
+    ctx.fillText(dayLabel, pad, lockReserveY * 0.22);
+    if (title.trim()) {
+      ctx.font = "600 20px system-ui, -apple-system, Segoe UI, sans-serif";
+      ctx.fillStyle = "rgba(71,85,105,0.9)";
+      ctx.fillText(title.trim(), pad, lockReserveY * 0.78);
+    }
+  } else {
+    ctx.fillStyle = "rgba(15,23,42,0.88)";
+    ctx.font = "600 28px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctx.fillText(dayLabel, pad, lockReserveY * 0.35);
+    if (title.trim()) {
+      ctx.font = "600 20px system-ui, sans-serif";
+      ctx.fillStyle = "rgba(71,85,105,0.9)";
+      ctx.fillText(title.trim(), pad, lockReserveY * 0.55);
+    }
+  }
+
+  const stages = [...new Set(slots.map((s) => s.stage.trim()))].sort();
+  const topY = headerY + headerBlock;
+  const bodyH = H - topY - pad;
+  const bodyW = W - pad * 2;
+  const gridBottom = topY + bodyH;
 
   if (!Number.isFinite(contentMin) || !Number.isFinite(contentMax)) {
     ctx.fillStyle = "#475569";

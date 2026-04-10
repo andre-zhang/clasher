@@ -283,7 +283,7 @@ export function SchedulePlannerStrip({
 
   return (
     <div
-      className={`flex w-full shrink-0 flex-col border-t-2 border-zinc-900 bg-zinc-50 lg:w-[min(280px,32vw)] lg:min-w-[220px] lg:border-l-2 lg:border-t-0 ${
+      className={`flex w-[min(260px,38vw)] min-w-[200px] max-w-[300px] shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 ${
         dragOver ? "ring-2 ring-zinc-900 ring-offset-1" : ""
       }`}
       onDragOver={(e) => {
