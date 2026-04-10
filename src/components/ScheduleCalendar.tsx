@@ -225,6 +225,7 @@ export function ScheduleCalendar({
 
   useEffect(() => {
     if (!plannerMemberId || !activeDay) return;
+    if (stripResize || stripMove) return;
     const g = groupRef.current;
     if (!g) return;
     const sched = scheduleRef.current;
@@ -277,6 +278,8 @@ export function ScheduleCalendar({
     stripScope,
     plannerMemberId,
     allIntentsHydrateSig,
+    stripResize,
+    stripMove,
   ]);
 
   const allStagesForDay = useMemo(() => {
@@ -680,6 +683,7 @@ export function ScheduleCalendar({
               group={group}
               activeDay={activeDay}
               schedule={schedule}
+              plannerMemberId={buildPlanner.memberId}
               stripIds={stripIds}
               setStripIds={setStripIds}
               windows={stripWindows}

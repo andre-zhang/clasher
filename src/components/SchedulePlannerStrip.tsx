@@ -20,6 +20,32 @@ import type { FestivalSnapshot } from "@/lib/types";
 
 type Slot = FestivalSnapshot["schedule"][number];
 
+type IntentPatch = {
+  slotId: string;
+  wants: boolean;
+  planFrom: string | null;
+  planTo: string | null;
+};
+
+function patchNeedsApply(
+  group: FestivalSnapshot,
+  memberId: string,
+  patch: IntentPatch,
+  slot: Slot | undefined
+): boolean {
+  const row = group.allMemberSlotIntents.find(
+    (i) => i.memberId === memberId && i.slotId === patch.slotId
+  );
+  if (!patch.wants) {
+    return Boolean(row?.wants);
+  }
+  if (!slot) return true;
+  if (!row?.wants) return true;
+  const rf = row.planFrom ?? slot.start;
+  const rt = row.planTo ?? slot.end;
+  return rf !== patch.planFrom || rt !== patch.planTo;
+}
+
 function stripBoxLayout(
   slot: Slot,
   wins: Record<string, { planFrom: string; planTo: string }>,
@@ -43,6 +69,7 @@ export function SchedulePlannerStrip({
   group,
   activeDay,
   schedule,
+  plannerMemberId,
   stripIds,
   setStripIds,
   windows,
@@ -62,6 +89,7 @@ export function SchedulePlannerStrip({
   group: FestivalSnapshot;
   activeDay: string;
   schedule: FestivalSnapshot["schedule"];
+  plannerMemberId: string;
   stripIds: string[];
   setStripIds: React.Dispatch<React.SetStateAction<string[]>>;
   windows: Record<string, { planFrom: string; planTo: string }>;
@@ -86,14 +114,7 @@ export function SchedulePlannerStrip({
   timelineMinM: number;
   timelineMaxM: number;
   timelineBodyPx: number;
-  onApply: (
-    patches: {
-      slotId: string;
-      wants: boolean;
-      planFrom: string | null;
-      planTo: string | null;
-    }[]
-  ) => Promise<void>;
+  onApply: (patches: IntentPatch[]) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -101,6 +122,25 @@ export function SchedulePlannerStrip({
   const [draftFrom, setDraftFrom] = useState("");
   const [draftTo, setDraftTo] = useState("");
   const editDialogRef = useRef<HTMLDialogElement>(null);
+  const groupRef = useRef(group);
+  groupRef.current = group;
+  const stripIdsRef = useRef(stripIds);
+  stripIdsRef.current = stripIds;
+  const windowsRef = useRef(windows);
+  windowsRef.current = windows;
+  const lastSuccessfulStripIdsRef = useRef<string[]>([]);
+  const onApplyRef = useRef(onApply);
+  onApplyRef.current = onApply;
+
+  useEffect(() => {
+    lastSuccessfulStripIdsRef.current = [];
+  }, [activeDay, plannerMemberId, stripScope]);
+
+  const stripSig = stripIds.join("\0");
+  const windowsSig = useMemo(() => {
+    const keys = Object.keys(windows).sort();
+    return keys.map((k) => `${k}\t${windows[k]!.planFrom}\t${windows[k]!.planTo}`).join("\0");
+  }, [windows]);
 
   const slotsById = useMemo(() => {
     const m = new Map(schedule.map((s) => [s.id, s]));
@@ -217,27 +257,63 @@ export function SchedulePlannerStrip({
     syncWindowsForOrder(next);
   }
 
-  async function save() {
-    if (clash && !allowClashes) return;
-    const patches = stripIds.map((id) => {
-      const s = slotsById.get(id)!;
-      const w = windows[id] ?? { planFrom: s.start, planTo: s.end };
-      const c = clampPlanWindowToSlot(s, w.planFrom, w.planTo);
-      return {
-        slotId: id,
-        wants: true,
-        planFrom: c.planFrom,
-        planTo: c.planTo,
-      };
-    });
-    if (!patches.length) return;
-    setBusy(true);
-    try {
-      await onApply(patches);
-    } finally {
-      setBusy(false);
-    }
-  }
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      if (clash && !allowClashes) return;
+      const g = groupRef.current;
+      const ids = stripIdsRef.current;
+      const wins = windowsRef.current;
+      const prev = new Set(lastSuccessfulStripIdsRef.current);
+      const next = new Set(ids);
+      const patches: IntentPatch[] = [];
+      for (const id of prev) {
+        if (!next.has(id)) {
+          patches.push({
+            slotId: id,
+            wants: false,
+            planFrom: null,
+            planTo: null,
+          });
+        }
+      }
+      for (const id of ids) {
+        const s = slotsById.get(id);
+        if (!s) continue;
+        const w = wins[id] ?? { planFrom: s.start, planTo: s.end };
+        const c = clampPlanWindowToSlot(s, w.planFrom, w.planTo);
+        patches.push({
+          slotId: id,
+          wants: true,
+          planFrom: c.planFrom,
+          planTo: c.planTo,
+        });
+      }
+      const toSend = patches.filter((p) =>
+        patchNeedsApply(g, plannerMemberId, p, slotsById.get(p.slotId))
+      );
+      if (!toSend.length) {
+        lastSuccessfulStripIdsRef.current = [...ids];
+        return;
+      }
+      setBusy(true);
+      void (async () => {
+        try {
+          await onApplyRef.current(toSend);
+          lastSuccessfulStripIdsRef.current = [...ids];
+        } finally {
+          setBusy(false);
+        }
+      })();
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [
+    stripSig,
+    windowsSig,
+    clash,
+    allowClashes,
+    plannerMemberId,
+    slotsById,
+  ]);
 
   function applyDraftTimes() {
     if (!editId) return;
@@ -462,7 +538,7 @@ export function SchedulePlannerStrip({
       <div className="border-t border-zinc-300 p-1">
         <button
           type="button"
-          className="mb-1 w-full text-[9px] text-red-800 underline"
+          className="mb-0.5 w-full text-[9px] text-red-800 underline"
           disabled={!stripIds.length}
           onClick={() => {
             setStripIds([]);
@@ -471,18 +547,11 @@ export function SchedulePlannerStrip({
         >
           Clear strip
         </button>
-        <button
-          type="button"
-          disabled={
-            busy ||
-            stripIds.length === 0 ||
-            (Boolean(clash) && !allowClashes)
-          }
-          onClick={() => void save()}
-          className="w-full border-2 border-zinc-900 bg-[var(--accent)] py-1 text-[10px] font-semibold text-white disabled:opacity-40"
-        >
-          {busy ? "…" : "Apply to plan"}
-        </button>
+        {busy ? (
+          <p className="text-center text-[9px] text-zinc-500" aria-live="polite">
+            Saving…
+          </p>
+        ) : null}
       </div>
 
       <dialog
