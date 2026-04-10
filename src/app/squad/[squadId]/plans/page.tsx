@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EveryonePlansCalendar } from "@/components/EveryonePlansCalendar";
@@ -99,20 +98,6 @@ export default function PlansPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-zinc-900">Plans</h1>
-
-      <p className="max-w-xl text-sm leading-relaxed text-zinc-600">
-        Your plan is driven from the{" "}
-        <Link
-          href={`/squad/${session.squadId}/schedule`}
-          className="font-semibold text-zinc-900 underline decoration-zinc-900 underline-offset-2"
-        >
-          Schedule
-        </Link>{" "}
-        plan strip (drag sets in, adjust windows, then Apply). To copy Hot
-        picks from Lineup into the timetable as a starting point, use{" "}
-        <span className="font-medium text-zinc-800">Sync from Lineup</span> on
-        that page. Reactions here are mainly for comparing with the squad.
-      </p>
 
       <PlanWallpaperExport group={group} sessionMemberId={session.memberId} />
 

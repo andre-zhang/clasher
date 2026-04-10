@@ -19,23 +19,17 @@ export type PlanCalendarSlot = {
   stage: string;
 };
 
-/** Muted column tints (no loud primaries) — readable on lock screen. */
+/** Soft color blocks — readable, not neon. */
 const STAGE_BG = [
-  "rgba(148,163,184,0.38)",
-  "rgba(148,163,184,0.22)",
-  "rgba(100,116,139,0.32)",
-  "rgba(100,116,139,0.18)",
-  "rgba(71,85,105,0.28)",
-  "rgba(71,85,105,0.16)",
-  "rgba(120,113,108,0.26)",
-  "rgba(120,113,108,0.14)",
+  "rgba(129,140,248,0.45)",
+  "rgba(244,114,182,0.34)",
+  "rgba(45,212,191,0.4)",
+  "rgba(251,191,36,0.32)",
+  "rgba(96,165,250,0.42)",
+  "rgba(196,181,253,0.4)",
+  "rgba(52,211,153,0.36)",
+  "rgba(251,146,60,0.3)",
 ];
-
-function formatMinutesClock(m: number): string {
-  const hh = Math.floor(m / 60);
-  const mm = m % 60;
-  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-}
 
 function slotSortKey(s: FestivalSnapshot["schedule"][0]): number {
   const d = s.dayLabel.trim().toLowerCase();
@@ -168,7 +162,7 @@ function maxFontForText(
   return best;
 }
 
-/** Portrait 9:16 — top third shows day + span for lock screen; muted calendar grid. */
+/** Portrait 9:16 — top ~⅓ kept visually empty for lock-screen clock; colored grid below. */
 export function renderPlanWallpaperCalendarPng(
   dayLabel: string,
   title: string,
@@ -187,12 +181,30 @@ export function renderPlanWallpaperCalendarPng(
   const ctx = canvas.getContext("2d");
   if (!ctx) return Promise.reject(new Error("Canvas unsupported"));
 
-  const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
-  bgGrad.addColorStop(0, "#f4f4f5");
-  bgGrad.addColorStop(0.33, "#f0f0f2");
-  bgGrad.addColorStop(1, "#e4e4e7");
-  ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#f4f4f5";
+  ctx.fillRect(0, 0, W, lockReserveY);
+
+  const lowerGrad = ctx.createLinearGradient(0, lockReserveY, W, H);
+  lowerGrad.addColorStop(0, "#faf5ff");
+  lowerGrad.addColorStop(0.35, "#ffffff");
+  lowerGrad.addColorStop(0.75, "#eef2ff");
+  lowerGrad.addColorStop(1, "#e0e7ff");
+  ctx.fillStyle = lowerGrad;
+  ctx.fillRect(0, lockReserveY, W, H - lockReserveY);
+
+  const splash = ctx.createRadialGradient(
+    W * 0.85,
+    H * 0.92,
+    0,
+    W * 0.85,
+    H * 0.92,
+    W * 0.55
+  );
+  splash.addColorStop(0, "rgba(99,102,241,0.22)");
+  splash.addColorStop(0.45, "rgba(99,102,241,0.06)");
+  splash.addColorStop(1, "rgba(99,102,241,0)");
+  ctx.fillStyle = splash;
+  ctx.fillRect(0, lockReserveY, W, H - lockReserveY);
 
   let contentMin = Infinity;
   let contentMax = -Infinity;
@@ -205,33 +217,18 @@ export function renderPlanWallpaperCalendarPng(
     }
   }
 
-  const headerY = lockReserveY + pad;
-  if (Number.isFinite(contentMin) && Number.isFinite(contentMax)) {
-    const spanStr = `${formatMinutesClock(contentMin)} – ${formatMinutesClock(contentMax)}`;
-    ctx.fillStyle = "rgba(15,23,42,0.88)";
-    ctx.font = "700 52px ui-monospace, SFMono-Regular, Menlo, monospace";
-    ctx.fillText(spanStr, pad, lockReserveY * 0.52);
-    ctx.font = "600 26px system-ui, -apple-system, Segoe UI, sans-serif";
-    ctx.fillStyle = "rgba(51,65,85,0.92)";
-    ctx.fillText(dayLabel, pad, lockReserveY * 0.22);
-    if (title.trim()) {
-      ctx.font = "600 20px system-ui, -apple-system, Segoe UI, sans-serif";
-      ctx.fillStyle = "rgba(71,85,105,0.9)";
-      ctx.fillText(title.trim(), pad, lockReserveY * 0.78);
-    }
-  } else {
-    ctx.fillStyle = "rgba(15,23,42,0.88)";
-    ctx.font = "600 28px system-ui, -apple-system, Segoe UI, sans-serif";
-    ctx.fillText(dayLabel, pad, lockReserveY * 0.35);
-    if (title.trim()) {
-      ctx.font = "600 20px system-ui, sans-serif";
-      ctx.fillStyle = "rgba(71,85,105,0.9)";
-      ctx.fillText(title.trim(), pad, lockReserveY * 0.55);
-    }
+  const headerStartY = lockReserveY + 20;
+  ctx.fillStyle = "#312e81";
+  ctx.font = "700 32px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText(dayLabel, pad, headerStartY + 30);
+  if (title.trim()) {
+    ctx.font = "600 20px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctx.fillStyle = "#6366f1";
+    ctx.fillText(title.trim(), pad, headerStartY + 58);
   }
 
   const stages = [...new Set(slots.map((s) => s.stage.trim()))].sort();
-  const topY = headerY + headerBlock;
+  const topY = headerStartY + headerBlock;
   const bodyH = H - topY - pad;
   const bodyW = W - pad * 2;
   const gridBottom = topY + bodyH;
@@ -276,8 +273,11 @@ export function renderPlanWallpaperCalendarPng(
   const gridW = bodyW - timeGutter;
   const colW = stages.length ? gridW / stages.length : gridW;
 
-  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  ctx.fillStyle = "rgba(255,255,255,0.72)";
   ctx.fillRect(gridLeft, topY + titleBlock, gridW, timelineH);
+  ctx.strokeStyle = "rgba(99,102,241,0.25)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(gridLeft, topY + titleBlock, gridW, timelineH);
 
   stages.forEach((st, i) => {
     const x = gridLeft + i * colW;

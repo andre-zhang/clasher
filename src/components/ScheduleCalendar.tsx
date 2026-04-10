@@ -212,6 +212,17 @@ export function ScheduleCalendar({
   const stripHydrateKey = buildPlanner?.stripHydrateKey ?? 0;
   const plannerMemberId = buildPlanner?.memberId;
 
+  const allIntentsHydrateSig = useMemo(() => {
+    if (!group) return "";
+    return group.allMemberSlotIntents
+      .map(
+        (i) =>
+          `${i.memberId}:${i.slotId}:${i.wants ? 1 : 0}:${i.planFrom ?? ""}:${i.planTo ?? ""}`
+      )
+      .sort()
+      .join("|");
+  }, [group]);
+
   useEffect(() => {
     if (!plannerMemberId || !activeDay) return;
     const g = groupRef.current;
@@ -260,7 +271,13 @@ export function ScheduleCalendar({
       .map((s) => s.id);
     setStripIds(ids);
     setStripWindows(recomputeStripWindowsSequential(g, ids, sched));
-  }, [stripHydrateKey, activeDay, stripScope, plannerMemberId]);
+  }, [
+    stripHydrateKey,
+    activeDay,
+    stripScope,
+    plannerMemberId,
+    allIntentsHydrateSig,
+  ]);
 
   const allStagesForDay = useMemo(() => {
     const rows = schedule.filter((s) => s.dayLabel.trim() === activeDay);
