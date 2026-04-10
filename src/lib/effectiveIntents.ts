@@ -126,13 +126,17 @@ export function effectiveMemberWantsSlot(
   );
   const base = row ? row.wants : true;
 
-  for (const c of group.conflictResolutions) {
-    if (c.memberId !== memberId) continue;
-    if (c.planMode === "group") continue;
-    if (c.planMode === "split_seq" || c.planMode === "custom") continue;
-    if (!c.choice) continue;
-    if (c.slotAId !== slotId && c.slotBId !== slotId) continue;
-    return c.choice === slotId;
+  // Intent row is authoritative after pick resolutions (server updates it).
+  // Inferring from the first matching pick row broke when one slot was in multiple pairs.
+  if (row === undefined) {
+    for (const c of group.conflictResolutions) {
+      if (c.memberId !== memberId) continue;
+      if (c.planMode === "group") continue;
+      if (c.planMode === "split_seq" || c.planMode === "custom") continue;
+      if (!c.choice) continue;
+      if (c.slotAId !== slotId && c.slotBId !== slotId) continue;
+      return c.choice === slotId;
+    }
   }
 
   const groupRes = group.conflictResolutions.filter(

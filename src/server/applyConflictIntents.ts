@@ -33,6 +33,46 @@ async function upsertIntent(
   });
 }
 
+/** Pick winner keeps existing plan windows; loser clears (fixes cross-clash wipes). */
+async function upsertIntentPickOutcome(
+  tx: Db,
+  squadId: string,
+  memberId: string,
+  slotId: string,
+  wants: boolean
+) {
+  if (!wants) {
+    await upsertIntent(tx, squadId, memberId, slotId, false, null, null);
+    return;
+  }
+  const cur = await tx.memberSlotIntent.findUnique({
+    where: { memberId_slotId: { memberId, slotId } },
+  });
+  await upsertIntent(
+    tx,
+    squadId,
+    memberId,
+    slotId,
+    true,
+    cur?.planFrom ?? null,
+    cur?.planTo ?? null
+  );
+}
+
+export async function applyPickChoiceToIntents(
+  tx: Db,
+  squadId: string,
+  memberId: string,
+  slotAId: string,
+  slotBId: string,
+  choice: string
+): Promise<void> {
+  const delta = wantsDeltaFromChoice(slotAId, slotBId, choice);
+  for (const [slotId, wants] of Object.entries(delta)) {
+    await upsertIntentPickOutcome(tx, squadId, memberId, slotId, wants);
+  }
+}
+
 export async function patchIntentsForConflict(
   tx: Db,
   squadId: string,
@@ -56,10 +96,14 @@ export async function patchIntentsForConflict(
   }
 
   if (effectiveMode === "pick" && choice) {
-    const delta = wantsDeltaFromChoice(slotAId, slotBId, choice);
-    for (const [slotId, wants] of Object.entries(delta)) {
-      await upsertIntent(tx, squadId, memberId, slotId, wants, null, null);
-    }
+    await applyPickChoiceToIntents(
+      tx,
+      squadId,
+      memberId,
+      slotAId,
+      slotBId,
+      choice
+    );
     return;
   }
 

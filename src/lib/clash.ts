@@ -7,6 +7,19 @@ function parseHm(s: string): number {
   return parseInt(m[1]!, 10) * 60 + parseInt(m[2]!, 10);
 }
 
+/**
+ * Listing times don't overlap in clock sense, but you still can't do both
+ * (need walk gap and there isn't enough time between sets).
+ */
+export function pairListingConflictWalkOnly(
+  group: FestivalSnapshot,
+  a: FestivalSnapshot["schedule"][0],
+  b: FestivalSnapshot["schedule"][0]
+): boolean {
+  if (!slotsInfeasibleTogether(group, a, b)) return false;
+  return !slotsTimeOverlap(a, b);
+}
+
 export function slotsTimeOverlap(
   a: { dayLabel: string; start: string; end: string },
   b: { dayLabel: string; start: string; end: string }

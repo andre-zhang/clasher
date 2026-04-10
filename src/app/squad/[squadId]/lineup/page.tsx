@@ -189,13 +189,23 @@ export default function LineupPage() {
               className="min-w-0 flex-1 text-left hover:opacity-80"
             >
               <h2 className="font-semibold text-zinc-900">{a.name}</h2>
-              <p
-                className="mt-1 truncate text-[10px] text-zinc-600"
-                title={compactSquadTierStrip(group, a.id, session.memberId)}
-              >
-                <span className="font-semibold text-zinc-800">Others</span>{" "}
-                {compactSquadTierStrip(group, a.id, session.memberId)}
-              </p>
+              {(() => {
+                const others = compactSquadTierStrip(
+                  group,
+                  a.id,
+                  session.memberId
+                );
+                if (!others || others === "—") return null;
+                return (
+                  <p
+                    className="mt-1 truncate text-[10px] text-zinc-600"
+                    title={others}
+                  >
+                    <span className="font-semibold text-zinc-800">Others</span>{" "}
+                    {others}
+                  </p>
+                );
+              })()}
             </button>
             <div className="flex flex-wrap gap-1">
               {TIERS.map((t) => (

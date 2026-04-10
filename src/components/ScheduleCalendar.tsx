@@ -369,10 +369,11 @@ export function ScheduleCalendar({
     useEffectiveSlotLayout,
   ]);
 
-  const clashOverlapIntervalsBySlot = useMemo(() => {
+  const { clashOverlapIntervalsBySlot, clashWalkOnlySlotIds } = useMemo(() => {
     const m = new Map<string, { o0: number; o1: number }[]>();
+    const walkOnly = new Set<string>();
     if (!group || !rateMemberId || !activeDay || !useEffectiveSlotLayout) {
-      return m;
+      return { clashOverlapIntervalsBySlot: m, clashWalkOnlySlotIds: walkOnly };
     }
     const dayKey = activeDay.trim();
     const wanted = schedule.filter(
@@ -402,7 +403,11 @@ export function ScheduleCalendar({
         const wb = effectiveWindowMinutes(group, rateMemberId, b);
         const o0 = Math.max(wa.start, wb.start);
         const o1 = Math.min(wa.end, wb.end);
-        if (o0 >= o1) continue;
+        if (o0 >= o1) {
+          walkOnly.add(a.id);
+          walkOnly.add(b.id);
+          continue;
+        }
         const pushSeg = (id: string, ws: number, we: number) => {
           if (o1 <= ws || o0 >= we) return;
           const seg0 = Math.max(o0, ws);
@@ -415,7 +420,7 @@ export function ScheduleCalendar({
         pushSeg(b.id, wb.start, wb.end);
       }
     }
-    return m;
+    return { clashOverlapIntervalsBySlot: m, clashWalkOnlySlotIds: walkOnly };
   }, [group, rateMemberId, activeDay, schedule, useEffectiveSlotLayout]);
 
   useEffect(() => {
@@ -805,6 +810,8 @@ export function ScheduleCalendar({
 
                   const ovSegs =
                     clashOverlapIntervalsBySlot.get(slot.id) ?? [];
+                  const walkOnlyClash = clashWalkOnlySlotIds.has(slot.id);
+                  const showClashStripe = ovSegs.length > 0 || walkOnlyClash;
 
                   return (
                     <div
@@ -844,11 +851,19 @@ export function ScheduleCalendar({
                         zIndex: onStrip ? 40 + slotIndex : 6 + slotIndex,
                       }}
                     >
-                      {ovSegs.length > 0 ? (
+                      {showClashStripe ? (
                         <div
                           className="pointer-events-none absolute bottom-0 left-0 top-0 z-[8] w-1 bg-red-600/75"
                           aria-hidden
                         />
+                      ) : null}
+                      {walkOnlyClash ? (
+                        <span
+                          className="pointer-events-none absolute right-0.5 top-0.5 z-[9] text-[8px] leading-none"
+                          aria-hidden
+                        >
+                          🚶
+                        </span>
                       ) : null}
                       <div className="relative z-[2] flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
                         <p className="shrink-0 break-words text-[11px] font-semibold leading-snug text-zinc-900 [overflow-wrap:anywhere]">

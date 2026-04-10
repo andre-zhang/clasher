@@ -13,8 +13,10 @@ import {
   DEMO_FRIEND_HOT_ARTIST_INDICES,
   DEMO_SLOT_ROWS,
 } from "./demoFestivalData";
-import { patchIntentsForConflict } from "./applyConflictIntents";
-import { wantsDeltaFromChoice } from "./memberSlotIntentPatch";
+import {
+  applyPickChoiceToIntents,
+  patchIntentsForConflict,
+} from "./applyConflictIntents";
 import { normalizeScheduleTimesForImport } from "@/lib/scheduleTimeNormalize";
 
 import {
@@ -1235,24 +1237,14 @@ export function createFestivalApp(apiBasePath: string): Hono {
             setByMemberId: member.id,
           },
         });
-        const delta = wantsDeltaFromChoice(slotAId, slotBId, squadDefaultChoice);
-        for (const [sid, wants] of Object.entries(delta)) {
-          await tx.memberSlotIntent.upsert({
-            where: {
-              memberId_slotId: { memberId: member.id, slotId: sid },
-            },
-            create: {
-              squadId: member.squadId,
-              memberId: member.id,
-              slotId: sid,
-              wants,
-              scheduleKeep: false,
-              planFrom: null,
-              planTo: null,
-            },
-            update: { wants, planFrom: null, planTo: null },
-          });
-        }
+        await applyPickChoiceToIntents(
+          tx,
+          member.squadId,
+          member.id,
+          slotAId,
+          slotBId,
+          squadDefaultChoice
+        );
       }
 
       if (planMode === "group" && squadDefaultSplitOrder) {

@@ -9,6 +9,8 @@ import {
   findMyResolution,
   findUnresolvedOverlappingPairs,
   isMyClashResolved,
+  pairKey,
+  pairListingConflictWalkOnly,
 } from "@/lib/clash";
 import { findSquadClashDefault } from "@/lib/effectiveIntents";
 import type { ConflictPlanPayload } from "@/lib/api";
@@ -118,7 +120,7 @@ export default function ClashesPage() {
         <ul className="space-y-4">
           {unresolvedPairs.map(({ a, b }) => (
             <ClashCard
-              key={`${a.id}-${b.id}`}
+              key={pairKey(a.id, b.id)}
               a={a}
               b={b}
               myMemberId={session.memberId}
@@ -138,7 +140,7 @@ export default function ClashesPage() {
           <ul className="mt-3 space-y-4">
             {resolvedPairs.map(({ a, b }) => (
               <ClashCard
-                key={`resolved-${a.id}-${b.id}`}
+                key={`resolved-${pairKey(a.id, b.id)}`}
                 a={a}
                 b={b}
                 myMemberId={session.memberId}
@@ -344,8 +346,18 @@ function ClashCard({
               ? `${b.artistName} first, then ${a.artistName}`
               : "Set custom times for the group";
 
+  const walkOnlyListing = pairListingConflictWalkOnly(group, a, b);
+
   return (
-    <li className="border-2 border-zinc-900 bg-white p-4 shadow-[3px_3px_0_0_#18181b]">
+    <li className="relative border-2 border-zinc-900 bg-white p-4 shadow-[3px_3px_0_0_#18181b]">
+      {walkOnlyListing ? (
+        <span
+          className="pointer-events-none absolute right-2 top-2 text-[9px] leading-none"
+          aria-hidden
+        >
+          🚶
+        </span>
+      ) : null}
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="border-2 border-zinc-900 bg-zinc-50 p-2 text-sm">
           <p className="text-[10px] font-bold uppercase text-zinc-500">A</p>
