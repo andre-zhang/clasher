@@ -6,7 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
@@ -74,9 +74,13 @@ export function SchedulePlannerStrip({
   onStripTimeResize?: (
     slot: Slot,
     edge: "start" | "end",
-    e: ReactMouseEvent
+    e: ReactPointerEvent
   ) => void;
-  onStripWindowMoveStart?: (slot: Slot, anchorClientY: number) => void;
+  onStripWindowMoveStart?: (
+    slot: Slot,
+    anchorClientY: number,
+    pointerId: number
+  ) => void;
   resizeBusy?: boolean;
   moveBusy?: boolean;
   timelineMinM: number;
@@ -249,7 +253,7 @@ export function SchedulePlannerStrip({
 
   function bodyPointerDown(slot: Slot, e: React.PointerEvent) {
     if (!onStripWindowMoveStart) return;
-    if (e.button !== 0) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     const t = e.target as HTMLElement | null;
     if (
       t?.closest(
@@ -264,7 +268,7 @@ export function SchedulePlannerStrip({
       moved = true;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      onStripWindowMoveStart(slot, y0);
+      onStripWindowMoveStart(slot, y0, e.pointerId);
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
@@ -279,7 +283,7 @@ export function SchedulePlannerStrip({
 
   return (
     <div
-      className={`flex w-[min(280px,32vw)] min-w-[220px] shrink-0 flex-col border-l-2 border-zinc-900 bg-zinc-50 ${
+      className={`flex w-full shrink-0 flex-col border-t-2 border-zinc-900 bg-zinc-50 lg:w-[min(280px,32vw)] lg:min-w-[220px] lg:border-l-2 lg:border-t-0 ${
         dragOver ? "ring-2 ring-zinc-900 ring-offset-1" : ""
       }`}
       onDragOver={(e) => {
@@ -289,23 +293,25 @@ export function SchedulePlannerStrip({
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => void onDropStrip(e)}
     >
-      <div className="sticky top-0 z-50 border-b-2 border-zinc-900 bg-zinc-100 px-1 py-1 text-center text-[10px] font-bold leading-tight text-zinc-900">
-        Plan strip
-        <div className="mt-1 flex gap-0.5">
+      <div className="sticky top-0 z-50 flex h-8 shrink-0 items-center gap-1 border-b-2 border-zinc-900 bg-zinc-100 px-1">
+        <span className="text-[10px] font-bold leading-none text-zinc-900">
+          Plan
+        </span>
+        <div className="ml-auto flex gap-0.5">
           <button
             type="button"
-            className={`flex-1 border px-0.5 py-px text-[9px] font-semibold ${
+            className={`border px-1 py-0.5 text-[9px] font-semibold leading-none ${
               stripScope === "mine"
                 ? "border-zinc-900 bg-zinc-900 text-white"
                 : "border-zinc-600 bg-white text-zinc-800"
             }`}
             onClick={() => setStripScope("mine")}
           >
-            My plan
+            Mine
           </button>
           <button
             type="button"
-            className={`flex-1 border px-0.5 py-px text-[9px] font-semibold ${
+            className={`border px-1 py-0.5 text-[9px] font-semibold leading-none ${
               stripScope === "group"
                 ? "border-zinc-900 bg-zinc-900 text-white"
                 : "border-zinc-600 bg-white text-zinc-800"
@@ -397,8 +403,8 @@ export function SchedulePlannerStrip({
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="start"
-                    className="absolute left-0 right-0 top-0 z-20 h-1.5 cursor-ns-resize"
-                    onMouseDown={(e) => {
+                    className="absolute left-0 right-0 top-0 z-20 h-2 cursor-ns-resize touch-none"
+                    onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       onStripTimeResize(slot, "start", e);
@@ -423,8 +429,8 @@ export function SchedulePlannerStrip({
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="end"
-                    className="absolute bottom-0 left-0 right-0 z-20 h-1.5 cursor-ns-resize"
-                    onMouseDown={(e) => {
+                    className="absolute bottom-0 left-0 right-0 z-20 h-2 cursor-ns-resize touch-none"
+                    onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       onStripTimeResize(slot, "end", e);

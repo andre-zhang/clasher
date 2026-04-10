@@ -20,14 +20,14 @@ export type PlanCalendarSlot = {
 };
 
 const STAGE_BG = [
-  "#c7d2fe",
+  "#bae6fd",
   "#fde68a",
   "#86efac",
   "#fbcfe8",
   "#a5f3fc",
   "#fcd34d",
-  "#bfdbfe",
-  "#d8b4fe",
+  "#99f6e4",
+  "#fed7aa",
 ];
 
 function slotSortKey(s: FestivalSnapshot["schedule"][0]): number {
@@ -161,7 +161,7 @@ function maxFontForText(
   return best;
 }
 
-/** Portrait 9:16 — zoomed to when you have sets; tuned for lock-screen glance. */
+/** Portrait 9:16 — top third left clear for lock-screen clock; readable stage/act type. */
 export function renderPlanWallpaperCalendarPng(
   dayLabel: string,
   title: string,
@@ -169,9 +169,11 @@ export function renderPlanWallpaperCalendarPng(
 ): Promise<Blob> {
   const W = 1080;
   const H = 1920;
-  const pad = 20;
-  const headerH = 80;
-  const titleBlock = 52;
+  const pad = 24;
+  /** Empty region for phone date/time (top ~⅓). */
+  const lockReserveY = Math.floor(H / 3);
+  const headerBlock = 56;
+  const titleBlock = 44;
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -179,23 +181,37 @@ export function renderPlanWallpaperCalendarPng(
   const ctx = canvas.getContext("2d");
   if (!ctx) return Promise.reject(new Error("Canvas unsupported"));
 
-  const grad = ctx.createLinearGradient(0, 0, W, H);
-  grad.addColorStop(0, "#1e1b4b");
-  grad.addColorStop(0.45, "#312e81");
-  grad.addColorStop(1, "#4c1d95");
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillRect(0, 0, W, lockReserveY);
+
+  const grad = ctx.createLinearGradient(0, lockReserveY, W, H);
+  grad.addColorStop(0, "#f1f5f9");
+  grad.addColorStop(0.55, "#e2e8f0");
+  grad.addColorStop(1, "#cbd5e1");
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(0, lockReserveY, W, H - lockReserveY);
 
-  ctx.fillStyle = "#faf5ff";
-  ctx.font = "700 32px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText(title, pad, pad + 28);
+  ctx.strokeStyle = "rgba(15,23,42,0.08)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, lockReserveY);
+  ctx.lineTo(W, lockReserveY);
+  ctx.stroke();
 
-  ctx.font = "600 24px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillStyle = "#e9d5ff";
-  ctx.fillText(dayLabel, pad, pad + 58);
+  const contentTop = lockReserveY + pad;
+  let headerY = contentTop;
+  if (title.trim()) {
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "700 28px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctx.fillText(title.trim(), pad, headerY + 26);
+    headerY += 34;
+  }
+  ctx.font = "600 22px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillStyle = "#334155";
+  ctx.fillText(dayLabel, pad, headerY + 22);
 
   const stages = [...new Set(slots.map((s) => s.stage.trim()))].sort();
-  const topY = pad + headerH;
+  const topY = headerY + headerBlock;
   const bodyH = H - topY - pad;
   const bodyW = W - pad * 2;
   const gridBottom = topY + bodyH;
@@ -212,8 +228,8 @@ export function renderPlanWallpaperCalendarPng(
   }
 
   if (!Number.isFinite(contentMin) || !Number.isFinite(contentMax)) {
-    ctx.fillStyle = "#fce7f3";
-    ctx.font = "600 22px system-ui, sans-serif";
+    ctx.fillStyle = "#475569";
+    ctx.font = "600 24px system-ui, sans-serif";
     ctx.fillText("Nothing planned this day", pad, topY + 80);
     return new Promise((resolve, reject) => {
       canvas.toBlob(
@@ -245,23 +261,25 @@ export function renderPlanWallpaperCalendarPng(
 
   const tickCount = Math.floor((maxM - minM) / stepM) + 1;
   const tickFontPx =
-    tickCount > 28 ? 11 : tickCount > 18 ? 13 : tickCount > 12 ? 16 : 20;
-  const timeGutter = tickFontPx >= 16 ? 82 : tickFontPx >= 13 ? 72 : 62;
+    tickCount > 28 ? 14 : tickCount > 18 ? 17 : tickCount > 12 ? 20 : 24;
+  const timeGutter = tickFontPx >= 20 ? 96 : tickFontPx >= 17 ? 88 : 78;
   const gridLeft = pad + timeGutter;
   const gridW = bodyW - timeGutter;
   const colW = stages.length ? gridW / stages.length : gridW;
 
-  ctx.fillStyle = "rgba(255,255,255,0.14)";
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
   ctx.fillRect(gridLeft, topY + titleBlock, gridW, timelineH);
 
   stages.forEach((st, i) => {
     const x = gridLeft + i * colW;
     ctx.fillStyle = STAGE_BG[i % STAGE_BG.length]!;
     ctx.fillRect(x, topY, colW, titleBlock - 2);
-    ctx.fillStyle = "#1e1b4b";
-    ctx.font = "700 15px system-ui, -apple-system, Segoe UI, sans-serif";
-    const label = st.length > 16 ? `${st.slice(0, 14)}…` : st;
-    ctx.fillText(label, x + 4, topY + 24);
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "700 20px system-ui, -apple-system, Segoe UI, sans-serif";
+    const maxChars = colW > 200 ? 22 : colW > 140 ? 18 : 14;
+    const label =
+      st.length > maxChars ? `${st.slice(0, maxChars - 1)}…` : st;
+    ctx.fillText(label, x + 6, topY + 28);
     ctx.strokeStyle = "rgba(0,0,0,0.2)";
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -272,17 +290,17 @@ export function renderPlanWallpaperCalendarPng(
 
   for (let m = minM; m <= maxM; m += stepM) {
     const y = topY + titleBlock + (m - minM) * pxPerMin;
-    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.strokeStyle = "rgba(15,23,42,0.1)";
     ctx.beginPath();
     ctx.moveTo(gridLeft, y);
     ctx.lineTo(W - pad, y);
     ctx.stroke();
-    ctx.fillStyle = "#fae8ff";
+    ctx.fillStyle = "#1e293b";
     ctx.font = `600 ${tickFontPx}px ui-monospace, monospace`;
     const hh = Math.floor(m / 60);
     const mm = m % 60;
     const label = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-    ctx.fillText(label, pad, y + 5);
+    ctx.fillText(label, pad, y + tickFontPx * 0.35);
   }
 
   const stageIndex = new Map(stages.map((s, i) => [s, i]));
@@ -307,10 +325,10 @@ export function renderPlanWallpaperCalendarPng(
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y0, w, h);
 
-    const innerPad = 8;
+    const innerPad = 10;
     const maxTextW = w - innerPad * 2;
-    const maxTextH = Math.max(18, h - innerPad * 2 - 18);
-    const fp = maxFontForText(ctx, s.act, maxTextW, maxTextH, 11, 30);
+    const maxTextH = Math.max(22, h - innerPad * 2 - 20);
+    const fp = maxFontForText(ctx, s.act, maxTextW, maxTextH, 15, 44);
     ctx.fillStyle = "#0f172a";
     ctx.font = `700 ${fp}px system-ui, -apple-system, Segoe UI, sans-serif`;
     ctx.fillText(s.act, x + innerPad, y0 + innerPad + fp);

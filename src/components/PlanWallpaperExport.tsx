@@ -50,7 +50,7 @@ export function PlanWallpaperExport({
         scope === "union"
           ? "Union"
           : scope === "me"
-            ? "Mine"
+            ? ""
             : (group.members.find((m) => m.id === pickMember)?.displayName ??
               "Member");
 
@@ -72,7 +72,11 @@ export function PlanWallpaperExport({
         const a = document.createElement("a");
         a.href = url;
         const safeDay = dayLabel.replace(/[^\w\-]+/g, "_");
-        a.download = `plan-${titleBase}-${safeDay}.png`;
+        const fileStem =
+          scope === "me" || !titleBase.trim()
+            ? `plan-${safeDay}`
+            : `plan-${titleBase.replace(/[^\w\-]+/g, "_")}-${safeDay}`;
+        a.download = `${fileStem}.png`;
         a.click();
         URL.revokeObjectURL(url);
         await new Promise((r) => setTimeout(r, 350));

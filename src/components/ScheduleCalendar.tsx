@@ -5,7 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type SyntheticEvent,
 } from "react";
 
@@ -171,12 +171,14 @@ export function ScheduleCalendar({
     anchorClientY: number;
     baseFromM: number;
     baseToM: number;
+    pointerId: number;
   } | null>(null);
   const [stripMove, setStripMove] = useState<{
     slotId: string;
     anchorClientY: number;
     baseFromM: number;
     baseToM: number;
+    pointerId: number;
   } | null>(null);
   const [stripScope, setStripScope] = useState<"mine" | "group">("mine");
 
@@ -433,7 +435,8 @@ export function ScheduleCalendar({
     const lo = parseHm(slot.start);
     const hi = parseHm(slot.end);
 
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerId !== stripResize.pointerId) return;
       const { minMR: loR, maxMR: hiR, timelineBodyPx: tb } =
         timelineMetricsRef.current;
       const range = hiR - loR;
@@ -469,12 +472,17 @@ export function ScheduleCalendar({
         },
       }));
     };
-    const onUp = () => setStripResize(null);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerId !== stripResize.pointerId) return;
+      setStripResize(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, [stripResize, schedule, buildPlanner]);
 
@@ -489,7 +497,8 @@ export function ScheduleCalendar({
     const hi = parseHm(slot.end);
     const duration = stripMove.baseToM - stripMove.baseFromM;
 
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerId !== stripMove.pointerId) return;
       const { minMR: loR, maxMR: hiR, timelineBodyPx: tb } =
         timelineMetricsRef.current;
       const range = hiR - loR;
@@ -522,28 +531,21 @@ export function ScheduleCalendar({
         },
       }));
     };
-    const onUp = () => setStripMove(null);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerId !== stripMove.pointerId) return;
+      setStripMove(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, [stripMove, schedule, buildPlanner]);
 
-  function plannerSortStart(slot: Slot): number {
-    if (!buildPlanner || !stripIds.includes(slot.id)) {
-      return parseHm(slot.start);
-    }
-    const w = stripWindows[slot.id];
-    const t = w ? parseHm(w.planFrom) : NaN;
-    return Number.isNaN(t) ? parseHm(slot.start) : t;
-  }
-
   function layoutSortStart(slot: Slot): number {
-    if (buildPlanner && stripIds.includes(slot.id)) {
-      return plannerSortStart(slot);
-    }
     if (useEffectiveSlotLayout && group && rateMemberId) {
       return effectiveWindowMinutes(group, rateMemberId, slot).start;
     }
@@ -553,10 +555,16 @@ export function ScheduleCalendar({
   function beginStripResize(
     slot: Slot,
     edge: "start" | "end",
-    e: ReactMouseEvent
+    e: ReactPointerEvent
   ) {
     e.stopPropagation();
     e.preventDefault();
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
     const w = stripWindows[slot.id] ?? {
       planFrom: slot.start,
       planTo: slot.end,
@@ -570,10 +578,15 @@ export function ScheduleCalendar({
       anchorClientY: e.clientY,
       baseFromM: sm,
       baseToM: em,
+      pointerId: e.pointerId,
     });
   }
 
-  function beginStripWindowMove(slot: Slot, anchorClientY: number) {
+  function beginStripWindowMove(
+    slot: Slot,
+    anchorClientY: number,
+    pointerId: number
+  ) {
     const w = stripWindows[slot.id] ?? {
       planFrom: slot.start,
       planTo: slot.end,
@@ -586,6 +599,7 @@ export function ScheduleCalendar({
       anchorClientY,
       baseFromM: sm,
       baseToM: em,
+      pointerId,
     });
   }
 
@@ -623,7 +637,8 @@ export function ScheduleCalendar({
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : (
         <div className="max-h-[min(72vh,calc(100vh-10rem))] overflow-auto border-2 border-zinc-900 bg-white">
-          <div className="flex min-w-max">
+          <div className="flex min-w-0 flex-col lg:flex-row lg:min-w-max lg:items-stretch">
+          <div className="flex min-w-max min-h-0 flex-1">
           <div
             className="sticky left-0 z-30 flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 shadow-[6px_0_12px_-4px_rgba(0,0,0,0.12)]"
             style={{ width: 56, minHeight: timelineHRender }}
@@ -636,7 +651,7 @@ export function ScheduleCalendar({
               {ticksRender.map((m, i) => (
                 <div
                   key={m}
-                  className="pointer-events-none absolute left-0 right-0 flex items-start border-b border-zinc-200 px-1 pt-0.5 text-[10px] font-mono text-zinc-600"
+                  className="pointer-events-none absolute left-0 right-0 flex items-center border-b border-zinc-200 px-1 text-[11px] font-mono leading-none text-zinc-600"
                   style={{ top: i * pxPerSlot, height: pxPerSlot }}
                 >
                   {hhmmFromMinutes(m)}
@@ -700,31 +715,7 @@ export function ScheduleCalendar({
                     effectiveMemberWantsSlot(group, rateMemberId, slot.id);
                   let topPx: number;
                   let heightPx: number;
-                  if (onStrip) {
-                    const w = stripWindows[slot.id];
-                    const lo = parseHm(slot.start);
-                    const hi = parseHm(slot.end);
-                    let sm = w ? parseHm(w.planFrom) : lo;
-                    let em = w ? parseHm(w.planTo) : hi;
-                    if (Number.isNaN(sm)) sm = lo;
-                    if (Number.isNaN(em)) em = hi;
-                    if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
-                      sm = Math.max(lo, Math.min(hi, sm));
-                      em = Math.max(lo, Math.min(hi, em));
-                    }
-                    if (em < sm) em = sm;
-                    const range = maxMR - minMR;
-                    if (range <= 0 || Number.isNaN(sm) || Number.isNaN(em)) {
-                      topPx = 0;
-                      heightPx = 40;
-                    } else {
-                      topPx = ((sm - minMR) / range) * timelineBodyPx;
-                      heightPx = Math.max(
-                        ((em - sm) / range) * timelineBodyPx,
-                        14
-                      );
-                    }
-                  } else if (useEffectiveSlotLayout && group && rateMemberId) {
+                  if (useEffectiveSlotLayout && group && rateMemberId) {
                     const ew = effectiveWindowMinutes(group, rateMemberId, slot);
                     let sm = ew.start;
                     let em = ew.end;
@@ -960,6 +951,8 @@ export function ScheduleCalendar({
           })}
               </div>
             </div>
+          </div>
+          </div>
           {buildPlanner && showAllStages && group && activeDay ? (
             <SchedulePlannerStrip
               group={group}
@@ -983,7 +976,6 @@ export function ScheduleCalendar({
             />
           ) : null}
           </div>
-        </div>
         </div>
       )}
 
