@@ -321,6 +321,22 @@ export async function apiPutSlotIntents(
   return j.group as FestivalSnapshot;
 }
 
+/** Copy the combined “everyone” plan (any member’s acts) onto this member. */
+export async function apiSyncPlanFromGroup(
+  session: ClasherSession
+): Promise<FestivalSnapshot> {
+  const r = await fetch(
+    apiUrl(`/squads/${session.squadId}/plan/sync-from-group`),
+    {
+      method: "POST",
+      headers: bearer(session.memberSecret),
+    }
+  );
+  await ensureOk(r);
+  const j = await r.json();
+  return j.group as FestivalSnapshot;
+}
+
 export async function apiPatchScheduleKeep(
   session: ClasherSession,
   slotId: string,

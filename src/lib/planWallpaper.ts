@@ -57,8 +57,8 @@ function lineForMemberSlot(
   };
 }
 
-/** Slots at least one member keeps on their effective plan (union). */
-export function buildGroupUnionLines(
+/** Slots at least one member keeps on their effective plan (combined “everyone” view). */
+export function buildEveryonePlanLines(
   group: FestivalSnapshot
 ): PlanWallpaperLine[] {
   const ids = new Set<string>();
@@ -77,6 +77,9 @@ export function buildGroupUnionLines(
       stage: s.stageName.trim(),
     }));
 }
+
+/** @deprecated Use buildEveryonePlanLines */
+export const buildGroupUnionLines = buildEveryonePlanLines;
 
 export function buildMemberPlanLines(
   group: FestivalSnapshot,
@@ -112,7 +115,7 @@ export function buildMemberPlanCalendarSlotsForDay(
     .sort((a, b) => parseHmRelaxed(a.start) - parseHmRelaxed(b.start));
 }
 
-export function buildUnionCalendarSlotsForDay(
+export function buildEveryoneCalendarSlotsForDay(
   group: FestivalSnapshot,
   dayLabel: string
 ): PlanCalendarSlot[] {
@@ -133,6 +136,9 @@ export function buildUnionCalendarSlotsForDay(
     }))
     .sort((a, b) => parseHmRelaxed(a.start) - parseHmRelaxed(b.start));
 }
+
+/** @deprecated Use buildEveryoneCalendarSlotsForDay */
+export const buildUnionCalendarSlotsForDay = buildEveryoneCalendarSlotsForDay;
 
 function maxFontForText(
   ctx: CanvasRenderingContext2D,
@@ -227,7 +233,6 @@ export function renderPlanWallpaperCalendarPng(
     ctx.fillText(title.trim(), pad, headerStartY + 58);
   }
 
-  const stages = [...new Set(slots.map((s) => s.stage.trim()))].sort();
   const topY = headerStartY + headerBlock;
   const bodyH = H - topY - pad;
   const bodyW = W - pad * 2;
@@ -271,31 +276,18 @@ export function renderPlanWallpaperCalendarPng(
   const timeGutter = tickFontPx >= 20 ? 96 : tickFontPx >= 17 ? 88 : 78;
   const gridLeft = pad + timeGutter;
   const gridW = bodyW - timeGutter;
-  const colW = stages.length ? gridW / stages.length : gridW;
+
+  ctx.fillStyle = "rgba(99,102,241,0.12)";
+  ctx.fillRect(gridLeft, topY, gridW, titleBlock - 2);
+  ctx.fillStyle = "#334155";
+  ctx.font = "700 18px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText("Plan", gridLeft + 8, topY + 26);
 
   ctx.fillStyle = "rgba(255,255,255,0.72)";
   ctx.fillRect(gridLeft, topY + titleBlock, gridW, timelineH);
   ctx.strokeStyle = "rgba(99,102,241,0.25)";
   ctx.lineWidth = 2;
   ctx.strokeRect(gridLeft, topY + titleBlock, gridW, timelineH);
-
-  stages.forEach((st, i) => {
-    const x = gridLeft + i * colW;
-    ctx.fillStyle = STAGE_BG[i % STAGE_BG.length]!;
-    ctx.fillRect(x, topY, colW, titleBlock - 2);
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "700 20px system-ui, -apple-system, Segoe UI, sans-serif";
-    const maxChars = colW > 200 ? 22 : colW > 140 ? 18 : 14;
-    const label =
-      st.length > maxChars ? `${st.slice(0, maxChars - 1)}…` : st;
-    ctx.fillText(label, x + 6, topY + 28);
-    ctx.strokeStyle = "rgba(0,0,0,0.2)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x + colW, topY);
-    ctx.lineTo(x + colW, gridBottom);
-    ctx.stroke();
-  });
 
   for (let m = minM; m <= maxM; m += stepM) {
     const y = topY + titleBlock + (m - minM) * pxPerMin;
@@ -312,21 +304,24 @@ export function renderPlanWallpaperCalendarPng(
     ctx.fillText(label, pad, y + tickFontPx * 0.35);
   }
 
-  const stageIndex = new Map(stages.map((s, i) => [s, i]));
+  const stageBg = (stage: string) => {
+    let h = 0;
+    const st = stage.trim();
+    for (let i = 0; i < st.length; i++) h = (h * 31 + st.charCodeAt(i)) >>> 0;
+    return STAGE_BG[h % STAGE_BG.length]!;
+  };
 
   for (const s of slots) {
-    const si = stageIndex.get(s.stage.trim());
-    if (si === undefined) continue;
     const ss = parseHmRelaxed(s.start);
     const ee = parseHmRelaxed(s.end);
     if (Number.isNaN(ss) || Number.isNaN(ee)) continue;
     const y0 = topY + titleBlock + (ss - minM) * pxPerMin;
     const y1 = topY + titleBlock + (ee - minM) * pxPerMin;
     const h = Math.max(y1 - y0, 10);
-    const x = gridLeft + si * colW + 2;
-    const w = colW - 4;
+    const x = gridLeft + 2;
+    const w = gridW - 4;
 
-    ctx.fillStyle = STAGE_BG[si % STAGE_BG.length]!;
+    ctx.fillStyle = stageBg(s.stage);
     ctx.globalAlpha = 0.98;
     ctx.fillRect(x, y0, w, h);
     ctx.globalAlpha = 1;
@@ -336,11 +331,15 @@ export function renderPlanWallpaperCalendarPng(
 
     const innerPad = 10;
     const maxTextW = w - innerPad * 2;
-    const maxTextH = Math.max(22, h - innerPad * 2 - 20);
-    const fp = maxFontForText(ctx, s.act, maxTextW, maxTextH, 15, 44);
+    const maxTextH = Math.max(22, h - innerPad * 2 - 28);
+    const fp = maxFontForText(ctx, s.act, maxTextW, Math.max(18, maxTextH * 0.55), 14, 44);
     ctx.fillStyle = "#0f172a";
     ctx.font = `700 ${fp}px system-ui, -apple-system, Segoe UI, sans-serif`;
     ctx.fillText(s.act, x + innerPad, y0 + innerPad + fp);
+    const sp = Math.min(20, Math.max(12, Math.round(fp * 0.45)));
+    ctx.font = `600 ${sp}px system-ui, -apple-system, Segoe UI, sans-serif`;
+    ctx.fillStyle = "#475569";
+    ctx.fillText(s.stage, x + innerPad, y0 + innerPad + fp + sp + 4);
   }
 
   return new Promise((resolve, reject) => {

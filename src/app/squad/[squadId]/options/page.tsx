@@ -146,6 +146,10 @@ export default function OptionsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-zinc-900">Options</h1>
+      <p className="text-xs text-zinc-600">
+        Anyone in the squad can edit the lineup, schedule, clashes, and group
+        defaults — not only whoever created the group.
+      </p>
 
       <section className="space-y-3">
         <button

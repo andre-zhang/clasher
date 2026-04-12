@@ -18,12 +18,14 @@ export default function SchedulePage() {
     addSlotComment,
     setRating,
     putSlotIntents,
+    syncPlanFromGroup,
   } = useClasher();
   const [draft, setDraft] = useState<ScheduleDraftSlot[] | null>(null);
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [syncGroupBusy, setSyncGroupBusy] = useState(false);
   const [stripHydrateKey, setStripHydrateKey] = useState(0);
   const galleryFileRef = useRef<HTMLInputElement>(null);
   const cameraFileRef = useRef<HTMLInputElement>(null);
@@ -303,6 +305,30 @@ export default function SchedulePage() {
           </div>
         </div>
       ) : null}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={syncGroupBusy || !group.schedule.length}
+          onClick={() => {
+            setSyncGroupBusy(true);
+            void (async () => {
+              try {
+                await syncPlanFromGroup();
+              } finally {
+                setSyncGroupBusy(false);
+              }
+            })();
+          }}
+          className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40"
+        >
+          {syncGroupBusy ? "Syncing…" : "Sync mine with everyone"}
+        </button>
+        <p className="max-w-md text-[11px] text-zinc-600">
+          Copies every act anyone in the group keeps onto your plan (full listed
+          times). New members get this automatically once when they join.
+        </p>
+      </div>
 
       <ScheduleCalendar
         schedule={group.schedule}

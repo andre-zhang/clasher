@@ -425,7 +425,7 @@ export function SchedulePlannerStrip({
             }`}
             onClick={() => setStripScope("group")}
           >
-            Group
+            Everyone
           </button>
         </div>
       </div>
@@ -547,7 +547,7 @@ export function SchedulePlannerStrip({
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="start"
-                    className="absolute left-0 right-0 top-0 z-20 min-h-11 cursor-ns-resize touch-none sm:min-h-0 sm:h-2"
+                    className="absolute left-0 right-0 top-0 z-30 min-h-10 cursor-ns-resize touch-none sm:min-h-8"
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -573,7 +573,7 @@ export function SchedulePlannerStrip({
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="end"
-                    className="absolute bottom-0 left-0 right-0 z-20 min-h-11 cursor-ns-resize touch-none sm:min-h-0 sm:h-2"
+                    className="absolute bottom-0 left-0 right-0 z-30 min-h-10 cursor-ns-resize touch-none sm:min-h-8"
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();

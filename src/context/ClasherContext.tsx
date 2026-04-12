@@ -23,6 +23,7 @@ import {
   apiPatchSquadOptions,
   apiPeekInvite,
   apiPutSlotIntents,
+  apiSyncPlanFromGroup,
   apiReplaceSchedule,
   apiSetConflict,
   type ConflictPlanPayload,
@@ -95,6 +96,8 @@ type ClasherContextValue = {
       planTo?: string | null;
     }[]
   ) => Promise<void>;
+  /** Set your plan to every act anyone in the group keeps (full slot times). */
+  syncPlanFromGroup: () => Promise<void>;
   patchScheduleKeep: (slotId: string, keep: boolean) => Promise<void>;
   loadDemoFull: () => Promise<void>;
   deleteSquad: () => Promise<void>;
@@ -252,6 +255,12 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
     [requireSession]
   );
 
+  const syncPlanFromGroup = useCallback(async () => {
+    const s = requireSession();
+    const g = await apiSyncPlanFromGroup(s);
+    setGroup(g);
+  }, [requireSession]);
+
   const patchScheduleKeep = useCallback(
     async (slotId: string, keep: boolean) => {
       const s = requireSession();
@@ -334,6 +343,7 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       replaceSchedule,
       setConflict,
       putSlotIntents,
+      syncPlanFromGroup,
       patchScheduleKeep,
       loadDemoFull,
       deleteSquad,
@@ -359,6 +369,7 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       replaceSchedule,
       setConflict,
       putSlotIntents,
+      syncPlanFromGroup,
       patchScheduleKeep,
       loadDemoFull,
       deleteSquad,

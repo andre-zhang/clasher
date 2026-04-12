@@ -92,6 +92,8 @@ export function ScheduleCalendar({
   scheduleViewerMemberId,
   onSlotOpenDetail,
   buildPlanner,
+  /** One combined time column (like Everyone plan view), not split by stage. */
+  singleColumnTimeline = false,
 }: {
   schedule: Slot[];
   memberId?: string;
@@ -105,6 +107,7 @@ export function ScheduleCalendar({
   showEffectivePlanLayer?: boolean;
   scheduleViewerMemberId?: string;
   onSlotOpenDetail?: (slot: Slot) => void;
+  singleColumnTimeline?: boolean;
   buildPlanner?: {
     memberId: string;
     /** Bump after a successful strip apply so the strip reloads from server intents. */
@@ -180,7 +183,7 @@ export function ScheduleCalendar({
     pointerId: number;
   } | null>(null);
   const [stripScope, setStripScope] = useState<"mine" | "group">("mine");
-  /** Group strip: slots added from grid before first save (excluded from "everyone else's" acts). */
+  /** “Everyone” strip: slots you added from the grid before first save (not from others’ plans). */
   const [stripUserAddedIds, setStripUserAddedIds] = useState<Set<string>>(
     () => new Set()
   );
@@ -319,13 +322,30 @@ export function ScheduleCalendar({
     scheduleViewerMemberId && !memberId && group && visibilityMode === "effectivePlan"
   );
 
+  const singleCol = Boolean(
+    singleColumnTimeline &&
+      memberId &&
+      group &&
+      visibilityMode === "effectivePlan"
+  );
+
   const stagesFromFiltered = useMemo(() => {
     if (!filtered.length) return [] as string[];
     return [...new Set(filtered.map((s) => s.stageName.trim()))].sort();
   }, [filtered]);
 
-  const stagesToRender = showAllStages ? allStagesForDay : stagesFromFiltered;
+  const stagesToRender = singleCol
+    ? ["_plan_"]
+    : showAllStages
+      ? allStagesForDay
+      : stagesFromFiltered;
+
   const slotsForStage = (stage: string) => {
+    if (singleCol) {
+      return [...filtered].sort(
+        (a, b) => layoutSortStart(a) - layoutSortStart(b)
+      );
+    }
     const base = schedule.filter(
       (s) =>
         s.dayLabel.trim() === activeDay && s.stageName.trim() === stage
@@ -337,9 +357,11 @@ export function ScheduleCalendar({
   };
 
   const minMaxForStages = useMemo(() => {
-    const rows = showAllStages
-      ? schedule.filter((s) => s.dayLabel.trim() === activeDay)
-      : filtered;
+    const rows = singleCol
+      ? filtered
+      : showAllStages
+        ? schedule.filter((s) => s.dayLabel.trim() === activeDay)
+        : filtered;
     if (!rows.length) {
       return { minM: 0, maxM: 60 };
     }
@@ -355,7 +377,7 @@ export function ScheduleCalendar({
     const minM = Math.floor(lo / 30) * 30;
     const maxM = Math.max(minM + 60, Math.ceil(hi / 30) * 30);
     return { minM, maxM };
-  }, [showAllStages, schedule, activeDay, filtered]);
+  }, [singleCol, showAllStages, schedule, activeDay, filtered]);
 
   const ticksRender = useMemo(() => {
     const t: number[] = [];
@@ -480,48 +502,66 @@ export function ScheduleCalendar({
       setStripResize(null);
       return;
     }
-    const lo = parseHm(slot.start);
-    const hi = parseHm(slot.end);
+    const slotLo = parseHm(slot.start);
+    const slotHi = parseHm(slot.end);
+    const slotId = stripResize.slotId;
+    const edge = stripResize.edge;
+    const pointerId = stripResize.pointerId;
+    const baseFromM = stripResize.baseFromM;
+    const baseToM = stripResize.baseToM;
+    const anchorClientY = stripResize.anchorClientY;
 
     const onMove = (e: PointerEvent) => {
-      if (e.pointerId !== stripResize.pointerId) return;
+      if (e.pointerId !== pointerId) return;
       const { minMR: loR, maxMR: hiR, timelineBodyPx: tb } =
         timelineMetricsRef.current;
       const range = hiR - loR;
       if (range <= 0 || tb <= 0) return;
-      const deltaY = e.clientY - stripResize.anchorClientY;
+      const deltaY = e.clientY - anchorClientY;
       const deltaMin = (deltaY / tb) * range;
-      let nextFrom = stripResize.baseFromM;
-      let nextTo = stripResize.baseToM;
-      if (stripResize.edge === "end") {
-        nextTo = stripResize.baseToM + deltaMin;
+      let sm: number;
+      let em: number;
+      if (edge === "end") {
+        sm = baseFromM;
+        em = baseToM + deltaMin;
       } else {
-        nextFrom = stripResize.baseFromM + deltaMin;
+        sm = baseFromM + deltaMin;
+        em = baseToM;
       }
-      const w = clampPlanWindowToSlot(
-        slot,
-        hhmmFromMinutes(snapMinutesTo5(Math.round(nextFrom))),
-        hhmmFromMinutes(snapMinutesTo5(Math.round(nextTo)))
-      );
-      let sm = parseHm(w.planFrom);
-      let em = parseHm(w.planTo);
-      if (!Number.isNaN(sm)) sm = snapMinutesTo5(sm);
-      if (!Number.isNaN(em)) em = snapMinutesTo5(em);
-      if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
-        if (!Number.isNaN(sm)) sm = Math.max(lo, Math.min(hi, sm));
-        if (!Number.isNaN(em)) em = Math.max(lo, Math.min(hi, em));
+      if (!Number.isNaN(slotLo) && !Number.isNaN(slotHi)) {
+        sm = Math.max(slotLo, Math.min(slotHi, sm));
+        em = Math.max(slotLo, Math.min(slotHi, em));
       }
-      if (!Number.isNaN(sm) && !Number.isNaN(em) && em < sm) em = sm;
+      if (em < sm) {
+        if (edge === "end") em = sm;
+        else sm = em;
+      }
       setStripWindows((prev) => ({
         ...prev,
-        [slot.id]: {
+        [slotId]: {
           planFrom: hhmmFromMinutes(sm),
           planTo: hhmmFromMinutes(em),
         },
       }));
     };
     const onUp = (e: PointerEvent) => {
-      if (e.pointerId !== stripResize.pointerId) return;
+      if (e.pointerId !== pointerId) return;
+      setStripWindows((prev) => {
+        const cur = prev[slotId];
+        if (!cur) return prev;
+        const c = clampPlanWindowToSlot(slot, cur.planFrom, cur.planTo);
+        let sm = parseHm(c.planFrom);
+        let em = parseHm(c.planTo);
+        if (Number.isNaN(sm) || Number.isNaN(em)) return prev;
+        sm = snapMinutesTo5(Math.round(sm));
+        em = snapMinutesTo5(Math.round(em));
+        const fin = clampPlanWindowToSlot(
+          slot,
+          hhmmFromMinutes(sm),
+          hhmmFromMinutes(em)
+        );
+        return { ...prev, [slotId]: { planFrom: fin.planFrom, planTo: fin.planTo } };
+      });
       setStripResize(null);
     };
     window.addEventListener("pointermove", onMove);
@@ -777,11 +817,15 @@ export function ScheduleCalendar({
             return (
             <div
               key={stage}
-              className="relative min-w-[min(100%,140px)] flex-1 border-r-2 border-zinc-900 sm:min-w-[148px]"
+              className={
+                singleCol
+                  ? "relative min-w-[min(100%,320px)] max-w-xl flex-1 border-r-2 border-zinc-900"
+                  : "relative min-w-[min(100%,140px)] flex-1 border-r-2 border-zinc-900 sm:min-w-[148px]"
+              }
               style={{ minHeight: timelineHRender }}
             >
               <div className="sticky top-0 z-20 h-8 border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-8 text-zinc-900 shadow-[0_6px_10px_-4px_rgba(0,0,0,0.1)]">
-                {stage}
+                {singleCol ? "Plan" : stage}
               </div>
               <div
                 className="relative"

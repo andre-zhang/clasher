@@ -154,8 +154,35 @@ export function createFestivalApp(apiBasePath: string): Hono {
     const squad = await prisma.squad.findFirst({ where: { inviteToken } });
     if (!squad) return c.json({ error: "not_found" }, 404);
 
-    const member = await prisma.member.create({
-      data: { squadId: squad.id, displayName },
+    const member = await prisma.$transaction(async (tx) => {
+      const m = await tx.member.create({
+        data: { squadId: squad.id, displayName },
+      });
+      const peerRows = await tx.memberSlotIntent.findMany({
+        where: {
+          squadId: squad.id,
+          memberId: { not: m.id },
+          wants: true,
+        },
+        select: { slotId: true },
+      });
+      const seen = new Set<string>();
+      for (const r of peerRows) {
+        if (seen.has(r.slotId)) continue;
+        seen.add(r.slotId);
+        await tx.memberSlotIntent.create({
+          data: {
+            squadId: squad.id,
+            memberId: m.id,
+            slotId: r.slotId,
+            wants: true,
+            scheduleKeep: false,
+            planFrom: null,
+            planTo: null,
+          },
+        });
+      }
+      return m;
     });
     const snap = await buildSnapshot(prisma, squad.id, member.id);
     return c.json({
@@ -1338,6 +1365,53 @@ export function createFestivalApp(apiBasePath: string): Hono {
     });
 
     const snap = await buildSnapshot(prisma, member.squadId, member.id);
+    return c.json({ group: snap });
+  });
+
+  /** Match this member’s plan to the combined group plan (anyone’s wants). */
+  app.post("/squads/:squadId/plan/sync-from-group", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    if (member.squadId !== squadId) return c.json({ error: "forbidden" }, 403);
+    const sid = member.squadId;
+    const allRows = await prisma.memberSlotIntent.findMany({
+      where: { squadId: sid },
+      select: { slotId: true, wants: true },
+    });
+    const anyoneWants = new Set<string>();
+    for (const r of allRows) {
+      if (r.wants) anyoneWants.add(r.slotId);
+    }
+    const scheduleSlots = await prisma.scheduleSlot.findMany({
+      where: { squadId: sid },
+      select: { id: true },
+    });
+    await prisma.$transaction(async (tx) => {
+      for (const s of scheduleSlots) {
+        const w = anyoneWants.has(s.id);
+        await tx.memberSlotIntent.upsert({
+          where: {
+            memberId_slotId: { memberId: member.id, slotId: s.id },
+          },
+          create: {
+            squadId: sid,
+            memberId: member.id,
+            slotId: s.id,
+            wants: w,
+            scheduleKeep: false,
+            planFrom: null,
+            planTo: null,
+          },
+          update: {
+            wants: w,
+            planFrom: null,
+            planTo: null,
+          },
+        });
+      }
+    });
+    const snap = await buildSnapshot(prisma, sid, member.id);
     return c.json({ group: snap });
   });
 

@@ -153,6 +153,7 @@ export default function PlansPage() {
               slotComments={group.slotComments}
               visibilityMode="effectivePlan"
               showEffectivePlanLayer
+              singleColumnTimeline
               onSetRating={
                 activeMember === session.memberId
                   ? (artistId, tier) => setRating(artistId, tier)

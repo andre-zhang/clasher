@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ClasherCheckbox } from "@/components/ClasherCheckbox";
 import {
+  buildEveryoneCalendarSlotsForDay,
   buildMemberPlanCalendarSlotsForDay,
-  buildUnionCalendarSlotsForDay,
   renderPlanWallpaperCalendarPng,
 } from "@/lib/planWallpaper";
 import type { FestivalSnapshot } from "@/lib/types";
@@ -17,7 +17,7 @@ export function PlanWallpaperExport({
   group: FestivalSnapshot;
   sessionMemberId: string;
 }) {
-  const [scope, setScope] = useState<"me" | "member" | "union">("me");
+  const [scope, setScope] = useState<"me" | "member" | "everyone">("me");
   const [pickMember, setPickMember] = useState(sessionMemberId);
   const [busy, setBusy] = useState(false);
 
@@ -47,8 +47,8 @@ export function PlanWallpaperExport({
       if (!picked.length) return;
 
       const titleBase =
-        scope === "union"
-          ? "Union"
+        scope === "everyone"
+          ? "Everyone"
           : scope === "me"
             ? ""
             : (group.members.find((m) => m.id === pickMember)?.displayName ??
@@ -56,8 +56,8 @@ export function PlanWallpaperExport({
 
       for (const dayLabel of picked) {
         const slots =
-          scope === "union"
-            ? buildUnionCalendarSlotsForDay(group, dayLabel)
+          scope === "everyone"
+            ? buildEveryoneCalendarSlotsForDay(group, dayLabel)
             : buildMemberPlanCalendarSlotsForDay(
                 group,
                 scope === "me" ? sessionMemberId : pickMember,
@@ -117,14 +117,14 @@ export function PlanWallpaperExport({
           </button>
           <button
             type="button"
-            onClick={() => setScope("union")}
+            onClick={() => setScope("everyone")}
             className={`border-2 px-2 py-1 text-xs font-semibold ${
-              scope === "union"
+              scope === "everyone"
                 ? "border-zinc-900 bg-zinc-900 text-white"
                 : "border-zinc-900 bg-white text-zinc-900"
             }`}
           >
-            Union
+            Everyone
           </button>
         </div>
         {scope === "member" ? (
