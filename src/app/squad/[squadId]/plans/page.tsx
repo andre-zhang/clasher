@@ -46,6 +46,8 @@ export default function PlansPage() {
   const [planNoteDraft, setPlanNoteDraft] = useState("");
   const [planNoteSaving, setPlanNoteSaving] = useState(false);
   const [planRemoveBusy, setPlanRemoveBusy] = useState(false);
+  const [planAllowClashes, setPlanAllowClashes] = useState(false);
+  const [planStripHydrateKey, setPlanStripHydrateKey] = useState(0);
   const planDetailRef = useRef<HTMLDialogElement>(null);
 
   const me = session?.memberId ?? null;
@@ -128,6 +130,19 @@ export default function PlansPage() {
 
       {tab === "person" ? (
         <div className="space-y-3">
+          {activeMember === session.memberId ? (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-2 border-zinc-900 bg-white px-3 py-2 shadow-[2px_2px_0_0_#18181b]">
+              <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-zinc-800">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 border-2 border-zinc-900 accent-zinc-900"
+                  checked={planAllowClashes}
+                  onChange={(e) => setPlanAllowClashes(e.target.checked)}
+                />
+                Allow clashes (plan strip)
+              </label>
+            </div>
+          ) : null}
           <label className="flex flex-wrap items-center gap-2 text-sm text-zinc-800">
             <span className="font-medium">Member</span>
             <select
@@ -159,6 +174,19 @@ export default function PlansPage() {
                   : undefined
               }
               onSlotOpenDetail={(slot) => setPlanDetailSlotId(slot.id)}
+              buildPlanner={
+                activeMember === session.memberId
+                  ? {
+                      memberId: session.memberId,
+                      allowClashes: planAllowClashes,
+                      stripHydrateKey: planStripHydrateKey,
+                      onApplyPlan: async (patches) => {
+                        await putSlotIntents(patches);
+                        setPlanStripHydrateKey((k) => k + 1);
+                      },
+                    }
+                  : undefined
+              }
             />
           ) : null}
         </div>
@@ -253,6 +281,7 @@ export default function PlansPage() {
                           planTo: null,
                         },
                       ]);
+                      setPlanStripHydrateKey((k) => k + 1);
                       planDetailRef.current?.close();
                     } finally {
                       setPlanRemoveBusy(false);

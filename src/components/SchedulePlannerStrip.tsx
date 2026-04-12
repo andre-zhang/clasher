@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
+import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
 import { parseHm } from "@/lib/timeHm";
@@ -77,6 +78,9 @@ export function SchedulePlannerStrip({
   allowClashes,
   stripScope,
   setStripScope,
+  stripUserAddedIds,
+  onStripUserAddedSlot,
+  onStripUserRemovedUserAdd,
   onApply,
   onStripTimeResize,
   onStripWindowMoveStart,
@@ -99,6 +103,10 @@ export function SchedulePlannerStrip({
   allowClashes: boolean;
   stripScope: "mine" | "group";
   setStripScope: (v: "mine" | "group") => void;
+  /** In group mode: slots the user added from the grid (not yet on server wants). */
+  stripUserAddedIds: Set<string>;
+  onStripUserAddedSlot?: (slotId: string) => void;
+  onStripUserRemovedUserAdd?: (slotId: string) => void;
   onStripTimeResize?: (
     slot: Slot,
     edge: "start" | "end",
@@ -124,19 +132,38 @@ export function SchedulePlannerStrip({
   const editDialogRef = useRef<HTMLDialogElement>(null);
   const groupRef = useRef(group);
   groupRef.current = group;
-  const stripIdsRef = useRef(stripIds);
-  stripIdsRef.current = stripIds;
-  const windowsRef = useRef(windows);
-  windowsRef.current = windows;
-  const lastSuccessfulStripIdsRef = useRef<string[]>([]);
+  const lastSuccessfulSaveIdsRef = useRef<string[]>([]);
   const onApplyRef = useRef(onApply);
   onApplyRef.current = onApply;
 
   useEffect(() => {
-    lastSuccessfulStripIdsRef.current = [];
+    lastSuccessfulSaveIdsRef.current = [];
   }, [activeDay, plannerMemberId, stripScope]);
 
-  const stripSig = stripIds.join("\0");
+  const daySlots = useMemo(
+    () =>
+      schedule.filter((s) => s.dayLabel.trim() === activeDay.trim()),
+    [schedule, activeDay]
+  );
+
+  const myEffectiveWantedIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const slot of daySlots) {
+      if (effectiveMemberWantsSlot(group, plannerMemberId, slot.id)) {
+        s.add(slot.id);
+      }
+    }
+    return s;
+  }, [daySlots, group, plannerMemberId]);
+
+  const mySaveOrdered = useMemo(() => {
+    if (stripScope === "mine") return stripIds;
+    return stripIds.filter(
+      (id) => myEffectiveWantedIds.has(id) || stripUserAddedIds.has(id)
+    );
+  }, [stripScope, stripIds, myEffectiveWantedIds, stripUserAddedIds]);
+
+  const mySaveSig = mySaveOrdered.join("\0");
   const windowsSig = useMemo(() => {
     const keys = Object.keys(windows).sort();
     return keys.map((k) => `${k}\t${windows[k]!.planFrom}\t${windows[k]!.planTo}`).join("\0");
@@ -151,15 +178,23 @@ export function SchedulePlannerStrip({
     .map((id) => slotsById.get(id))
     .filter((s): s is Slot => Boolean(s));
 
+  const orderedSlotsForClash = useMemo(
+    () =>
+      mySaveOrdered
+        .map((id) => slotsById.get(id))
+        .filter((s): s is Slot => Boolean(s)),
+    [mySaveOrdered, slotsById]
+  );
+
   const clash = useMemo(
     () =>
       stripWindowsInfeasiblePair(
         group,
-        orderedSlots,
+        orderedSlotsForClash,
         windows,
         allowClashes
       ),
-    [group, orderedSlots, windows, allowClashes]
+    [group, orderedSlotsForClash, windows, allowClashes]
   );
 
   const walkBands = useMemo(
@@ -243,6 +278,18 @@ export function SchedulePlannerStrip({
     setWindows(recomputeStripWindowsSequential(group, nextIds, schedule));
   }
 
+  function moveStripSlot(slotId: string, delta: -1 | 1) {
+    const i = stripIds.indexOf(slotId);
+    if (i < 0) return;
+    const j = i + delta;
+    if (j < 0 || j >= stripIds.length) return;
+    const next = [...stripIds];
+    const [removed] = next.splice(i, 1);
+    next.splice(j, 0, removed!);
+    setStripIds(next);
+    syncWindowsForOrder(next);
+  }
+
   function onDropStrip(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
@@ -252,19 +299,26 @@ export function SchedulePlannerStrip({
     if (stripIds.includes(id)) return;
     const slot = slotsById.get(id);
     if (!slot) return;
+    if (stripScope === "group") {
+      onStripUserAddedSlot?.(id);
+    }
     const next = [...stripIds, id];
     setStripIds(next);
     syncWindowsForOrder(next);
   }
 
   useEffect(() => {
+    const saveOrdered = mySaveOrdered;
     const t = window.setTimeout(() => {
       if (clash && !allowClashes) return;
       const g = groupRef.current;
-      const ids = stripIdsRef.current;
-      const wins = windowsRef.current;
-      const prev = new Set(lastSuccessfulStripIdsRef.current);
-      const next = new Set(ids);
+      const winsForSave = recomputeStripWindowsSequential(
+        g,
+        saveOrdered,
+        schedule
+      );
+      const prev = new Set(lastSuccessfulSaveIdsRef.current);
+      const next = new Set(saveOrdered);
       const patches: IntentPatch[] = [];
       for (const id of prev) {
         if (!next.has(id)) {
@@ -276,10 +330,10 @@ export function SchedulePlannerStrip({
           });
         }
       }
-      for (const id of ids) {
+      for (const id of saveOrdered) {
         const s = slotsById.get(id);
         if (!s) continue;
-        const w = wins[id] ?? { planFrom: s.start, planTo: s.end };
+        const w = winsForSave[id] ?? { planFrom: s.start, planTo: s.end };
         const c = clampPlanWindowToSlot(s, w.planFrom, w.planTo);
         patches.push({
           slotId: id,
@@ -292,14 +346,14 @@ export function SchedulePlannerStrip({
         patchNeedsApply(g, plannerMemberId, p, slotsById.get(p.slotId))
       );
       if (!toSend.length) {
-        lastSuccessfulStripIdsRef.current = [...ids];
+        lastSuccessfulSaveIdsRef.current = [...saveOrdered];
         return;
       }
       setBusy(true);
       void (async () => {
         try {
           await onApplyRef.current(toSend);
-          lastSuccessfulStripIdsRef.current = [...ids];
+          lastSuccessfulSaveIdsRef.current = [...saveOrdered];
         } finally {
           setBusy(false);
         }
@@ -307,12 +361,13 @@ export function SchedulePlannerStrip({
     }, 500);
     return () => window.clearTimeout(t);
   }, [
-    stripSig,
+    mySaveSig,
     windowsSig,
     clash,
     allowClashes,
     plannerMemberId,
     slotsById,
+    schedule,
   ]);
 
   function applyDraftTimes() {
@@ -333,33 +388,39 @@ export function SchedulePlannerStrip({
     const t = e.target as HTMLElement | null;
     if (
       t?.closest(
-        "button,a,input,textarea,[data-strip-resize],[data-strip-drag]"
+        "button,a,input,textarea,[data-strip-resize],[data-strip-drag],[data-strip-reorder]"
       )
     )
       return;
     const y0 = e.clientY;
+    const pid = e.pointerId;
     let moved = false;
     const onMove = (ev: PointerEvent) => {
-      if (Math.abs(ev.clientY - y0) < 8) return;
+      if (ev.pointerId !== pid) return;
+      if (Math.abs(ev.clientY - y0) < 10) return;
       moved = true;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      onStripWindowMoveStart(slot, y0, e.pointerId);
+      window.removeEventListener("pointercancel", onUp);
+      onStripWindowMoveStart(slot, y0, pid);
     };
-    const onUp = () => {
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pid) return;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
       if (!moved) setEditId(slot.id);
     };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp, { once: true });
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   }
 
   const dialogSlot = editId ? slotsById.get(editId) ?? null : null;
 
   return (
     <div
-      className={`flex w-[min(260px,38vw)] min-w-[200px] max-w-[300px] shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 ${
+      className={`flex w-[min(92vw,280px)] min-w-[176px] max-w-[300px] shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 sm:w-[min(260px,38vw)] sm:min-w-[200px] ${
         dragOver ? "ring-2 ring-zinc-900 ring-offset-1" : ""
       }`}
       onDragOver={(e) => {
@@ -376,7 +437,7 @@ export function SchedulePlannerStrip({
         <div className="ml-auto flex gap-0.5">
           <button
             type="button"
-            className={`border px-1 py-0.5 text-[9px] font-semibold leading-none ${
+            className={`touch-manipulation border px-2 py-1.5 text-[9px] font-semibold leading-none sm:px-1 sm:py-0.5 ${
               stripScope === "mine"
                 ? "border-zinc-900 bg-zinc-900 text-white"
                 : "border-zinc-600 bg-white text-zinc-800"
@@ -387,7 +448,7 @@ export function SchedulePlannerStrip({
           </button>
           <button
             type="button"
-            className={`border px-1 py-0.5 text-[9px] font-semibold leading-none ${
+            className={`touch-manipulation border px-2 py-1.5 text-[9px] font-semibold leading-none sm:px-1 sm:py-0.5 ${
               stripScope === "group"
                 ? "border-zinc-900 bg-zinc-900 text-white"
                 : "border-zinc-600 bg-white text-zinc-800"
@@ -400,7 +461,7 @@ export function SchedulePlannerStrip({
       </div>
 
       <div
-        className="relative w-full overflow-hidden border-b border-zinc-200"
+        className="relative w-full touch-pan-y overflow-hidden border-b border-zinc-200"
         style={{ height: timelineBodyPx, minHeight: 120 }}
       >
         {walkBands.map((band, i) => {
@@ -423,6 +484,10 @@ export function SchedulePlannerStrip({
         {orderedSlots.map((slot, idx) => {
           const packItem = itemById.get(slot.id);
           if (!packItem) return null;
+          const canRemoveFromMyPlan =
+            stripScope === "mine" ||
+            myEffectiveWantedIds.has(slot.id) ||
+            stripUserAddedIds.has(slot.id);
           const { topPx, heightPx } = packItem;
           const pack = stripColumnPack.colOf.get(slot.id) ?? {
             col: 0,
@@ -461,25 +526,58 @@ export function SchedulePlannerStrip({
               }}
             >
               <div
-                data-strip-drag
-                draggable={!resizeBusy && !moveBusy}
-                aria-label="Reorder in strip"
-                className="absolute bottom-0 left-0 top-0 z-[26] flex w-2 cursor-grab items-center justify-center border-r border-zinc-200 bg-zinc-100/90 active:cursor-grabbing"
-                onDragStart={(e) => {
-                  e.stopPropagation();
-                  e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
-                  e.dataTransfer.effectAllowed = "move";
-                }}
+                data-strip-reorder
+                className="absolute bottom-0 left-0 top-0 z-[26] flex border-r border-zinc-200 bg-zinc-100/90 md:w-2 md:min-w-0"
               >
-                <span className="select-none text-[9px] leading-none text-zinc-400">
-                  ⋮
-                </span>
+                <div className="flex w-10 shrink-0 flex-col md:hidden">
+                  <button
+                    type="button"
+                    className="touch-manipulation flex min-h-10 flex-1 items-center justify-center border-b border-zinc-200 text-xs font-bold text-zinc-700"
+                    aria-label="Move earlier in plan"
+                    disabled={idx === 0 || resizeBusy || moveBusy}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      moveStripSlot(slot.id, -1);
+                    }}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="touch-manipulation flex min-h-10 flex-1 items-center justify-center text-xs font-bold text-zinc-700"
+                    aria-label="Move later in plan"
+                    disabled={
+                      idx >= stripIds.length - 1 || resizeBusy || moveBusy
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      moveStripSlot(slot.id, 1);
+                    }}
+                  >
+                    ↓
+                  </button>
+                </div>
+                <div
+                  data-strip-drag
+                  draggable={!resizeBusy && !moveBusy}
+                  aria-label="Reorder in strip"
+                  className="hidden w-2 min-w-[8px] cursor-grab items-center justify-center active:cursor-grabbing md:flex"
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                >
+                  <span className="select-none text-[9px] leading-none text-zinc-400">
+                    ⋮
+                  </span>
+                </div>
               </div>
-              <div className="relative min-h-0 flex-1 pl-2">
+              <div className="relative min-h-0 flex-1 pl-10 md:pl-2">
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="start"
-                    className="absolute left-0 right-0 top-0 z-20 h-2 cursor-ns-resize touch-none"
+                    className="absolute left-0 right-0 top-0 z-20 min-h-11 cursor-ns-resize touch-none sm:min-h-0 sm:h-2"
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -488,7 +586,7 @@ export function SchedulePlannerStrip({
                   />
                 ) : null}
                 <div
-                  className={`flex h-full min-h-0 flex-col justify-start gap-px overflow-y-auto overflow-x-hidden px-0.5 pb-1.5 pt-1.5 ${
+                  className={`flex h-full min-h-0 flex-col justify-start gap-px overflow-y-auto overflow-x-hidden px-0.5 pb-1.5 pt-1.5 touch-manipulation ${
                     onStripWindowMoveStart
                       ? "cursor-grab active:cursor-grabbing"
                       : ""
@@ -505,7 +603,7 @@ export function SchedulePlannerStrip({
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="end"
-                    className="absolute bottom-0 left-0 right-0 z-20 h-2 cursor-ns-resize touch-none"
+                    className="absolute bottom-0 left-0 right-0 z-20 min-h-11 cursor-ns-resize touch-none sm:min-h-0 sm:h-2"
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -514,22 +612,28 @@ export function SchedulePlannerStrip({
                   />
                 ) : null}
               </div>
-              <button
-                type="button"
-                className="absolute right-0.5 top-0.5 z-[25] border border-zinc-400 bg-white px-0.5 text-[9px] leading-none text-red-800"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setStripIds((ids) => {
-                    const next = ids.filter((x) => x !== slot.id);
-                    setWindows(
-                      recomputeStripWindowsSequential(group, next, schedule)
-                    );
-                    return next;
-                  });
-                }}
-              >
-                ×
-              </button>
+              {canRemoveFromMyPlan ? (
+                <button
+                  type="button"
+                  className="touch-manipulation absolute right-0.5 top-0.5 z-[25] flex h-8 min-h-8 min-w-8 items-center justify-center border border-zinc-400 bg-white text-sm leading-none text-red-800"
+                  aria-label="Remove from strip"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (stripUserAddedIds.has(slot.id)) {
+                      onStripUserRemovedUserAdd?.(slot.id);
+                    }
+                    setStripIds((ids) => {
+                      const next = ids.filter((x) => x !== slot.id);
+                      setWindows(
+                        recomputeStripWindowsSequential(group, next, schedule)
+                      );
+                      return next;
+                    });
+                  }}
+                >
+                  ×
+                </button>
+              ) : null}
             </div>
           );
         })}
@@ -538,7 +642,7 @@ export function SchedulePlannerStrip({
       <div className="border-t border-zinc-300 p-1">
         <button
           type="button"
-          className="mb-0.5 w-full text-[9px] text-red-800 underline"
+          className="touch-manipulation mb-0.5 w-full py-2 text-[9px] text-red-800 underline sm:py-0"
           disabled={!stripIds.length}
           onClick={() => {
             setStripIds([]);

@@ -24,7 +24,8 @@ export default function LineupPage() {
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const artistsSorted = useMemo(
@@ -92,17 +93,37 @@ export default function LineupPage() {
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => fileRef.current?.click()}
+          onClick={() => cameraRef.current?.click()}
           disabled={busy}
-          className="border-2 border-zinc-900 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-50"
+          className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-50 min-h-11 sm:min-h-0 sm:py-1.5"
         >
-          Scan poster
+          Take photo
+        </button>
+        <button
+          type="button"
+          onClick={() => galleryRef.current?.click()}
+          disabled={busy}
+          className="touch-manipulation border-2 border-zinc-900 bg-zinc-900 px-3 py-2.5 text-xs font-medium text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-50 min-h-11 sm:min-h-0 sm:py-1.5"
+        >
+          Upload image
         </button>
         <input
-          ref={fileRef}
+          ref={cameraRef}
           type="file"
           accept="image/*"
-          className="hidden"
+          capture="environment"
+          className="sr-only"
+          aria-hidden
+          tabIndex={-1}
+          onChange={onFile}
+        />
+        <input
+          ref={galleryRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          aria-hidden
+          tabIndex={-1}
           onChange={onFile}
         />
       </div>

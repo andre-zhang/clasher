@@ -27,7 +27,8 @@ export default function SchedulePage() {
   const [plannerClashes, setPlannerClashes] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [stripHydrateKey, setStripHydrateKey] = useState(0);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const galleryFileRef = useRef<HTMLInputElement>(null);
+  const cameraFileRef = useRef<HTMLInputElement>(null);
 
   if (!group || !session) return null;
 
@@ -142,24 +143,44 @@ export default function SchedulePage() {
             type="button"
             disabled={syncBusy || !group.schedule.length}
             onClick={() => void syncHotToShortlist()}
-            className="border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40"
+            className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
           >
             Sync from Lineup
           </button>
           <button
             type="button"
-            onClick={() => fileRef.current?.click()}
+            onClick={() => cameraFileRef.current?.click()}
             disabled={busy}
-            className="border-2 border-zinc-900 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-50"
+            className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-50 min-h-11 sm:min-h-0 sm:py-1.5"
           >
-            Scan timetable
+            Take photo
+          </button>
+          <button
+            type="button"
+            onClick={() => galleryFileRef.current?.click()}
+            disabled={busy}
+            className="touch-manipulation border-2 border-zinc-900 bg-zinc-900 px-3 py-2.5 text-xs font-medium text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-50 min-h-11 sm:min-h-0 sm:py-1.5"
+          >
+            Upload images
           </button>
           <input
-            ref={fileRef}
+            ref={cameraFileRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="sr-only fixed left-0 top-0 h-px w-px opacity-0"
+            aria-hidden
+            tabIndex={-1}
+            onChange={onFiles}
+          />
+          <input
+            ref={galleryFileRef}
             type="file"
             accept="image/*"
             multiple
-            className="hidden"
+            className="sr-only fixed left-0 top-0 h-px w-px opacity-0"
+            aria-hidden
+            tabIndex={-1}
             onChange={onFiles}
           />
         </div>
@@ -253,7 +274,7 @@ export default function SchedulePage() {
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => fileRef.current?.click()}
+              onClick={() => galleryFileRef.current?.click()}
               disabled={busy}
               className="border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium"
             >

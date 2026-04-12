@@ -24,7 +24,8 @@ export default function OptionsPage() {
   const [demoBusy, setDemoBusy] = useState(false);
   const [delBusy, setDelBusy] = useState(false);
   const [mapBusy, setMapBusy] = useState(false);
-  const mapAnalyzeRef = useRef<HTMLInputElement>(null);
+  const mapCameraRef = useRef<HTMLInputElement>(null);
+  const mapGalleryRef = useRef<HTMLInputElement>(null);
 
   const [aliasEdit, setAliasEdit] = useState<Record<string, string>>({});
 
@@ -175,20 +176,40 @@ export default function OptionsPage() {
           matches are kept.
         </p>
         <input
-          ref={mapAnalyzeRef}
+          ref={mapCameraRef}
           type="file"
           accept="image/*"
-          className="hidden"
+          capture="environment"
+          className="sr-only"
+          aria-hidden
+          tabIndex={-1}
+          onChange={(e) => void onMapUploadAndAnalyze(e)}
+        />
+        <input
+          ref={mapGalleryRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          aria-hidden
+          tabIndex={-1}
           onChange={(e) => void onMapUploadAndAnalyze(e)}
         />
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             disabled={mapBusy}
-            onClick={() => mapAnalyzeRef.current?.click()}
-            className="border-2 border-zinc-900 bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+            onClick={() => mapCameraRef.current?.click()}
+            className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-semibold text-zinc-900 shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
           >
-            {mapBusy ? "Working…" : "Upload & analyze map"}
+            {mapBusy ? "Working…" : "Take photo of map"}
+          </button>
+          <button
+            type="button"
+            disabled={mapBusy}
+            onClick={() => mapGalleryRef.current?.click()}
+            className="touch-manipulation border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
+          >
+            {mapBusy ? "Working…" : "Upload map image"}
           </button>
         </div>
         {group.mapStageLabels.length > 0 ? (
@@ -196,7 +217,7 @@ export default function OptionsPage() {
             <p className="text-xs font-semibold text-zinc-800">
               Map labels → schedule stage
             </p>
-            <div className="max-h-56 space-y-1 overflow-y-auto text-xs">
+            <div className="touch-scroll max-h-56 space-y-1 overflow-y-auto text-xs">
               {group.mapStageLabels.map((label) => (
                 <label
                   key={label}

@@ -181,6 +181,10 @@ export function ScheduleCalendar({
     pointerId: number;
   } | null>(null);
   const [stripScope, setStripScope] = useState<"mine" | "group">("mine");
+  /** Group strip: slots added from grid before first save (excluded from "everyone else's" acts). */
+  const [stripUserAddedIds, setStripUserAddedIds] = useState<Set<string>>(
+    () => new Set()
+  );
 
   const groupRef = useRef(group);
   groupRef.current = group;
@@ -222,6 +226,31 @@ export function ScheduleCalendar({
       .sort()
       .join("|");
   }, [group]);
+
+  useEffect(() => {
+    setStripUserAddedIds(new Set());
+  }, [activeDay, stripScope]);
+
+  useEffect(() => {
+    if (!plannerMemberId || !groupRef.current) return;
+    const g = groupRef.current;
+    setStripUserAddedIds((prev) => {
+      if (!prev.size) return prev;
+      const next = new Set(prev);
+      for (const id of prev) {
+        if (effectiveMemberWantsSlot(g, plannerMemberId, id)) {
+          next.delete(id);
+        }
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [allIntentsHydrateSig, plannerMemberId]);
+
+  useEffect(() => {
+    if (!stripIds.length) {
+      setStripUserAddedIds(new Set());
+    }
+  }, [stripIds.length]);
 
   useEffect(() => {
     if (!plannerMemberId || !activeDay) return;
@@ -623,6 +652,18 @@ export function ScheduleCalendar({
     });
   }
 
+  function addSlotToStrip(slot: Slot) {
+    if (!buildPlanner || !group || !activeDay) return;
+    if (slot.dayLabel.trim() !== activeDay.trim()) return;
+    if (stripIds.includes(slot.id)) return;
+    if (stripScope === "group") {
+      setStripUserAddedIds((prev) => new Set(prev).add(slot.id));
+    }
+    const next = [...stripIds, slot.id];
+    setStripIds(next);
+    setStripWindows(recomputeStripWindowsSequential(group, next, schedule));
+  }
+
   if (!schedule.length) {
     return <p className="text-sm text-zinc-600">No slots.</p>;
   }
@@ -656,11 +697,11 @@ export function ScheduleCalendar({
       ) : showAllStages && !allStagesForDay.length ? (
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : (
-        <div className="max-h-[min(72vh,calc(100vh-10rem))] overflow-auto border-2 border-zinc-900 bg-white">
+        <div className="touch-scroll max-h-[min(72vh,calc(100vh-10rem))] overflow-auto border-2 border-zinc-900 bg-white">
           <div className="flex min-w-max min-h-0 items-stretch">
           <div
-            className="sticky left-0 z-[100] flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 shadow-[6px_0_12px_-4px_rgba(0,0,0,0.12)]"
-            style={{ width: 56, minHeight: timelineHRender }}
+            className="sticky left-0 z-[100] flex w-16 shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 shadow-[6px_0_12px_-4px_rgba(0,0,0,0.12)] sm:w-14"
+            style={{ minHeight: timelineHRender }}
           >
             <div className="sticky top-0 z-[110] h-8 shrink-0 border-b-2 border-zinc-900 bg-zinc-50" />
             <div
@@ -678,7 +719,7 @@ export function ScheduleCalendar({
               ))}
             </div>
           </div>
-          {buildPlanner && showAllStages && group && activeDay ? (
+          {buildPlanner && group && activeDay ? (
             <SchedulePlannerStrip
               group={group}
               activeDay={activeDay}
@@ -691,6 +732,17 @@ export function ScheduleCalendar({
               allowClashes={buildPlanner.allowClashes}
               stripScope={stripScope}
               setStripScope={setStripScope}
+              stripUserAddedIds={stripUserAddedIds}
+              onStripUserAddedSlot={(id) =>
+                setStripUserAddedIds((prev) => new Set(prev).add(id))
+              }
+              onStripUserRemovedUserAdd={(id) =>
+                setStripUserAddedIds((prev) => {
+                  const next = new Set(prev);
+                  next.delete(id);
+                  return next;
+                })
+              }
               onApply={buildPlanner.onApplyPlan}
               onStripTimeResize={beginStripResize}
               onStripWindowMoveStart={beginStripWindowMove}
@@ -731,7 +783,7 @@ export function ScheduleCalendar({
             return (
             <div
               key={stage}
-              className="relative min-w-[148px] flex-1 border-r-2 border-zinc-900"
+              className="relative min-w-[min(100%,140px)] flex-1 border-r-2 border-zinc-900 sm:min-w-[148px]"
               style={{ minHeight: timelineHRender }}
             >
               <div className="sticky top-0 z-20 h-8 border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-8 text-zinc-900 shadow-[0_6px_10px_-4px_rgba(0,0,0,0.1)]">
@@ -845,6 +897,14 @@ export function ScheduleCalendar({
                     clashOverlapIntervalsBySlot.get(slot.id) ?? [];
                   const walkOnlyClash = clashWalkOnlySlotIds.has(slot.id);
                   const showClashStripe = ovSegs.length > 0 || walkOnlyClash;
+                  const showAddToStrip =
+                    Boolean(
+                      buildPlanner &&
+                        showAllStages &&
+                        group &&
+                        activeDay &&
+                        !stripIds.includes(slot.id)
+                    );
 
                   return (
                     <div
@@ -898,6 +958,21 @@ export function ScheduleCalendar({
                           🚶
                         </span>
                       ) : null}
+                      {showAddToStrip ? (
+                        <button
+                          type="button"
+                          className={`touch-manipulation absolute right-0.5 z-[30] flex h-9 min-h-9 min-w-9 items-center justify-center border-2 border-zinc-900 bg-[var(--accent)] text-xs font-bold leading-none text-white ${
+                            walkOnlyClash ? "top-7" : "top-0.5"
+                          }`}
+                          aria-label={`Add ${slot.artistName} to plan strip`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addSlotToStrip(slot);
+                          }}
+                        >
+                          +
+                        </button>
+                      ) : null}
                       <div className="relative z-[2] flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
                         <p className="shrink-0 break-words text-[11px] font-semibold leading-snug text-zinc-900 [overflow-wrap:anywhere]">
                           {slot.artistName}
@@ -934,7 +1009,7 @@ export function ScheduleCalendar({
                                           }
                                         })();
                                       }}
-                                      className={`min-h-[18px] min-w-[18px] border px-0.5 text-[11px] leading-none transition-colors ${
+                                      className={`touch-manipulation min-h-9 min-w-9 border px-0.5 text-[11px] leading-none transition-colors sm:min-h-[18px] sm:min-w-[18px] ${
                                         active
                                           ? "border-zinc-900 bg-zinc-900 text-white"
                                           : "border-zinc-300 bg-white text-zinc-800 hover:border-zinc-900"

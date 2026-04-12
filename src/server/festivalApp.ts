@@ -1361,32 +1361,63 @@ export function createFestivalApp(apiBasePath: string): Hono {
       return c.json({ error: "invalid_json" }, 400);
     }
     const intents = Array.isArray(body.intents) ? body.intents : [];
+    const rows = intents
+      .map((row) => {
+        const slotId = String(row.slotId ?? "").trim();
+        const wants = Boolean(row.wants);
+        const scheduleKeepExplicit =
+          row.scheduleKeep !== undefined && row.scheduleKeep !== null
+            ? Boolean(row.scheduleKeep)
+            : undefined;
+        const planFrom =
+          row.planFrom != null && String(row.planFrom).trim()
+            ? String(row.planFrom).trim()
+            : null;
+        const planTo =
+          row.planTo != null && String(row.planTo).trim()
+            ? String(row.planTo).trim()
+            : null;
+        return {
+          slotId,
+          wants,
+          scheduleKeepExplicit,
+          planFrom,
+          planTo,
+        };
+      })
+      .filter((row) => row.slotId.length > 0);
+
     await prisma.$transaction(async (tx) => {
-      await tx.memberSlotIntent.deleteMany({
-        where: { squadId, memberId: member.id },
-      });
-      const rows = intents
-        .map((row) => ({
-          squadId,
-          memberId: member.id,
-          slotId: String(row.slotId ?? ""),
-          wants: Boolean(row.wants),
-          scheduleKeep:
-            row.scheduleKeep !== undefined && row.scheduleKeep !== null
-              ? Boolean(row.scheduleKeep)
-              : false,
-          planFrom:
-            row.planFrom != null && String(row.planFrom).trim()
-              ? String(row.planFrom).trim()
-              : null,
-          planTo:
-            row.planTo != null && String(row.planTo).trim()
-              ? String(row.planTo).trim()
-              : null,
-        }))
-        .filter((row) => row.slotId.length > 0);
-      if (rows.length > 0) {
-        await tx.memberSlotIntent.createMany({ data: rows });
+      for (const row of rows) {
+        const existing = await tx.memberSlotIntent.findUnique({
+          where: {
+            memberId_slotId: { memberId: member.id, slotId: row.slotId },
+          },
+        });
+        const scheduleKeep =
+          row.scheduleKeepExplicit !== undefined
+            ? row.scheduleKeepExplicit
+            : (existing?.scheduleKeep ?? false);
+        await tx.memberSlotIntent.upsert({
+          where: {
+            memberId_slotId: { memberId: member.id, slotId: row.slotId },
+          },
+          create: {
+            squadId,
+            memberId: member.id,
+            slotId: row.slotId,
+            wants: row.wants,
+            scheduleKeep,
+            planFrom: row.planFrom,
+            planTo: row.planTo,
+          },
+          update: {
+            wants: row.wants,
+            scheduleKeep,
+            planFrom: row.planFrom,
+            planTo: row.planTo,
+          },
+        });
       }
     });
     const snap = await buildSnapshot(prisma, member.squadId, member.id);

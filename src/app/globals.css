@@ -30,3 +30,10 @@ body {
 .clasher-scan-bar {
   animation: clasher-scan-bar 1.2s ease-in-out infinite;
 }
+
+@layer utilities {
+  .touch-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
