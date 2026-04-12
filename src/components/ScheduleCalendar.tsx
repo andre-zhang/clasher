@@ -107,7 +107,6 @@ export function ScheduleCalendar({
   onSlotOpenDetail?: (slot: Slot) => void;
   buildPlanner?: {
     memberId: string;
-    allowClashes: boolean;
     /** Bump after a successful strip apply so the strip reloads from server intents. */
     stripHydrateKey?: number;
     onApplyPlan: (
@@ -652,17 +651,13 @@ export function ScheduleCalendar({
     });
   }
 
-  function addSlotToStrip(slot: Slot) {
-    if (!buildPlanner || !group || !activeDay) return;
-    if (slot.dayLabel.trim() !== activeDay.trim()) return;
-    if (stripIds.includes(slot.id)) return;
-    if (stripScope === "group") {
-      setStripUserAddedIds((prev) => new Set(prev).add(slot.id));
-    }
-    const next = [...stripIds, slot.id];
-    setStripIds(next);
-    setStripWindows(recomputeStripWindowsSequential(group, next, schedule));
-  }
+  const canDragSlotToStrip = Boolean(
+    buildPlanner &&
+      group &&
+      activeDay &&
+      !stripResize &&
+      !stripMove
+  );
 
   if (!schedule.length) {
     return <p className="text-sm text-zinc-600">No slots.</p>;
@@ -729,7 +724,6 @@ export function ScheduleCalendar({
               setStripIds={setStripIds}
               windows={stripWindows}
               setWindows={setStripWindows}
-              allowClashes={buildPlanner.allowClashes}
               stripScope={stripScope}
               setStripScope={setStripScope}
               stripUserAddedIds={stripUserAddedIds}
@@ -897,26 +891,12 @@ export function ScheduleCalendar({
                     clashOverlapIntervalsBySlot.get(slot.id) ?? [];
                   const walkOnlyClash = clashWalkOnlySlotIds.has(slot.id);
                   const showClashStripe = ovSegs.length > 0 || walkOnlyClash;
-                  const showAddToStrip =
-                    Boolean(
-                      buildPlanner &&
-                        showAllStages &&
-                        group &&
-                        activeDay &&
-                        !stripIds.includes(slot.id)
-                    );
-
                   return (
                     <div
                       key={slot.id}
-                      draggable={Boolean(
-                        buildPlanner &&
-                          showAllStages &&
-                          !stripResize &&
-                          !stripMove
-                      )}
+                      draggable={canDragSlotToStrip}
                       onDragStart={
-                        buildPlanner && showAllStages
+                        canDragSlotToStrip
                           ? (e) => {
                               e.dataTransfer.setData("text/plain", slot.id);
                               e.dataTransfer.effectAllowed = "copyMove";
@@ -957,21 +937,6 @@ export function ScheduleCalendar({
                         >
                           🚶
                         </span>
-                      ) : null}
-                      {showAddToStrip ? (
-                        <button
-                          type="button"
-                          className={`touch-manipulation absolute right-0.5 z-[30] flex h-9 min-h-9 min-w-9 items-center justify-center border-2 border-zinc-900 bg-[var(--accent)] text-xs font-bold leading-none text-white ${
-                            walkOnlyClash ? "top-7" : "top-0.5"
-                          }`}
-                          aria-label={`Add ${slot.artistName} to plan strip`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            addSlotToStrip(slot);
-                          }}
-                        >
-                          +
-                        </button>
                       ) : null}
                       <div className="relative z-[2] flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
                         <p className="shrink-0 break-words text-[11px] font-semibold leading-snug text-zinc-900 [overflow-wrap:anywhere]">

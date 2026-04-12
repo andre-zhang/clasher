@@ -13,10 +13,7 @@ import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
 import { parseHm } from "@/lib/timeHm";
-import {
-  clampPlanWindowToSlot,
-  stripWindowsInfeasiblePair,
-} from "@/lib/walkFeasibility";
+import { clampPlanWindowToSlot } from "@/lib/walkFeasibility";
 import type { FestivalSnapshot } from "@/lib/types";
 
 type Slot = FestivalSnapshot["schedule"][number];
@@ -75,7 +72,6 @@ export function SchedulePlannerStrip({
   setStripIds,
   windows,
   setWindows,
-  allowClashes,
   stripScope,
   setStripScope,
   stripUserAddedIds,
@@ -100,7 +96,6 @@ export function SchedulePlannerStrip({
   setWindows: React.Dispatch<
     React.SetStateAction<Record<string, { planFrom: string; planTo: string }>>
   >;
-  allowClashes: boolean;
   stripScope: "mine" | "group";
   setStripScope: (v: "mine" | "group") => void;
   /** In group mode: slots the user added from the grid (not yet on server wants). */
@@ -177,25 +172,6 @@ export function SchedulePlannerStrip({
   const orderedSlots = stripIds
     .map((id) => slotsById.get(id))
     .filter((s): s is Slot => Boolean(s));
-
-  const orderedSlotsForClash = useMemo(
-    () =>
-      mySaveOrdered
-        .map((id) => slotsById.get(id))
-        .filter((s): s is Slot => Boolean(s)),
-    [mySaveOrdered, slotsById]
-  );
-
-  const clash = useMemo(
-    () =>
-      stripWindowsInfeasiblePair(
-        group,
-        orderedSlotsForClash,
-        windows,
-        allowClashes
-      ),
-    [group, orderedSlotsForClash, windows, allowClashes]
-  );
 
   const walkBands = useMemo(
     () => walkBandsBetweenOrderedActs(group, orderedSlots, windows),
@@ -310,9 +286,8 @@ export function SchedulePlannerStrip({
   useEffect(() => {
     const saveOrdered = mySaveOrdered;
     const t = window.setTimeout(() => {
-      if (clash && !allowClashes) return;
       const g = groupRef.current;
-      const winsForSave = recomputeStripWindowsSequential(
+      const winsSeq = recomputeStripWindowsSequential(
         g,
         saveOrdered,
         schedule
@@ -333,7 +308,10 @@ export function SchedulePlannerStrip({
       for (const id of saveOrdered) {
         const s = slotsById.get(id);
         if (!s) continue;
-        const w = winsForSave[id] ?? { planFrom: s.start, planTo: s.end };
+        const fromUi = windows[id];
+        const fromSeq = winsSeq[id];
+        const w =
+          fromUi ?? fromSeq ?? { planFrom: s.start, planTo: s.end };
         const c = clampPlanWindowToSlot(s, w.planFrom, w.planTo);
         patches.push({
           slotId: id,
@@ -360,15 +338,7 @@ export function SchedulePlannerStrip({
       })();
     }, 500);
     return () => window.clearTimeout(t);
-  }, [
-    mySaveSig,
-    windowsSig,
-    clash,
-    allowClashes,
-    plannerMemberId,
-    slotsById,
-    schedule,
-  ]);
+  }, [mySaveSig, windowsSig, plannerMemberId, slotsById, schedule]);
 
   function applyDraftTimes() {
     if (!editId) return;
@@ -527,9 +497,9 @@ export function SchedulePlannerStrip({
             >
               <div
                 data-strip-reorder
-                className="absolute bottom-0 left-0 top-0 z-[26] flex border-r border-zinc-200 bg-zinc-100/90 md:w-2 md:min-w-0"
+                className="absolute bottom-0 left-0 top-0 z-[26] flex flex-row border-r border-zinc-200 bg-zinc-100/90"
               >
-                <div className="flex w-10 shrink-0 flex-col md:hidden">
+                <div className="flex w-10 shrink-0 flex-col border-r border-zinc-200 md:hidden">
                   <button
                     type="button"
                     className="touch-manipulation flex min-h-10 flex-1 items-center justify-center border-b border-zinc-200 text-xs font-bold text-zinc-700"
@@ -561,19 +531,19 @@ export function SchedulePlannerStrip({
                   data-strip-drag
                   draggable={!resizeBusy && !moveBusy}
                   aria-label="Reorder in strip"
-                  className="hidden w-2 min-w-[8px] cursor-grab items-center justify-center active:cursor-grabbing md:flex"
+                  className="hidden min-h-[2.5rem] w-7 min-w-[28px] shrink-0 cursor-grab touch-none select-none items-center justify-center border-r border-zinc-200 active:cursor-grabbing md:flex"
                   onDragStart={(e) => {
                     e.stopPropagation();
                     e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
                     e.dataTransfer.effectAllowed = "move";
                   }}
                 >
-                  <span className="select-none text-[9px] leading-none text-zinc-400">
-                    ⋮
+                  <span className="pointer-events-none text-[11px] leading-none text-zinc-500">
+                    ⋮⋮
                   </span>
                 </div>
               </div>
-              <div className="relative min-h-0 flex-1 pl-10 md:pl-2">
+              <div className="relative min-h-0 flex-1 pl-10 md:pl-8">
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="start"

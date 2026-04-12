@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 
-import { ClasherCheckbox } from "@/components/ClasherCheckbox";
 import { ScanningOverlay } from "@/components/ScanningOverlay";
 import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { useClasher } from "@/context/ClasherContext";
@@ -24,7 +23,6 @@ export default function SchedulePage() {
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [plannerClashes, setPlannerClashes] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [stripHydrateKey, setStripHydrateKey] = useState(0);
   const galleryFileRef = useRef<HTMLInputElement>(null);
@@ -306,19 +304,6 @@ export default function SchedulePage() {
         </div>
       ) : null}
 
-      <section className="border-2 border-zinc-900 bg-white p-4 shadow-[2px_2px_0_0_#18181b]">
-        <h2 className="text-sm font-bold text-zinc-900">Timetable</h2>
-        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-          <ClasherCheckbox
-            size="sm"
-            checked={plannerClashes}
-            onChange={setPlannerClashes}
-          >
-            Allow clashes
-          </ClasherCheckbox>
-        </div>
-      </section>
-
       <ScheduleCalendar
         schedule={group.schedule}
         allMemberSlotIntents={group.allMemberSlotIntents}
@@ -330,7 +315,6 @@ export default function SchedulePage() {
         onSetRating={(artistId, tier) => setRating(artistId, tier)}
         buildPlanner={{
           memberId: session.memberId,
-          allowClashes: plannerClashes,
           stripHydrateKey,
           onApplyPlan: async (patches) => {
             await putSlotIntents(patches);
