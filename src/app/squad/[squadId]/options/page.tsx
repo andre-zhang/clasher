@@ -39,12 +39,9 @@ export default function OptionsPage() {
   const [mapBusy, setMapBusy] = useState(false);
   const [lineupScanBusy, setLineupScanBusy] = useState(false);
   const [scheduleScanBusy, setScheduleScanBusy] = useState(false);
-  const mapCameraRef = useRef<HTMLInputElement>(null);
-  const mapGalleryRef = useRef<HTMLInputElement>(null);
-  const lineupCameraRef = useRef<HTMLInputElement>(null);
-  const lineupGalleryRef = useRef<HTMLInputElement>(null);
-  const scheduleCameraRef = useRef<HTMLInputElement>(null);
-  const scheduleGalleryRef = useRef<HTMLInputElement>(null);
+  const mapFileRef = useRef<HTMLInputElement>(null);
+  const lineupFileRef = useRef<HTMLInputElement>(null);
+  const scheduleFileRef = useRef<HTMLInputElement>(null);
 
   const [aliasEdit, setAliasEdit] = useState<Record<string, string>>({});
 
@@ -80,7 +77,7 @@ export default function OptionsPage() {
       await navigator.clipboard.writeText(url);
       setMsg("Copied.");
     } catch {
-      setErr("Copy blocked — select the URL manually.");
+      setErr("Copy blocked. Select the URL manually.");
     }
   }
 
@@ -241,17 +238,7 @@ export default function OptionsPage() {
       <section className="space-y-3 border-t border-zinc-300 pt-4">
         <h2 className="text-sm font-bold text-zinc-900">Import lineup</h2>
         <input
-          ref={lineupCameraRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="sr-only"
-          aria-hidden
-          tabIndex={-1}
-          onChange={(e) => void onLineupFile(e)}
-        />
-        <input
-          ref={lineupGalleryRef}
+          ref={lineupFileRef}
           type="file"
           accept="image/*"
           className="sr-only"
@@ -259,40 +246,20 @@ export default function OptionsPage() {
           tabIndex={-1}
           onChange={(e) => void onLineupFile(e)}
         />
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={lineupScanBusy}
-            onClick={() => lineupCameraRef.current?.click()}
-            className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-semibold text-zinc-900 shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
-          >
-            {lineupScanBusy ? "Working…" : "Lineup — take photo"}
-          </button>
-          <button
-            type="button"
-            disabled={lineupScanBusy}
-            onClick={() => lineupGalleryRef.current?.click()}
-            className="touch-manipulation border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
-          >
-            {lineupScanBusy ? "Working…" : "Lineup — upload image"}
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={lineupScanBusy}
+          onClick={() => lineupFileRef.current?.click()}
+          className="touch-manipulation border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:py-1.5"
+        >
+          {lineupScanBusy ? "Working…" : "Upload lineup image"}
+        </button>
       </section>
 
       <section className="space-y-3 border-t border-zinc-300 pt-4">
         <h2 className="text-sm font-bold text-zinc-900">Import schedule</h2>
         <input
-          ref={scheduleCameraRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="sr-only"
-          aria-hidden
-          tabIndex={-1}
-          onChange={(e) => void onScheduleFiles(e)}
-        />
-        <input
-          ref={scheduleGalleryRef}
+          ref={scheduleFileRef}
           type="file"
           accept="image/*"
           multiple
@@ -301,40 +268,20 @@ export default function OptionsPage() {
           tabIndex={-1}
           onChange={(e) => void onScheduleFiles(e)}
         />
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={scheduleScanBusy}
-            onClick={() => scheduleCameraRef.current?.click()}
-            className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-semibold text-zinc-900 shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
-          >
-            {scheduleScanBusy ? "Working…" : "Schedule — take photo"}
-          </button>
-          <button
-            type="button"
-            disabled={scheduleScanBusy}
-            onClick={() => scheduleGalleryRef.current?.click()}
-            className="touch-manipulation border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
-          >
-            {scheduleScanBusy ? "Working…" : "Schedule — upload images"}
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={scheduleScanBusy}
+          onClick={() => scheduleFileRef.current?.click()}
+          className="touch-manipulation border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:py-1.5"
+        >
+          {scheduleScanBusy ? "Working…" : "Upload schedule images"}
+        </button>
       </section>
 
       <section className="space-y-3 border-t border-zinc-300 pt-4">
         <h2 className="text-sm font-bold text-zinc-900">Festival map</h2>
         <input
-          ref={mapCameraRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="sr-only"
-          aria-hidden
-          tabIndex={-1}
-          onChange={(e) => void onMapUploadAndAnalyze(e)}
-        />
-        <input
-          ref={mapGalleryRef}
+          ref={mapFileRef}
           type="file"
           accept="image/*"
           className="sr-only"
@@ -342,28 +289,18 @@ export default function OptionsPage() {
           tabIndex={-1}
           onChange={(e) => void onMapUploadAndAnalyze(e)}
         />
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={mapBusy}
-            onClick={() => mapCameraRef.current?.click()}
-            className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-semibold text-zinc-900 shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
-          >
-            {mapBusy ? "Working…" : "Take photo of map"}
-          </button>
-          <button
-            type="button"
-            disabled={mapBusy}
-            onClick={() => mapGalleryRef.current?.click()}
-            className="touch-manipulation border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
-          >
-            {mapBusy ? "Working…" : "Upload map image"}
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={mapBusy}
+          onClick={() => mapFileRef.current?.click()}
+          className="touch-manipulation border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:py-1.5"
+        >
+          {mapBusy ? "Working…" : "Upload map image"}
+        </button>
         {group.mapStageLabels.length > 0 ? (
           <div className="space-y-2">
             <p className="text-xs font-semibold text-zinc-800">
-              Map labels → schedule stage
+              Map labels to schedule stage
             </p>
             <div className="touch-scroll max-h-56 space-y-1 overflow-y-auto text-xs">
               {group.mapStageLabels.map((label) => (
@@ -384,7 +321,7 @@ export default function OptionsPage() {
                       }))
                     }
                   >
-                    <option value="">—</option>
+                    <option value="">-</option>
                     {scheduleStages.map((s) => (
                       <option key={s} value={s}>
                         {s}

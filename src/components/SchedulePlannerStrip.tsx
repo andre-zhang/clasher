@@ -378,7 +378,7 @@ export function SchedulePlannerStrip({
 
   return (
     <div
-      className={`flex w-[min(92vw,280px)] min-w-[176px] max-w-[300px] shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 sm:w-[min(260px,38vw)] sm:min-w-[200px] ${
+      className={`flex w-[min(90vw,276px)] min-w-[168px] max-w-[300px] shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 sm:w-[min(260px,38vw)] sm:min-w-[200px] ${
         dragOver ? "ring-2 ring-zinc-900 ring-offset-1" : ""
       }`}
       onDragOver={(e) => {
@@ -419,7 +419,7 @@ export function SchedulePlannerStrip({
       </div>
 
       <div
-        className="relative w-full touch-pan-y overflow-hidden border-b border-zinc-200"
+        className="relative w-full touch-pan-y overflow-hidden overscroll-y-contain border-b border-zinc-200 [-webkit-tap-highlight-color:transparent]"
         style={{ height: timelineBodyPx, minHeight: 120 }}
       >
         {walkBands.map((band, i) => {
@@ -487,7 +487,8 @@ export function SchedulePlannerStrip({
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="start"
-                    className="z-30 min-h-10 w-full shrink-0 cursor-ns-resize touch-none sm:min-h-9"
+                    className="z-30 min-h-11 w-full shrink-0 cursor-ns-resize touch-none sm:min-h-9"
+                    style={{ touchAction: "none" }}
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -495,12 +496,12 @@ export function SchedulePlannerStrip({
                     }}
                   />
                 ) : null}
-                <div className="relative flex min-h-0 flex-1 flex-col px-0.5 pb-1 pt-0.5">
+                <div className="relative flex min-h-0 flex-1 flex-col justify-center px-2 pb-1 pt-0.5 pr-11 text-center sm:pr-10">
                   <p
                     data-strip-drag
                     draggable={!resizeBusy && !moveBusy}
                     aria-label="Drag to reorder in plan"
-                    className="touch-none select-none text-[11px] font-bold leading-[1.15] text-zinc-900 [overflow-wrap:anywhere] cursor-grab active:cursor-grabbing"
+                    className="touch-none select-none text-[11px] font-bold leading-snug text-zinc-900 [overflow-wrap:anywhere] cursor-grab active:cursor-grabbing"
                     onDragStart={(e) => {
                       e.stopPropagation();
                       e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
@@ -517,7 +518,7 @@ export function SchedulePlannerStrip({
                     }`}
                     onPointerDown={(e) => bodyPointerDown(slot, e)}
                   >
-                    <p className="text-[8px] leading-tight text-zinc-500 [overflow-wrap:anywhere]">
+                    <p className="text-[8px] leading-snug text-zinc-500 [overflow-wrap:anywhere]">
                       {slot.stageName}
                     </p>
                   </div>
@@ -525,7 +526,8 @@ export function SchedulePlannerStrip({
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="end"
-                    className="z-30 min-h-10 w-full shrink-0 cursor-ns-resize touch-none sm:min-h-9"
+                    className="z-30 min-h-11 w-full shrink-0 cursor-ns-resize touch-none sm:min-h-9"
+                    style={{ touchAction: "none" }}
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -537,7 +539,7 @@ export function SchedulePlannerStrip({
               {canRemoveFromMyPlan ? (
                 <button
                   type="button"
-                  className="touch-manipulation absolute right-0.5 top-0.5 z-[25] flex h-8 min-h-8 min-w-8 items-center justify-center border border-zinc-400 bg-white text-sm leading-none text-red-800"
+                  className="touch-manipulation absolute right-0.5 top-0.5 z-[25] flex min-h-11 min-w-11 items-center justify-center border border-zinc-400 bg-white text-base leading-none text-red-800 sm:min-h-9 sm:min-w-9 sm:text-sm"
                   aria-label="Remove from strip"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -597,7 +599,7 @@ export function SchedulePlannerStrip({
               {dialogSlot.artistName}
             </p>
             <p className="font-mono text-[10px] text-zinc-600">
-              {dialogSlot.start}–{dialogSlot.end} · {dialogSlot.stageName}
+              {dialogSlot.start}-{dialogSlot.end} · {dialogSlot.stageName}
             </p>
             <label className="block text-[10px] font-medium text-zinc-800">
               From

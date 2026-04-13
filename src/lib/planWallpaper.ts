@@ -19,7 +19,7 @@ export type PlanCalendarSlot = {
   stage: string;
 };
 
-/** Soft color blocks — readable, not neon. */
+/** Soft color blocks, readable, not neon. */
 const STAGE_BG = [
   "rgba(129,140,248,0.45)",
   "rgba(244,114,182,0.34)",
@@ -47,8 +47,8 @@ function lineForMemberSlot(
   const win = effectiveMemberSlotPlanWindow(group, memberId, slot);
   const time =
     win.planFrom && win.planTo
-      ? `${win.planFrom}–${win.planTo}`
-      : `${slot.start}–${slot.end}`;
+      ? `${win.planFrom}-${win.planTo}`
+      : `${slot.start}-${slot.end}`;
   return {
     dayLabel: slot.dayLabel.trim(),
     time,
@@ -72,7 +72,7 @@ export function buildEveryonePlanLines(
     .sort((a, b) => slotSortKey(a) - slotSortKey(b))
     .map((s) => ({
       dayLabel: s.dayLabel.trim(),
-      time: `${s.start}–${s.end}`,
+      time: `${s.start}-${s.end}`,
       act: s.artistName,
       stage: s.stageName.trim(),
     }));
@@ -140,35 +140,101 @@ export function buildEveryoneCalendarSlotsForDay(
 /** @deprecated Use buildEveryoneCalendarSlotsForDay */
 export const buildUnionCalendarSlotsForDay = buildEveryoneCalendarSlotsForDay;
 
-function maxFontForText(
+const ACT_FONT_FAMILY =
+  "700 {px}px system-ui, -apple-system, Segoe UI, sans-serif";
+const STAGE_FONT_FAMILY =
+  "600 {px}px system-ui, -apple-system, Segoe UI, sans-serif";
+
+function lineHeightPx(fontPx: number): number {
+  return fontPx * 1.15;
+}
+
+type SlotBox = { y0: number; h: number; w: number; x: number };
+
+/**
+ * One shared act/stage size (as large as possible for all slots), then per-slot
+ * shrink only when width still overflows at that size.
+ */
+function planBlockFonts(
   ctx: CanvasRenderingContext2D,
-  text: string,
-  maxW: number,
-  maxH: number,
-  minPx: number,
-  maxPx: number
-): number {
-  if (!text.trim()) return minPx;
-  let lo = minPx;
-  let hi = maxPx;
-  let best = minPx;
+  slots: PlanCalendarSlot[],
+  boxes: SlotBox[],
+  innerPad: number,
+  minAct: number,
+  maxAct: number
+): { act: number[]; stage: number[] } {
+  const n = slots.length;
+  const act: number[] = new Array(n);
+  const stage: number[] = new Array(n);
+  const gap = 4;
+
+  let lo = minAct;
+  let hi = maxAct;
+  let uniformAct = minAct;
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2);
-    ctx.font = `700 ${mid}px system-ui, -apple-system, Segoe UI, sans-serif`;
-    const m = ctx.measureText(text);
-    const w = m.width;
-    const h = mid * 1.15;
-    if (w <= maxW && h <= maxH) {
-      best = mid;
+    const st = Math.max(8, Math.round(mid * 0.52));
+    let ok = true;
+    for (let i = 0; i < n; i++) {
+      const s = slots[i]!;
+      const b = boxes[i]!;
+      const maxTextW = b.w - innerPad * 2;
+      const stackH =
+        innerPad * 2 +
+        lineHeightPx(mid) +
+        gap +
+        lineHeightPx(st);
+      if (stackH > b.h || maxTextW <= 0) {
+        ok = false;
+        break;
+      }
+      ctx.font = ACT_FONT_FAMILY.replace("{px}", String(mid));
+      if (ctx.measureText(s.act).width > maxTextW) {
+        ok = false;
+        break;
+      }
+      ctx.font = STAGE_FONT_FAMILY.replace("{px}", String(st));
+      if (ctx.measureText(s.stage).width > maxTextW) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) {
+      uniformAct = mid;
       lo = mid + 1;
     } else {
       hi = mid - 1;
     }
   }
-  return best;
+
+  const uniformStage = Math.max(8, Math.round(uniformAct * 0.52));
+  for (let i = 0; i < n; i++) {
+    const s = slots[i]!;
+    const b = boxes[i]!;
+    const maxTextW = Math.max(4, b.w - innerPad * 2);
+    let a = uniformAct;
+    let st = uniformStage;
+    const fits = (): boolean => {
+      const stackH =
+        innerPad * 2 + lineHeightPx(a) + gap + lineHeightPx(st);
+      if (stackH > b.h) return false;
+      ctx.font = ACT_FONT_FAMILY.replace("{px}", String(a));
+      if (ctx.measureText(s.act).width > maxTextW) return false;
+      ctx.font = STAGE_FONT_FAMILY.replace("{px}", String(st));
+      if (ctx.measureText(s.stage).width > maxTextW) return false;
+      return true;
+    };
+    while (!fits() && a > minAct) {
+      a -= 1;
+      st = Math.max(8, Math.round(a * 0.52));
+    }
+    act[i] = a;
+    stage[i] = st;
+  }
+  return { act, stage };
 }
 
-/** Portrait 9:16 — top ~⅓ kept visually empty for lock-screen clock; colored grid below. */
+/** Portrait 9:16; top ~1/3 reserved for lock-screen clock, grid below. */
 export function renderPlanWallpaperCalendarPng(
   dayLabel: string,
   title: string,
@@ -311,6 +377,10 @@ export function renderPlanWallpaperCalendarPng(
     return STAGE_BG[h % STAGE_BG.length]!;
   };
 
+  const innerPad = 10;
+  const gap = 4;
+  type Placed = { slot: PlanCalendarSlot; y0: number; h: number; x: number; w: number };
+  const placed: Placed[] = [];
   for (const s of slots) {
     const ss = parseHmRelaxed(s.start);
     const ee = parseHmRelaxed(s.end);
@@ -320,7 +390,27 @@ export function renderPlanWallpaperCalendarPng(
     const h = Math.max(y1 - y0, 10);
     const x = gridLeft + 2;
     const w = gridW - 4;
+    placed.push({ slot: s, y0, h, x, w });
+  }
 
+  const boxes: SlotBox[] = placed.map((p) => ({
+    y0: p.y0,
+    h: p.h,
+    w: p.w,
+    x: p.x,
+  }));
+  const slotArr = placed.map((p) => p.slot);
+  const { act: actFonts, stage: stageFonts } =
+    slotArr.length > 0
+      ? planBlockFonts(ctx, slotArr, boxes, innerPad, 10, 52)
+      : { act: [], stage: [] };
+
+  const prevBaseline = ctx.textBaseline;
+  ctx.textBaseline = "top";
+
+  placed.forEach((p, i) => {
+    const s = p.slot;
+    const { y0, h, x, w } = p;
     ctx.fillStyle = stageBg(s.stage);
     ctx.globalAlpha = 0.98;
     ctx.fillRect(x, y0, w, h);
@@ -329,18 +419,25 @@ export function renderPlanWallpaperCalendarPng(
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y0, w, h);
 
-    const innerPad = 10;
-    const maxTextW = w - innerPad * 2;
-    const maxTextH = Math.max(22, h - innerPad * 2 - 28);
-    const fp = maxFontForText(ctx, s.act, maxTextW, Math.max(18, maxTextH * 0.55), 14, 44);
+    const actPx = actFonts[i] ?? 12;
+    const stPx = stageFonts[i] ?? 8;
+    const tx = x + innerPad;
+    const ty = y0 + innerPad;
+
     ctx.fillStyle = "#0f172a";
-    ctx.font = `700 ${fp}px system-ui, -apple-system, Segoe UI, sans-serif`;
-    ctx.fillText(s.act, x + innerPad, y0 + innerPad + fp);
-    const sp = Math.min(20, Math.max(12, Math.round(fp * 0.45)));
-    ctx.font = `600 ${sp}px system-ui, -apple-system, Segoe UI, sans-serif`;
+    ctx.font = ACT_FONT_FAMILY.replace("{px}", String(actPx));
+    ctx.fillText(s.act, tx, ty);
+
     ctx.fillStyle = "#475569";
-    ctx.fillText(s.stage, x + innerPad, y0 + innerPad + fp + sp + 4);
-  }
+    ctx.font = STAGE_FONT_FAMILY.replace("{px}", String(stPx));
+    ctx.fillText(
+      s.stage,
+      tx,
+      ty + lineHeightPx(actPx) + gap
+    );
+  });
+
+  ctx.textBaseline = prevBaseline;
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(

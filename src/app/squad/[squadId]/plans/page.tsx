@@ -17,7 +17,7 @@ function planDetailSummary(
   memberId: string,
   slot: FestivalSnapshot["schedule"][0]
 ): { listingTime: string; listingWhere: string; planLine: string } {
-  const listingTime = `${slot.start}–${slot.end}`;
+  const listingTime = `${slot.start}-${slot.end}`;
   const listingWhere = `${slot.stageName} · ${slot.dayLabel}`;
   if (!effectiveMemberWantsSlot(group, memberId, slot.id)) {
     return {
@@ -29,14 +29,13 @@ function planDetailSummary(
   const w = effectiveMemberSlotPlanWindow(group, memberId, slot);
   const planLine =
     w.planFrom && w.planTo
-      ? `${w.planFrom}–${w.planTo}`
+      ? `${w.planFrom}-${w.planTo}`
       : "Full slot (no partial window)";
   return { listingTime, listingWhere, planLine };
 }
 
 export default function PlansPage() {
-  const { session, group, putSlotIntents, addSlotComment, setRating } =
-    useClasher();
+  const { session, group, putSlotIntents, addSlotComment } = useClasher();
   const [tab, setTab] = useState<"person" | "everyone">("person");
   const [memberId, setMemberId] = useState<string | null>(null);
   const [day, setDay] = useState<string | null>(null);
@@ -154,11 +153,7 @@ export default function PlansPage() {
               visibilityMode="effectivePlan"
               showEffectivePlanLayer
               singleColumnTimeline
-              onSetRating={
-                activeMember === session.memberId
-                  ? (artistId, tier) => setRating(artistId, tier)
-                  : undefined
-              }
+              hideSlotReactions
               onSlotOpenDetail={(slot) => setPlanDetailSlotId(slot.id)}
             />
           ) : null}

@@ -94,6 +94,8 @@ export function ScheduleCalendar({
   buildPlanner,
   /** One combined time column (like Everyone plan view), not split by stage. */
   singleColumnTimeline = false,
+  /** Hide tier emoji row on slot cards (e.g. Plans). */
+  hideSlotReactions = false,
 }: {
   schedule: Slot[];
   memberId?: string;
@@ -108,6 +110,7 @@ export function ScheduleCalendar({
   scheduleViewerMemberId?: string;
   onSlotOpenDetail?: (slot: Slot) => void;
   singleColumnTimeline?: boolean;
+  hideSlotReactions?: boolean;
   buildPlanner?: {
     memberId: string;
     /** Bump after a successful strip apply so the strip reloads from server intents. */
@@ -954,7 +957,7 @@ export function ScheduleCalendar({
                             }
                           : undefined
                       }
-                      title={`${slot.artistName} ${slot.start}–${slot.end}`}
+                      title={`${slot.artistName} ${slot.start}-${slot.end}`}
                       role={openDetailOrPanel ? "button" : undefined}
                       tabIndex={openDetailOrPanel ? 0 : undefined}
                       onClick={openDetailOrPanel ? handleCardActivate : undefined}
@@ -994,7 +997,8 @@ export function ScheduleCalendar({
                           {slot.artistName}
                         </p>
 
-                        {showQuickRate || squadPills.length > 0 ? (
+                        {!hideSlotReactions &&
+                        (showQuickRate || squadPills.length > 0) ? (
                           <div
                             className="flex flex-wrap items-center gap-1"
                             onClick={stopBubble}
@@ -1103,7 +1107,7 @@ export function ScheduleCalendar({
               {noteSlot.artistName}
             </h3>
             <p className="font-mono text-xs text-zinc-600">
-              {noteSlot.dayLabel} · {noteSlot.stageName} · {noteSlot.start}–
+              {noteSlot.dayLabel} · {noteSlot.stageName} · {noteSlot.start}-
               {noteSlot.end}
             </p>
             {onSetRating && rateMemberId && group ? (
