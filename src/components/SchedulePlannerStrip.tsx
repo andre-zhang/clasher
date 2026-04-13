@@ -83,7 +83,6 @@ export function SchedulePlannerStrip({
   onStripUserRemovedUserAdd,
   onApply,
   onStripTimeResize,
-  resizeBusy,
   stripPinned,
   onStripPinnedChange,
   timelineMinM,
@@ -111,7 +110,6 @@ export function SchedulePlannerStrip({
     edge: "start" | "end",
     e: ReactPointerEvent
   ) => void;
-  resizeBusy?: boolean;
   /** When true, outer calendar keeps this column pinned like the time rail while scrolling. */
   stripPinned?: boolean;
   onStripPinnedChange?: (pinned: boolean) => void;
@@ -344,12 +342,7 @@ export function SchedulePlannerStrip({
   function bodyPointerDown(slot: Slot, e: React.PointerEvent) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     const t = e.target as HTMLElement | null;
-    if (
-      t?.closest(
-        "button,a,input,textarea,[data-strip-resize],[data-strip-reorder]"
-      )
-    )
-      return;
+    if (t?.closest("button,a,input,textarea,[data-strip-resize]")) return;
     const y0 = e.clientY;
     const pid = e.pointerId;
     let dragLikely = false;
@@ -457,7 +450,7 @@ export function SchedulePlannerStrip({
           );
         })}
 
-        {orderedSlots.map((slot, idx) => {
+        {orderedSlots.map((slot) => {
           const packItem = itemById.get(slot.id);
           if (!packItem) return null;
           const canRemoveFromMyPlan =
@@ -477,6 +470,28 @@ export function SchedulePlannerStrip({
             STRIP_EDGE_HIT_PX,
             Math.max(8, Math.floor((heightPx - 6) / 2))
           );
+          const wCur = windows[slot.id] ?? {
+            planFrom: slot.start,
+            planTo: slot.end,
+          };
+          const slotLoM = parseHm(slot.start);
+          const slotHiM = parseHm(slot.end);
+          let planFromM = parseHm(wCur.planFrom);
+          let planToM = parseHm(wCur.planTo);
+          if (Number.isNaN(planFromM)) planFromM = slotLoM;
+          if (Number.isNaN(planToM)) planToM = slotHiM;
+          let ariaMin = 0;
+          let ariaMax = 1439;
+          if (!Number.isNaN(slotLoM) && !Number.isNaN(slotHiM)) {
+            ariaMin = Math.min(slotLoM, slotHiM);
+            ariaMax = Math.max(slotLoM, slotHiM);
+          } else if (!Number.isNaN(slotLoM)) {
+            ariaMin = slotLoM;
+            ariaMax = slotLoM;
+          } else if (!Number.isNaN(slotHiM)) {
+            ariaMin = slotHiM;
+            ariaMax = slotHiM;
+          }
           return (
             <div
               key={slot.id}
@@ -487,31 +502,24 @@ export function SchedulePlannerStrip({
                 left: `calc(${leftPct}% + ${gap}px)`,
                 width: `calc(${widthPct}% - ${gap * 2}px)`,
               }}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const raw = e.dataTransfer.getData("text/plain");
-                if (!raw.startsWith("reorder:")) return;
-                const dragId = raw.slice(8);
-                if (dragId === slot.id) return;
-                const from = stripIds.indexOf(dragId);
-                const to = idx;
-                if (from < 0) return;
-                const next = [...stripIds];
-                next.splice(from, 1);
-                next.splice(to, 0, dragId);
-                setStripIds(next);
-                syncWindowsForOrder(next);
-              }}
             >
               <div className="relative min-h-0 flex-1 overflow-hidden">
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="start"
                     role="slider"
-                    aria-label="Adjust when you join this set (start)"
-                    className="absolute inset-x-[-2px] top-[-2px] z-[32] cursor-ns-resize touch-none select-none bg-transparent"
+                    aria-label="Drag to adjust arrival time (not before set start)"
+                    aria-valuemin={ariaMin}
+                    aria-valuemax={ariaMax}
+                    aria-valuenow={
+                      Number.isNaN(planFromM)
+                        ? ariaMin
+                        : Math.round(
+                            Math.min(ariaMax, Math.max(ariaMin, planFromM))
+                          )
+                    }
+                    title="Drag to adjust arrival"
+                    className="absolute inset-x-[-2px] top-[-2px] z-[32] flex cursor-ns-resize touch-none select-none items-start justify-center bg-transparent pt-0.5"
                     style={{
                       height: edgeHitH,
                       touchAction: "none",
@@ -519,16 +527,36 @@ export function SchedulePlannerStrip({
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      try {
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                      } catch {
+                        /* ignore */
+                      }
                       onStripTimeResize(slot, "start", e);
                     }}
-                  />
+                  >
+                    <span
+                      className="pointer-events-none h-0.5 w-7 rounded-full bg-zinc-400"
+                      aria-hidden
+                    />
+                  </div>
                 ) : null}
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="end"
                     role="slider"
-                    aria-label="Adjust when you leave this set (end)"
-                    className="absolute inset-x-[-2px] bottom-[-2px] z-[32] cursor-ns-resize touch-none select-none bg-transparent"
+                    aria-label="Drag to adjust departure time (not after set end)"
+                    aria-valuemin={ariaMin}
+                    aria-valuemax={ariaMax}
+                    aria-valuenow={
+                      Number.isNaN(planToM)
+                        ? ariaMax
+                        : Math.round(
+                            Math.min(ariaMax, Math.max(ariaMin, planToM))
+                          )
+                    }
+                    title="Drag to adjust departure"
+                    className="absolute inset-x-[-2px] bottom-[-2px] z-[32] flex cursor-ns-resize touch-none select-none items-end justify-center bg-transparent pb-0.5"
                     style={{
                       height: edgeHitH,
                       touchAction: "none",
@@ -536,29 +564,24 @@ export function SchedulePlannerStrip({
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      try {
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                      } catch {
+                        /* ignore */
+                      }
                       onStripTimeResize(slot, "end", e);
                     }}
-                  />
+                  >
+                    <span
+                      className="pointer-events-none h-0.5 w-7 rounded-full bg-zinc-400"
+                      aria-hidden
+                    />
+                  </div>
                 ) : null}
                 <div
                   className="relative z-[5] flex h-full min-h-0 flex-row items-start gap-1 py-1 pl-1 pr-7 text-left touch-manipulation"
                   onPointerDown={(e) => bodyPointerDown(slot, e)}
                 >
-                  <span
-                    data-strip-reorder
-                    draggable={!resizeBusy}
-                    aria-label="Drag to reorder in plan"
-                    title="Reorder"
-                    className="mt-0.5 inline-flex shrink-0 cursor-grab touch-none select-none flex-col justify-center gap-[3px] rounded border border-zinc-200 bg-zinc-50 px-1 py-1 active:cursor-grabbing"
-                    onDragStart={(e) => {
-                      e.stopPropagation();
-                      e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
-                      e.dataTransfer.effectAllowed = "move";
-                    }}
-                  >
-                    <span className="block h-[2px] w-3.5 rounded-sm bg-zinc-400" />
-                    <span className="block h-[2px] w-3.5 rounded-sm bg-zinc-400" />
-                  </span>
                   <div className="flex min-h-0 min-w-0 flex-1 flex-col items-stretch justify-center gap-0.5 text-left">
                     <p className="w-full select-none text-left text-[11px] font-bold leading-tight text-zinc-900 [overflow-wrap:anywhere]">
                       {slot.artistName}

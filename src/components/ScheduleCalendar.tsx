@@ -605,13 +605,16 @@ export function ScheduleCalendar({
       });
       setStripResize(null);
     };
-    window.addEventListener("pointermove", onMove, { passive: false });
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    document.addEventListener("pointermove", onMove, {
+      capture: true,
+      passive: false,
+    });
+    document.addEventListener("pointerup", onUp, { capture: true });
+    document.addEventListener("pointercancel", onUp, { capture: true });
     return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
+      document.removeEventListener("pointermove", onMove, { capture: true });
+      document.removeEventListener("pointerup", onUp, { capture: true });
+      document.removeEventListener("pointercancel", onUp, { capture: true });
     };
   }, [stripResize, schedule, buildPlanner]);
 
@@ -745,7 +748,6 @@ export function ScheduleCalendar({
                 }
                 onApply={buildPlanner.onApplyPlan}
                 onStripTimeResize={beginStripResize}
-                resizeBusy={Boolean(stripResize)}
                 stripPinned={stripPinned}
                 onStripPinnedChange={setStripPinned}
                 timelineMinM={minMR}
