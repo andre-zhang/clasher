@@ -254,18 +254,6 @@ export function SchedulePlannerStrip({
     setWindows(recomputeStripWindowsSequential(group, nextIds, schedule));
   }
 
-  function moveStripSlot(slotId: string, delta: -1 | 1) {
-    const i = stripIds.indexOf(slotId);
-    if (i < 0) return;
-    const j = i + delta;
-    if (j < 0 || j >= stripIds.length) return;
-    const next = [...stripIds];
-    const [removed] = next.splice(i, 1);
-    next.splice(j, 0, removed!);
-    setStripIds(next);
-    syncWindowsForOrder(next);
-  }
-
   function onDropStrip(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
@@ -495,59 +483,11 @@ export function SchedulePlannerStrip({
                 syncWindowsForOrder(next);
               }}
             >
-              <div
-                data-strip-reorder
-                className="absolute bottom-0 left-0 top-0 z-[26] flex flex-row border-r border-zinc-200 bg-zinc-100/90"
-              >
-                <div className="flex w-10 shrink-0 flex-col border-r border-zinc-200 md:hidden">
-                  <button
-                    type="button"
-                    className="touch-manipulation flex min-h-10 flex-1 items-center justify-center border-b border-zinc-200 text-xs font-bold text-zinc-700"
-                    aria-label="Move earlier in plan"
-                    disabled={idx === 0 || resizeBusy || moveBusy}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      moveStripSlot(slot.id, -1);
-                    }}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="touch-manipulation flex min-h-10 flex-1 items-center justify-center text-xs font-bold text-zinc-700"
-                    aria-label="Move later in plan"
-                    disabled={
-                      idx >= stripIds.length - 1 || resizeBusy || moveBusy
-                    }
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      moveStripSlot(slot.id, 1);
-                    }}
-                  >
-                    ↓
-                  </button>
-                </div>
-                <div
-                  data-strip-drag
-                  draggable={!resizeBusy && !moveBusy}
-                  aria-label="Reorder in strip"
-                  className="hidden min-h-[2.5rem] w-7 min-w-[28px] shrink-0 cursor-grab touch-none select-none items-center justify-center border-r border-zinc-200 active:cursor-grabbing md:flex"
-                  onDragStart={(e) => {
-                    e.stopPropagation();
-                    e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
-                    e.dataTransfer.effectAllowed = "move";
-                  }}
-                >
-                  <span className="pointer-events-none text-[11px] leading-none text-zinc-500">
-                    ⋮⋮
-                  </span>
-                </div>
-              </div>
-              <div className="relative min-h-0 flex-1 pl-10 md:pl-8">
+              <div className="relative flex min-h-0 flex-1 flex-col">
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="start"
-                    className="absolute left-0 right-0 top-0 z-30 min-h-10 cursor-ns-resize touch-none sm:min-h-8"
+                    className="z-30 min-h-10 w-full shrink-0 cursor-ns-resize touch-none sm:min-h-9"
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -555,25 +495,37 @@ export function SchedulePlannerStrip({
                     }}
                   />
                 ) : null}
-                <div
-                  className={`flex h-full min-h-0 flex-col justify-start gap-px overflow-y-auto overflow-x-hidden px-0.5 pb-1.5 pt-1.5 touch-manipulation ${
-                    onStripWindowMoveStart
-                      ? "cursor-grab active:cursor-grabbing"
-                      : ""
-                  }`}
-                  onPointerDown={(e) => bodyPointerDown(slot, e)}
-                >
-                  <p className="text-[11px] font-bold leading-[1.15] text-zinc-900 [overflow-wrap:anywhere]">
+                <div className="relative flex min-h-0 flex-1 flex-col px-0.5 pb-1 pt-0.5">
+                  <p
+                    data-strip-drag
+                    draggable={!resizeBusy && !moveBusy}
+                    aria-label="Drag to reorder in plan"
+                    className="touch-none select-none text-[11px] font-bold leading-[1.15] text-zinc-900 [overflow-wrap:anywhere] cursor-grab active:cursor-grabbing"
+                    onDragStart={(e) => {
+                      e.stopPropagation();
+                      e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                  >
                     {slot.artistName}
                   </p>
-                  <p className="text-[8px] leading-tight text-zinc-500 [overflow-wrap:anywhere]">
-                    {slot.stageName}
-                  </p>
+                  <div
+                    className={`min-h-0 flex-1 touch-manipulation ${
+                      onStripWindowMoveStart
+                        ? "cursor-grab active:cursor-grabbing"
+                        : ""
+                    }`}
+                    onPointerDown={(e) => bodyPointerDown(slot, e)}
+                  >
+                    <p className="text-[8px] leading-tight text-zinc-500 [overflow-wrap:anywhere]">
+                      {slot.stageName}
+                    </p>
+                  </div>
                 </div>
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="end"
-                    className="absolute bottom-0 left-0 right-0 z-30 min-h-10 cursor-ns-resize touch-none sm:min-h-8"
+                    className="z-30 min-h-10 w-full shrink-0 cursor-ns-resize touch-none sm:min-h-9"
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();

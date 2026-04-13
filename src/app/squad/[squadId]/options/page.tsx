@@ -1,13 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { ClasherCheckbox } from "@/components/ClasherCheckbox";
+import { ScanningOverlay } from "@/components/ScanningOverlay";
 import { useClasher } from "@/context/ClasherContext";
+import {
+  PENDING_LINEUP_NAMES_KEY,
+  PENDING_SCHEDULE_DRAFT_KEY,
+} from "@/lib/pendingImport";
 import {
   buildWalkMatrixFromStageOrder,
   orderScheduleStagesByMap,
 } from "@/lib/walkMatrixDefaults";
+import {
+  normalizeImportedArtistNames,
+  normalizeImportedScheduleSlots,
+} from "@/lib/importNormalize";
 
 export default function OptionsPage() {
   const {
@@ -17,15 +27,24 @@ export default function OptionsPage() {
     deleteSquad,
     analyzeFestivalMap,
     patchSquadOptions,
+    parseLineupFile,
+    parseScheduleFiles,
   } = useClasher();
+  const router = useRouter();
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
   const [demoBusy, setDemoBusy] = useState(false);
   const [delBusy, setDelBusy] = useState(false);
   const [mapBusy, setMapBusy] = useState(false);
+  const [lineupScanBusy, setLineupScanBusy] = useState(false);
+  const [scheduleScanBusy, setScheduleScanBusy] = useState(false);
   const mapCameraRef = useRef<HTMLInputElement>(null);
   const mapGalleryRef = useRef<HTMLInputElement>(null);
+  const lineupCameraRef = useRef<HTMLInputElement>(null);
+  const lineupGalleryRef = useRef<HTMLInputElement>(null);
+  const scheduleCameraRef = useRef<HTMLInputElement>(null);
+  const scheduleGalleryRef = useRef<HTMLInputElement>(null);
 
   const [aliasEdit, setAliasEdit] = useState<Record<string, string>>({});
 
@@ -106,11 +125,57 @@ export default function OptionsPage() {
     setErr(null);
     try {
       await analyzeFestivalMap(f);
-      setMsg("Map analyzed — match stages below, then save walk times.");
+      setMsg("Map analyzed.");
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setMapBusy(false);
+    }
+  }
+
+  async function onLineupFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f || !session) return;
+    setLineupScanBusy(true);
+    setErr(null);
+    try {
+      const names = await parseLineupFile(f);
+      const cleaned = normalizeImportedArtistNames(names);
+      if (cleaned.length) {
+        sessionStorage.setItem(
+          PENDING_LINEUP_NAMES_KEY,
+          JSON.stringify(cleaned)
+        );
+        router.push(`/squad/${session.squadId}/lineup`);
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLineupScanBusy(false);
+    }
+  }
+
+  async function onScheduleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = [...(e.target.files ?? [])];
+    e.target.value = "";
+    if (!files.length || !session) return;
+    setScheduleScanBusy(true);
+    setErr(null);
+    try {
+      const slots = await parseScheduleFiles(files);
+      const merged = normalizeImportedScheduleSlots(slots);
+      if (merged.length) {
+        sessionStorage.setItem(
+          PENDING_SCHEDULE_DRAFT_KEY,
+          JSON.stringify(merged)
+        );
+        router.push(`/squad/${session.squadId}/schedule`);
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setScheduleScanBusy(false);
     }
   }
 
@@ -143,13 +208,13 @@ export default function OptionsPage() {
     }
   }
 
+  const scanning = mapBusy || lineupScanBusy || scheduleScanBusy;
+
   return (
     <div className="space-y-6">
+      {scanning ? <ScanningOverlay /> : null}
+
       <h1 className="text-xl font-bold text-zinc-900">Options</h1>
-      <p className="text-xs text-zinc-600">
-        Anyone in the squad can edit the lineup, schedule, clashes, and group
-        defaults — not only whoever created the group.
-      </p>
 
       <section className="space-y-3">
         <button
@@ -174,11 +239,90 @@ export default function OptionsPage() {
       </section>
 
       <section className="space-y-3 border-t border-zinc-300 pt-4">
+        <h2 className="text-sm font-bold text-zinc-900">Import lineup</h2>
+        <input
+          ref={lineupCameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="sr-only"
+          aria-hidden
+          tabIndex={-1}
+          onChange={(e) => void onLineupFile(e)}
+        />
+        <input
+          ref={lineupGalleryRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          aria-hidden
+          tabIndex={-1}
+          onChange={(e) => void onLineupFile(e)}
+        />
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={lineupScanBusy}
+            onClick={() => lineupCameraRef.current?.click()}
+            className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-semibold text-zinc-900 shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
+          >
+            {lineupScanBusy ? "Working…" : "Lineup — take photo"}
+          </button>
+          <button
+            type="button"
+            disabled={lineupScanBusy}
+            onClick={() => lineupGalleryRef.current?.click()}
+            className="touch-manipulation border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
+          >
+            {lineupScanBusy ? "Working…" : "Lineup — upload image"}
+          </button>
+        </div>
+      </section>
+
+      <section className="space-y-3 border-t border-zinc-300 pt-4">
+        <h2 className="text-sm font-bold text-zinc-900">Import schedule</h2>
+        <input
+          ref={scheduleCameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="sr-only"
+          aria-hidden
+          tabIndex={-1}
+          onChange={(e) => void onScheduleFiles(e)}
+        />
+        <input
+          ref={scheduleGalleryRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="sr-only"
+          aria-hidden
+          tabIndex={-1}
+          onChange={(e) => void onScheduleFiles(e)}
+        />
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={scheduleScanBusy}
+            onClick={() => scheduleCameraRef.current?.click()}
+            className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-semibold text-zinc-900 shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
+          >
+            {scheduleScanBusy ? "Working…" : "Schedule — take photo"}
+          </button>
+          <button
+            type="button"
+            disabled={scheduleScanBusy}
+            onClick={() => scheduleGalleryRef.current?.click()}
+            className="touch-manipulation border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
+          >
+            {scheduleScanBusy ? "Working…" : "Schedule — upload images"}
+          </button>
+        </div>
+      </section>
+
+      <section className="space-y-3 border-t border-zinc-300 pt-4">
         <h2 className="text-sm font-bold text-zinc-900">Festival map</h2>
-        <p className="text-xs text-zinc-600">
-          The image is analyzed once and not stored — only stage labels and your
-          matches are kept.
-        </p>
         <input
           ref={mapCameraRef}
           type="file"

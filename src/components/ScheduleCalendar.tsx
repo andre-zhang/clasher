@@ -192,6 +192,10 @@ export function ScheduleCalendar({
   groupRef.current = group;
   const scheduleRef = useRef(schedule);
   scheduleRef.current = schedule;
+  const stripResizeRef = useRef(false);
+  const stripMoveRef = useRef(false);
+  stripResizeRef.current = Boolean(stripResize);
+  stripMoveRef.current = Boolean(stripMove);
 
   const timelineMetricsRef = useRef({
     minMR: 0,
@@ -255,8 +259,13 @@ export function ScheduleCalendar({
   }, [stripIds.length]);
 
   useEffect(() => {
+    setStripResize(null);
+    setStripMove(null);
+  }, [activeDay, stripScope]);
+
+  useEffect(() => {
     if (!plannerMemberId || !activeDay) return;
-    if (stripResize || stripMove) return;
+    if (stripResizeRef.current || stripMoveRef.current) return;
     const g = groupRef.current;
     if (!g) return;
     const sched = scheduleRef.current;
@@ -309,8 +318,6 @@ export function ScheduleCalendar({
     stripScope,
     plannerMemberId,
     allIntentsHydrateSig,
-    stripResize,
-    stripMove,
   ]);
 
   const allStagesForDay = useMemo(() => {

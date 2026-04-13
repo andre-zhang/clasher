@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ScanningOverlay } from "@/components/ScanningOverlay";
 import { useClasher } from "@/context/ClasherContext";
 import { normalizeImportedArtistNames } from "@/lib/importNormalize";
+import { PENDING_LINEUP_NAMES_KEY } from "@/lib/pendingImport";
 import { compactSquadTierStrip } from "@/lib/reactionsUi";
 import { TIER_EMOJI, TIERS_ORDER, tierFromString } from "@/lib/tiers";
 import type { FestivalSnapshot, RatingTier } from "@/lib/types";
@@ -12,20 +12,11 @@ import type { FestivalSnapshot, RatingTier } from "@/lib/types";
 const TIERS: RatingTier[] = ["must", "want", "maybe", "skip"];
 
 export default function LineupPage() {
-  const {
-    session,
-    group,
-    setRating,
-    addComment,
-    commitLineupNames,
-    parseLineupFile,
-  } = useClasher();
+  const { session, group, setRating, addComment, commitLineupNames } =
+    useClasher();
   const [draftNames, setDraftNames] = useState<string[] | null>(null);
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const galleryRef = useRef<HTMLInputElement>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const artistsSorted = useMemo(
@@ -38,6 +29,22 @@ export default function LineupPage() {
     [group?.artists]
   );
 
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(PENDING_LINEUP_NAMES_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(PENDING_LINEUP_NAMES_KEY);
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed) || !parsed.length) return;
+      const names = normalizeImportedArtistNames(
+        parsed.filter((x): x is string => typeof x === "string")
+      );
+      if (names.length) setDraftNames(names);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   if (!group || !session) return null;
 
   const myRatings = new Map(
@@ -45,24 +52,6 @@ export default function LineupPage() {
       .filter((r) => r.memberId === session.memberId)
       .map((r) => [r.artistId, r.tier as RatingTier])
   );
-
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    e.target.value = "";
-    if (!f) return;
-    setParseErr(null);
-    setScanning(true);
-    setBusy(true);
-    try {
-      const names = await parseLineupFile(f);
-      setDraftNames(normalizeImportedArtistNames(names));
-    } catch (err) {
-      setParseErr(err instanceof Error ? err.message : String(err));
-    } finally {
-      setScanning(false);
-      setBusy(false);
-    }
-  }
 
   async function commitScan() {
     const cleaned =
@@ -86,47 +75,7 @@ export default function LineupPage() {
 
   return (
     <div className="space-y-6">
-      {scanning ? <ScanningOverlay /> : null}
-
       <h1 className="text-xl font-bold text-zinc-900">Lineup</h1>
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => cameraRef.current?.click()}
-          disabled={busy}
-          className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-50 min-h-11 sm:min-h-0 sm:py-1.5"
-        >
-          Take photo
-        </button>
-        <button
-          type="button"
-          onClick={() => galleryRef.current?.click()}
-          disabled={busy}
-          className="touch-manipulation border-2 border-zinc-900 bg-zinc-900 px-3 py-2.5 text-xs font-medium text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-50 min-h-11 sm:min-h-0 sm:py-1.5"
-        >
-          Upload image
-        </button>
-        <input
-          ref={cameraRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="sr-only"
-          aria-hidden
-          tabIndex={-1}
-          onChange={onFile}
-        />
-        <input
-          ref={galleryRef}
-          type="file"
-          accept="image/*"
-          className="sr-only"
-          aria-hidden
-          tabIndex={-1}
-          onChange={onFile}
-        />
-      </div>
 
       {parseErr ? (
         <p className="border-2 border-red-800 bg-red-50 px-3 py-2 text-sm text-red-900">

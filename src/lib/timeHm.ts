@@ -17,8 +17,12 @@ export function parseHmRelaxed(s: string): number {
 }
 
 export function hhmmFromMinutes(total: number): string {
-  const h = Math.floor(total / 60);
-  const mi = total % 60;
+  let t = Math.round(total);
+  if (!Number.isFinite(t)) t = 0;
+  // Avoid negative modulo (invalid for parseHm) while dragging.
+  t = Math.max(0, t);
+  const h = Math.floor(t / 60);
+  const mi = t % 60;
   return `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
 }
 

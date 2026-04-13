@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { ScanningOverlay } from "@/components/ScanningOverlay";
 import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { useClasher } from "@/context/ClasherContext";
 import { normalizeImportedScheduleSlots } from "@/lib/importNormalize";
+import { PENDING_SCHEDULE_DRAFT_KEY } from "@/lib/pendingImport";
 import { buildSlotIntentsFromHotRatings } from "@/lib/syncIntentsFromRatings";
 import type { ScheduleDraftSlot } from "@/lib/api";
 
@@ -14,7 +14,6 @@ export default function SchedulePage() {
     session,
     group,
     replaceSchedule,
-    parseScheduleFiles,
     addSlotComment,
     setRating,
     putSlotIntents,
@@ -23,12 +22,24 @@ export default function SchedulePage() {
   const [draft, setDraft] = useState<ScheduleDraftSlot[] | null>(null);
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [scanning, setScanning] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncGroupBusy, setSyncGroupBusy] = useState(false);
   const [stripHydrateKey, setStripHydrateKey] = useState(0);
-  const galleryFileRef = useRef<HTMLInputElement>(null);
-  const cameraFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(PENDING_SCHEDULE_DRAFT_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(PENDING_SCHEDULE_DRAFT_KEY);
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed) || !parsed.length) return;
+      setDraft(
+        normalizeImportedScheduleSlots(parsed as ScheduleDraftSlot[])
+      );
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   if (!group || !session) return null;
 
@@ -61,26 +72,6 @@ export default function SchedulePage() {
         artistName: "",
       },
     ]);
-  }
-
-  async function onFiles(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = [...(e.target.files ?? [])];
-    e.target.value = "";
-    if (!files.length) return;
-    setParseErr(null);
-    setScanning(true);
-    setBusy(true);
-    try {
-      const slots = await parseScheduleFiles(files);
-      setDraft((prev) =>
-        normalizeImportedScheduleSlots([...(prev ?? []), ...slots])
-      );
-    } catch (err) {
-      setParseErr(err instanceof Error ? err.message : String(err));
-    } finally {
-      setScanning(false);
-      setBusy(false);
-    }
   }
 
   async function commitDraft() {
@@ -132,8 +123,6 @@ export default function SchedulePage() {
 
   return (
     <div className="space-y-6">
-      {scanning ? <ScanningOverlay /> : null}
-
       <h1 className="text-xl font-bold text-zinc-900">Schedule</h1>
 
       <section className="border-2 border-zinc-900 bg-white p-4 shadow-[2px_2px_0_0_#18181b]">
@@ -147,42 +136,6 @@ export default function SchedulePage() {
           >
             Sync from Lineup
           </button>
-          <button
-            type="button"
-            onClick={() => cameraFileRef.current?.click()}
-            disabled={busy}
-            className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-50 min-h-11 sm:min-h-0 sm:py-1.5"
-          >
-            Take photo
-          </button>
-          <button
-            type="button"
-            onClick={() => galleryFileRef.current?.click()}
-            disabled={busy}
-            className="touch-manipulation border-2 border-zinc-900 bg-zinc-900 px-3 py-2.5 text-xs font-medium text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-50 min-h-11 sm:min-h-0 sm:py-1.5"
-          >
-            Upload images
-          </button>
-          <input
-            ref={cameraFileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="sr-only fixed left-0 top-0 h-px w-px opacity-0"
-            aria-hidden
-            tabIndex={-1}
-            onChange={onFiles}
-          />
-          <input
-            ref={galleryFileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="sr-only fixed left-0 top-0 h-px w-px opacity-0"
-            aria-hidden
-            tabIndex={-1}
-            onChange={onFiles}
-          />
         </div>
       </section>
 
@@ -274,14 +227,6 @@ export default function SchedulePage() {
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => galleryFileRef.current?.click()}
-              disabled={busy}
-              className="border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium"
-            >
-              Add more scans
-            </button>
-            <button
-              type="button"
               onClick={addDraftRow}
               className="border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium"
             >
@@ -324,10 +269,6 @@ export default function SchedulePage() {
         >
           {syncGroupBusy ? "Syncing…" : "Sync mine with everyone"}
         </button>
-        <p className="max-w-md text-[11px] text-zinc-600">
-          Copies every act anyone in the group keeps onto your plan (full listed
-          times). New members get this automatically once when they join.
-        </p>
       </div>
 
       <ScheduleCalendar
