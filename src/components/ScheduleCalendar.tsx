@@ -192,6 +192,8 @@ export function ScheduleCalendar({
   scheduleRef.current = schedule;
   const stripResizeRef = useRef(false);
   stripResizeRef.current = Boolean(stripResize);
+  /** Element that called setPointerCapture during plan-strip edge drag (mobile / scroll containers). */
+  const stripResizeCaptureElRef = useRef<HTMLElement | null>(null);
 
   const timelineMetricsRef = useRef({
     minMR: 0,
@@ -542,8 +544,10 @@ export function ScheduleCalendar({
         : 60;
     const minBlockMin = Math.max(1, Math.min(5, slotSpanMin));
 
-    const onMove = (e: PointerEvent) => {
+    const onMove = (ev: Event) => {
+      const e = ev as PointerEvent;
       if (e.pointerId !== pointerId) return;
+      e.preventDefault();
       const { minMR: loR, maxMR: hiR, timelineBodyPx: tb } =
         timelineMetricsRef.current;
       const range = hiR - loR;
@@ -582,8 +586,18 @@ export function ScheduleCalendar({
         },
       }));
     };
-    const onUp = (e: PointerEvent) => {
+    const onUp = (ev: Event) => {
+      const e = ev as PointerEvent;
       if (e.pointerId !== pointerId) return;
+      const cap = stripResizeCaptureElRef.current;
+      if (cap) {
+        try {
+          cap.releasePointerCapture(pointerId);
+        } catch {
+          /* already released */
+        }
+        stripResizeCaptureElRef.current = null;
+      }
       setStripWindows((prev) => {
         const cur = prev[slotId];
         if (!cur) return prev;
@@ -602,13 +616,24 @@ export function ScheduleCalendar({
       });
       setStripResize(null);
     };
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", onUp);
-    document.addEventListener("pointercancel", onUp);
+    const moveTarget: HTMLElement | Window =
+      stripResizeCaptureElRef.current ?? window;
+    moveTarget.addEventListener("pointermove", onMove, { passive: false });
+    moveTarget.addEventListener("pointerup", onUp);
+    moveTarget.addEventListener("pointercancel", onUp);
     return () => {
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerup", onUp);
-      document.removeEventListener("pointercancel", onUp);
+      moveTarget.removeEventListener("pointermove", onMove);
+      moveTarget.removeEventListener("pointerup", onUp);
+      moveTarget.removeEventListener("pointercancel", onUp);
+      const cap = stripResizeCaptureElRef.current;
+      if (cap) {
+        try {
+          cap.releasePointerCapture(pointerId);
+        } catch {
+          /* noop */
+        }
+        stripResizeCaptureElRef.current = null;
+      }
     };
   }, [stripResize, schedule, buildPlanner]);
 
@@ -634,6 +659,15 @@ export function ScheduleCalendar({
     const sm = parseHm(w.planFrom);
     const em = parseHm(w.planTo);
     if (Number.isNaN(sm) || Number.isNaN(em)) return;
+    const capEl = e.currentTarget;
+    if (capEl instanceof HTMLElement) {
+      stripResizeCaptureElRef.current = capEl;
+      try {
+        capEl.setPointerCapture(e.pointerId);
+      } catch {
+        /* unsupported or already captured */
+      }
+    }
     setStripResize({
       slotId: slot.id,
       edge,

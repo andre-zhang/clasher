@@ -18,6 +18,9 @@ import type { FestivalSnapshot } from "@/lib/types";
 
 type Slot = FestivalSnapshot["schedule"][number];
 
+/** Invisible hit band on top/bottom border; ≥12px for touch targets (WCAG). */
+const STRIP_EDGE_HIT_PX = 14;
+
 type IntentPatch = {
   slotId: string;
   wants: boolean;
@@ -347,11 +350,8 @@ export function SchedulePlannerStrip({
       )
     )
       return;
-    const x0 = e.clientX;
     const y0 = e.clientY;
     const pid = e.pointerId;
-    const bodyEl = e.currentTarget as HTMLElement;
-    let verticalResizeStarted = false;
     let dragLikely = false;
 
     function onUp(ev: PointerEvent) {
@@ -364,27 +364,7 @@ export function SchedulePlannerStrip({
 
     function onMove(ev: PointerEvent) {
       if (ev.pointerId !== pid) return;
-      const dx = ev.clientX - x0;
-      const dy = ev.clientY - y0;
-      if (!verticalResizeStarted && onStripTimeResize) {
-        if (Math.abs(dy) >= 10 && Math.abs(dy) > Math.abs(dx)) {
-          verticalResizeStarted = true;
-          dragLikely = true;
-          const r = bodyEl.getBoundingClientRect();
-          const edge: "start" | "end" =
-            ev.clientY < r.top + r.height / 2 ? "start" : "end";
-          window.removeEventListener("pointermove", onMove);
-          window.removeEventListener("pointerup", onUp);
-          window.removeEventListener("pointercancel", onUp);
-          onStripTimeResize(
-            slot,
-            edge,
-            ev as unknown as ReactPointerEvent<Element>
-          );
-          return;
-        }
-      }
-      if (!verticalResizeStarted && Math.abs(dy) >= 10) {
+      if (Math.abs(ev.clientY - y0) >= 10) {
         dragLikely = true;
         window.removeEventListener("pointermove", onMove);
       }
@@ -398,7 +378,7 @@ export function SchedulePlannerStrip({
 
   return (
     <div
-      className={`flex w-[min(90vw,276px)] min-w-[168px] max-w-[300px] shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 sm:w-[min(260px,38vw)] sm:min-w-[200px] ${
+      className={`flex w-[min(78vw,188px)] min-w-[118px] max-w-[200px] shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 sm:w-[min(22vw,176px)] sm:min-w-[128px] sm:max-w-[188px] ${
         dragOver ? "ring-2 ring-zinc-900 ring-offset-1" : ""
       }`}
       onDragOver={(e) => {
@@ -493,16 +473,9 @@ export function SchedulePlannerStrip({
           const gap = 3;
           const widthPct = 100 / cols;
           const leftPct = col * widthPct;
-          const minMidGap = 8;
-          const maxHalf = Math.max(
-            6,
-            Math.floor((heightPx - minMidGap) / 2)
-          );
-          const idealHandle = Math.round(heightPx * 0.28);
-          const handleH = Math.min(
-            36,
-            maxHalf,
-            Math.max(14, idealHandle)
+          const edgeHitH = Math.min(
+            STRIP_EDGE_HIT_PX,
+            Math.max(8, Math.floor((heightPx - 6) / 2))
           );
           return (
             <div
@@ -536,9 +509,13 @@ export function SchedulePlannerStrip({
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="start"
-                    className="absolute left-0 right-0 top-0 z-30 cursor-ns-resize touch-none border-b border-dashed border-zinc-400/80 bg-zinc-100/90"
-                    style={{ height: handleH, touchAction: "none" }}
-                    title="Drag to adjust start time"
+                    role="slider"
+                    aria-label="Adjust when you join this set (start)"
+                    className="absolute inset-x-[-2px] top-[-2px] z-[32] cursor-ns-resize touch-none select-none bg-transparent"
+                    style={{
+                      height: edgeHitH,
+                      touchAction: "none",
+                    }}
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -549,9 +526,13 @@ export function SchedulePlannerStrip({
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="end"
-                    className="absolute bottom-0 left-0 right-0 z-30 cursor-ns-resize touch-none border-t border-dashed border-zinc-400/80 bg-zinc-100/90"
-                    style={{ height: handleH, touchAction: "none" }}
-                    title="Drag to adjust end time"
+                    role="slider"
+                    aria-label="Adjust when you leave this set (end)"
+                    className="absolute inset-x-[-2px] bottom-[-2px] z-[32] cursor-ns-resize touch-none select-none bg-transparent"
+                    style={{
+                      height: edgeHitH,
+                      touchAction: "none",
+                    }}
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -560,20 +541,14 @@ export function SchedulePlannerStrip({
                   />
                 ) : null}
                 <div
-                  className={`relative z-[5] flex h-full min-h-0 flex-row items-stretch gap-0.5 pl-1 pr-9 text-right sm:pr-8 touch-manipulation ${
-                    !onStripTimeResize ? "py-1.5" : ""
-                  }`}
-                  style={{
-                    paddingTop: onStripTimeResize ? handleH : undefined,
-                    paddingBottom: onStripTimeResize ? handleH : undefined,
-                  }}
+                  className="relative z-[5] flex h-full min-h-0 flex-row items-stretch gap-0.5 py-1 pl-0.5 pr-8 text-right sm:pr-7 touch-manipulation"
                   onPointerDown={(e) => bodyPointerDown(slot, e)}
                 >
                   <span
                     data-strip-reorder
                     draggable={!resizeBusy}
                     aria-label="Drag to reorder in plan"
-                    className="mt-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none select-none items-start justify-center rounded border border-zinc-300 bg-zinc-100 px-0.5 text-[10px] font-bold leading-none text-zinc-500 active:cursor-grabbing"
+                    className="mt-0.5 flex h-5 w-3.5 shrink-0 cursor-grab touch-none select-none items-start justify-center rounded border border-zinc-300 bg-zinc-100 px-px text-[9px] font-bold leading-none text-zinc-500 active:cursor-grabbing"
                     title="Reorder"
                     onDragStart={(e) => {
                       e.stopPropagation();
