@@ -81,7 +81,16 @@ export function SquadShell({
             </button>
             <button
               type="button"
-              onClick={() => void leave()}
+              onClick={() => {
+                if (
+                  !confirm(
+                    "Leave this group? You will be removed from the squad and your ratings and plans here will be deleted."
+                  )
+                ) {
+                  return;
+                }
+                void leave();
+              }}
               className="border-2 border-red-800 bg-white px-2 py-0.5 text-xs font-semibold text-red-800"
             >
               Leave
