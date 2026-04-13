@@ -89,22 +89,9 @@ export default function JoinMemberSlugPage() {
       {busy ? (
         <p className="mt-8 text-sm text-zinc-600">Signing you in…</p>
       ) : err ? (
-        <div className="mt-8 space-y-4">
-          <p className="border-2 border-red-800 bg-red-50 px-3 py-2 text-sm text-red-900">
-            {err}
-          </p>
-          <p className="text-sm text-zinc-700">
-            Try the{" "}
-            <Link
-              href={`/join/${encodeURIComponent(token)}`}
-              className="font-semibold text-indigo-700 underline"
-            >
-              invite page
-            </Link>{" "}
-            and use <strong>Log back in</strong> with the same name you joined
-            with.
-          </p>
-        </div>
+        <p className="mt-8 border-2 border-red-800 bg-red-50 px-3 py-2 text-sm text-red-900">
+          {err}
+        </p>
       ) : null}
     </main>
   );

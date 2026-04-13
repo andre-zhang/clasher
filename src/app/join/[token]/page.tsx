@@ -118,11 +118,6 @@ export default function JoinTokenPage() {
             onChange={(e) => setDisplayName(e.target.value)}
           />
         </label>
-        <p className="text-xs text-zinc-600">
-          <strong>Join</strong> adds you as a new member.{" "}
-          <strong>Log back in</strong> restores your existing ratings and plans
-          if you already joined with that name.
-        </p>
         {err ? (
           <p className="border-2 border-red-800 bg-red-50 px-3 py-2 text-sm text-red-900">
             {err}
