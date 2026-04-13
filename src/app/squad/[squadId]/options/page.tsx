@@ -235,7 +235,7 @@ export default function OptionsPage() {
         </div>
       </section>
 
-      <section className="space-y-3 border-t border-zinc-300 pt-4">
+      <section className="space-y-4 border-t border-zinc-300 pt-4">
         <h2 className="text-sm font-bold text-zinc-900">Import lineup</h2>
         <input
           ref={lineupFileRef}
@@ -250,13 +250,13 @@ export default function OptionsPage() {
           type="button"
           disabled={lineupScanBusy}
           onClick={() => lineupFileRef.current?.click()}
-          className="touch-manipulation border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:py-1.5"
+          className="touch-manipulation block w-full max-w-xs border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:w-auto sm:py-1.5"
         >
           {lineupScanBusy ? "Working…" : "Upload lineup image"}
         </button>
       </section>
 
-      <section className="space-y-3 border-t border-zinc-300 pt-4">
+      <section className="space-y-4 border-t border-zinc-300 pt-4">
         <h2 className="text-sm font-bold text-zinc-900">Import schedule</h2>
         <input
           ref={scheduleFileRef}
@@ -272,13 +272,13 @@ export default function OptionsPage() {
           type="button"
           disabled={scheduleScanBusy}
           onClick={() => scheduleFileRef.current?.click()}
-          className="touch-manipulation border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:py-1.5"
+          className="touch-manipulation block w-full max-w-xs border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:w-auto sm:py-1.5"
         >
           {scheduleScanBusy ? "Working…" : "Upload schedule images"}
         </button>
       </section>
 
-      <section className="space-y-3 border-t border-zinc-300 pt-4">
+      <section className="space-y-4 border-t border-zinc-300 pt-4">
         <h2 className="text-sm font-bold text-zinc-900">Festival map</h2>
         <input
           ref={mapFileRef}
@@ -293,7 +293,7 @@ export default function OptionsPage() {
           type="button"
           disabled={mapBusy}
           onClick={() => mapFileRef.current?.click()}
-          className="touch-manipulation border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:py-1.5"
+          className="touch-manipulation block w-full max-w-xs border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:w-auto sm:py-1.5"
         >
           {mapBusy ? "Working…" : "Upload map image"}
         </button>
@@ -341,6 +341,7 @@ export default function OptionsPage() {
           </div>
         ) : null}
         <ClasherCheckbox
+          className="mt-3 gap-4"
           checked={group.walkTimesEnabled}
           onChange={(v) => void saveWalkToggle(v)}
         >
