@@ -110,6 +110,32 @@ export async function apiJoinSquad(
   return r.json();
 }
 
+/** Resume session by slug (from URL) or by display name (typed on invite page). */
+export async function apiResumeSquad(
+  inviteToken: string,
+  opts: { slug?: string; displayName?: string }
+): Promise<{
+  squadId: string;
+  memberId: string;
+  memberSecret: string;
+  group: FestivalSnapshot;
+}> {
+  const body: { slug?: string; displayName?: string } = {};
+  if (opts.slug !== undefined && opts.slug !== "") body.slug = opts.slug;
+  if (opts.displayName !== undefined && opts.displayName !== "")
+    body.displayName = opts.displayName;
+  const r = await fetch(
+    apiUrl(`/squads/by-token/${encodeURIComponent(inviteToken)}/resume`),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+  await ensureOk(r);
+  return r.json();
+}
+
 export async function apiDeleteSquad(session: ClasherSession): Promise<void> {
   const r = await fetch(apiUrl(`/squads/${session.squadId}`), {
     method: "DELETE",

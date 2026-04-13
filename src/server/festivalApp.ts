@@ -18,6 +18,7 @@ import {
   patchIntentsForConflict,
 } from "./applyConflictIntents";
 import { normalizeScheduleTimesForImport } from "@/lib/scheduleTimeNormalize";
+import { memberDisplaySlug } from "@/lib/memberSlug";
 
 import {
   buildWalkMatrixFromStageOrder,
@@ -184,6 +185,71 @@ export function createFestivalApp(apiBasePath: string): Hono {
       }
       return m;
     });
+    const snap = await buildSnapshot(prisma, squad.id, member.id);
+    return c.json({
+      squadId: squad.id,
+      memberId: member.id,
+      memberSecret: member.secret,
+      group: snap,
+    });
+  });
+
+  app.post("/squads/by-token/:inviteToken/resume", async (c) => {
+    const inviteToken = String(c.req.param("inviteToken") ?? "")
+      .trim()
+      .toLowerCase();
+    let body: { slug?: string; displayName?: string };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid_json" }, 400);
+    }
+    const slugPart =
+      typeof body.slug === "string" ? decodeURIComponent(body.slug).trim() : "";
+    const displayNamePart =
+      typeof body.displayName === "string" ? body.displayName.trim() : "";
+    const targetSlug = displayNamePart
+      ? memberDisplaySlug(displayNamePart)
+      : memberDisplaySlug(slugPart);
+    if (!targetSlug) {
+      return c.json(
+        {
+          error: "invalid_name",
+          message: "Enter the name you used when you joined.",
+        },
+        400
+      );
+    }
+    const squad = await prisma.squad.findFirst({ where: { inviteToken } });
+    if (!squad) return c.json({ error: "not_found", message: "Invite not found." }, 404);
+
+    const members = await prisma.member.findMany({
+      where: { squadId: squad.id },
+      select: { id: true, displayName: true, secret: true },
+    });
+    const matches = members.filter(
+      (m) => memberDisplaySlug(m.displayName) === targetSlug
+    );
+    if (matches.length === 0) {
+      return c.json(
+        {
+          error: "not_found",
+          message: "No one in this group matches that name.",
+        },
+        404
+      );
+    }
+    if (matches.length > 1) {
+      return c.json(
+        {
+          error: "ambiguous",
+          message:
+            "Several members match that name. Use the exact spelling you signed up with.",
+        },
+        409
+      );
+    }
+    const member = matches[0]!;
     const snap = await buildSnapshot(prisma, squad.id, member.id);
     return c.json({
       squadId: squad.id,
