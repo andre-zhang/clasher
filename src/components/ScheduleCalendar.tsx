@@ -178,13 +178,6 @@ export function ScheduleCalendar({
     baseToM: number;
     pointerId: number;
   } | null>(null);
-  const [stripMove, setStripMove] = useState<{
-    slotId: string;
-    anchorClientY: number;
-    baseFromM: number;
-    baseToM: number;
-    pointerId: number;
-  } | null>(null);
   const [stripScope, setStripScope] = useState<"mine" | "group">("mine");
   /** “Everyone” strip: slots you added from the grid before first save (not from others’ plans). */
   const [stripUserAddedIds, setStripUserAddedIds] = useState<Set<string>>(
@@ -196,9 +189,7 @@ export function ScheduleCalendar({
   const scheduleRef = useRef(schedule);
   scheduleRef.current = schedule;
   const stripResizeRef = useRef(false);
-  const stripMoveRef = useRef(false);
   stripResizeRef.current = Boolean(stripResize);
-  stripMoveRef.current = Boolean(stripMove);
 
   const timelineMetricsRef = useRef({
     minMR: 0,
@@ -263,12 +254,11 @@ export function ScheduleCalendar({
 
   useEffect(() => {
     setStripResize(null);
-    setStripMove(null);
   }, [activeDay, stripScope]);
 
   useEffect(() => {
     if (!plannerMemberId || !activeDay) return;
-    if (stripResizeRef.current || stripMoveRef.current) return;
+    if (stripResizeRef.current) return;
     const g = groupRef.current;
     if (!g) return;
     const sched = scheduleRef.current;
@@ -599,65 +589,6 @@ export function ScheduleCalendar({
     };
   }, [stripResize, schedule, buildPlanner]);
 
-  useEffect(() => {
-    if (!stripMove || !buildPlanner) return;
-    const slot = schedule.find((s) => s.id === stripMove.slotId);
-    if (!slot) {
-      setStripMove(null);
-      return;
-    }
-    const lo = parseHm(slot.start);
-    const hi = parseHm(slot.end);
-    const duration = stripMove.baseToM - stripMove.baseFromM;
-
-    const onMove = (e: PointerEvent) => {
-      if (e.pointerId !== stripMove.pointerId) return;
-      const { minMR: loR, maxMR: hiR, timelineBodyPx: tb } =
-        timelineMetricsRef.current;
-      const range = hiR - loR;
-      if (range <= 0 || tb <= 0) return;
-      const deltaY = e.clientY - stripMove.anchorClientY;
-      const deltaMin = (deltaY / tb) * range;
-      const nextFrom = snapMinutesTo5(
-        Math.round(stripMove.baseFromM + deltaMin)
-      );
-      const nextTo = snapMinutesTo5(Math.round(nextFrom + duration));
-      const w = clampPlanWindowToSlot(
-        slot,
-        hhmmFromMinutes(nextFrom),
-        hhmmFromMinutes(nextTo)
-      );
-      let sm = parseHm(w.planFrom);
-      let em = parseHm(w.planTo);
-      if (!Number.isNaN(sm)) sm = snapMinutesTo5(sm);
-      if (!Number.isNaN(em)) em = snapMinutesTo5(em);
-      if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
-        if (!Number.isNaN(sm)) sm = Math.max(lo, Math.min(hi, sm));
-        if (!Number.isNaN(em)) em = Math.max(lo, Math.min(hi, em));
-      }
-      if (!Number.isNaN(sm) && !Number.isNaN(em) && em < sm) em = sm;
-      setStripWindows((prev) => ({
-        ...prev,
-        [slot.id]: {
-          planFrom: hhmmFromMinutes(sm),
-          planTo: hhmmFromMinutes(em),
-        },
-      }));
-    };
-    const onUp = (e: PointerEvent) => {
-      if (e.pointerId !== stripMove.pointerId) return;
-      setStripMove(null);
-    };
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", onUp);
-    document.addEventListener("pointercancel", onUp);
-    return () => {
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerup", onUp);
-      document.removeEventListener("pointercancel", onUp);
-    };
-  }, [stripMove, schedule, buildPlanner]);
-
   function layoutSortStart(slot: Slot): number {
     if (useEffectiveSlotLayout && group && rateMemberId) {
       return effectiveWindowMinutes(group, rateMemberId, slot).start;
@@ -690,33 +621,11 @@ export function ScheduleCalendar({
     });
   }
 
-  function beginStripWindowMove(
-    slot: Slot,
-    anchorClientY: number,
-    pointerId: number
-  ) {
-    const w = stripWindows[slot.id] ?? {
-      planFrom: slot.start,
-      planTo: slot.end,
-    };
-    const sm = parseHm(w.planFrom);
-    const em = parseHm(w.planTo);
-    if (Number.isNaN(sm) || Number.isNaN(em)) return;
-    setStripMove({
-      slotId: slot.id,
-      anchorClientY,
-      baseFromM: sm,
-      baseToM: em,
-      pointerId,
-    });
-  }
-
   const canDragSlotToStrip = Boolean(
     buildPlanner &&
       group &&
       activeDay &&
-      !stripResize &&
-      !stripMove
+      !stripResize
   );
 
   if (!schedule.length) {
@@ -753,7 +662,11 @@ export function ScheduleCalendar({
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : (
         <div className="touch-scroll max-h-[min(72vh,calc(100vh-10rem))] overflow-auto border-2 border-zinc-900 bg-white">
-          <div className="flex min-w-max min-h-0 items-stretch">
+          <div
+            className={`flex min-h-0 items-stretch ${
+              singleCol ? "w-full min-w-0" : "min-w-max"
+            }`}
+          >
           <div
             className="sticky left-0 z-[100] flex w-16 shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 shadow-[6px_0_12px_-4px_rgba(0,0,0,0.12)] sm:w-14"
             style={{ minHeight: timelineHRender }}
@@ -799,16 +712,14 @@ export function ScheduleCalendar({
               }
               onApply={buildPlanner.onApplyPlan}
               onStripTimeResize={beginStripResize}
-              onStripWindowMoveStart={beginStripWindowMove}
               resizeBusy={Boolean(stripResize)}
-              moveBusy={Boolean(stripMove)}
               timelineMinM={minMR}
               timelineMaxM={maxMR}
               timelineBodyPx={timelineBodyPx}
             />
           ) : null}
-          <div className="relative flex min-h-0 min-w-0 flex-1">
-            <div className="relative flex min-w-0 flex-1">
+          <div className="relative flex min-h-0 min-w-0 flex-1 w-full">
+            <div className="relative flex min-w-0 flex-1 w-full">
               {showEffectivePlanLayer &&
                 planWalkBands.map((band, bi) => {
                   const range = maxMR - minMR;
@@ -829,7 +740,9 @@ export function ScheduleCalendar({
                     />
                   );
                 })}
-              <div className="flex min-w-0 flex-1">
+              <div
+                className={`flex min-w-0 flex-1 ${singleCol ? "w-full" : ""}`}
+              >
           {stagesToRender.map((stage) => {
             const sortedSlots = [...slotsForStage(stage)].sort(
               (a, b) => layoutSortStart(a) - layoutSortStart(b)
@@ -839,7 +752,7 @@ export function ScheduleCalendar({
               key={stage}
               className={
                 singleCol
-                  ? "relative min-w-[min(100%,320px)] max-w-xl flex-1 border-r-2 border-zinc-900"
+                  ? "relative min-w-0 flex-1 border-r-2 border-zinc-900"
                   : "relative min-w-[min(100%,140px)] flex-1 border-r-2 border-zinc-900 sm:min-w-[148px]"
               }
               style={{ minHeight: timelineHRender }}

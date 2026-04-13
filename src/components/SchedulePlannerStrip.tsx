@@ -80,9 +80,7 @@ export function SchedulePlannerStrip({
   onStripUserRemovedUserAdd,
   onApply,
   onStripTimeResize,
-  onStripWindowMoveStart,
   resizeBusy,
-  moveBusy,
   timelineMinM,
   timelineMaxM,
   timelineBodyPx,
@@ -108,13 +106,7 @@ export function SchedulePlannerStrip({
     edge: "start" | "end",
     e: ReactPointerEvent
   ) => void;
-  onStripWindowMoveStart?: (
-    slot: Slot,
-    anchorClientY: number,
-    pointerId: number
-  ) => void;
   resizeBusy?: boolean;
-  moveBusy?: boolean;
   timelineMinM: number;
   timelineMaxM: number;
   timelineBodyPx: number;
@@ -342,7 +334,6 @@ export function SchedulePlannerStrip({
   }
 
   function bodyPointerDown(slot: Slot, e: React.PointerEvent) {
-    if (!onStripWindowMoveStart) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     const t = e.target as HTMLElement | null;
     if (
@@ -353,22 +344,20 @@ export function SchedulePlannerStrip({
       return;
     const y0 = e.clientY;
     const pid = e.pointerId;
-    let moved = false;
+    let dragLikely = false;
     const onMove = (ev: PointerEvent) => {
       if (ev.pointerId !== pid) return;
-      if (Math.abs(ev.clientY - y0) < 10) return;
-      moved = true;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      onStripWindowMoveStart(slot, y0, pid);
+      if (Math.abs(ev.clientY - y0) >= 10) {
+        dragLikely = true;
+        window.removeEventListener("pointermove", onMove);
+      }
     };
     const onUp = (ev: PointerEvent) => {
       if (ev.pointerId !== pid) return;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
-      if (!moved) setEditId(slot.id);
+      if (!dragLikely) setEditId(slot.id);
     };
     window.addEventListener("pointermove", onMove, { passive: true });
     window.addEventListener("pointerup", onUp);
@@ -456,6 +445,17 @@ export function SchedulePlannerStrip({
           const gap = 3;
           const widthPct = 100 / cols;
           const leftPct = col * widthPct;
+          const minMidGap = 8;
+          const maxHalf = Math.max(
+            6,
+            Math.floor((heightPx - minMidGap) / 2)
+          );
+          const idealHandle = Math.round(heightPx * 0.28);
+          const handleH = Math.min(
+            36,
+            maxHalf,
+            Math.max(14, idealHandle)
+          );
           return (
             <div
               key={slot.id}
@@ -488,8 +488,8 @@ export function SchedulePlannerStrip({
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="start"
-                    className="absolute left-0 right-0 top-0 z-30 min-h-9 cursor-ns-resize touch-none sm:min-h-8"
-                    style={{ touchAction: "none" }}
+                    className="absolute left-0 right-0 top-0 z-30 cursor-ns-resize touch-none"
+                    style={{ height: handleH, touchAction: "none" }}
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -500,8 +500,8 @@ export function SchedulePlannerStrip({
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="end"
-                    className="absolute bottom-0 left-0 right-0 z-30 min-h-9 cursor-ns-resize touch-none sm:min-h-8"
-                    style={{ touchAction: "none" }}
+                    className="absolute bottom-0 left-0 right-0 z-30 cursor-ns-resize touch-none"
+                    style={{ height: handleH, touchAction: "none" }}
                     onPointerDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -510,16 +510,18 @@ export function SchedulePlannerStrip({
                   />
                 ) : null}
                 <div
-                  className={`relative z-[5] flex h-full min-h-0 flex-col items-end justify-center gap-0.5 py-1.5 pl-2 pr-10 text-right sm:pr-9 ${
-                    onStripWindowMoveStart
-                      ? "touch-manipulation cursor-grab active:cursor-grabbing"
-                      : ""
+                  className={`relative z-[5] flex h-full min-h-0 flex-col items-end justify-center gap-0.5 pl-2 pr-10 text-right sm:pr-9 touch-manipulation ${
+                    !onStripTimeResize ? "py-1.5" : ""
                   }`}
+                  style={{
+                    paddingTop: onStripTimeResize ? handleH : undefined,
+                    paddingBottom: onStripTimeResize ? handleH : undefined,
+                  }}
                   onPointerDown={(e) => bodyPointerDown(slot, e)}
                 >
                   <p
                     data-strip-drag
-                    draggable={!resizeBusy && !moveBusy}
+                    draggable={!resizeBusy}
                     aria-label="Drag to reorder in plan"
                     className="w-full touch-none select-none text-[11px] font-bold leading-tight text-zinc-900 [overflow-wrap:anywhere] cursor-grab active:cursor-grabbing"
                     onDragStart={(e) => {
