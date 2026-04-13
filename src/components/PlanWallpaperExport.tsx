@@ -17,7 +17,7 @@ export function PlanWallpaperExport({
   group: FestivalSnapshot;
   sessionMemberId: string;
 }) {
-  const [scope, setScope] = useState<"me" | "member" | "everyone">("me");
+  const [scope, setScope] = useState<"member" | "everyone">("member");
   const [pickMember, setPickMember] = useState(sessionMemberId);
   const [busy, setBusy] = useState(false);
 
@@ -48,11 +48,9 @@ export function PlanWallpaperExport({
 
       const titleBase =
         scope === "everyone"
-          ? "Everyone"
-          : scope === "me"
-            ? ""
-            : (group.members.find((m) => m.id === pickMember)?.displayName ??
-              "Member");
+          ? "Group"
+          : (group.members.find((m) => m.id === pickMember)?.displayName ??
+            "Member");
 
       for (const dayLabel of picked) {
         const slots =
@@ -60,7 +58,7 @@ export function PlanWallpaperExport({
             ? buildEveryoneCalendarSlotsForDay(group, dayLabel)
             : buildMemberPlanCalendarSlotsForDay(
                 group,
-                scope === "me" ? sessionMemberId : pickMember,
+                pickMember,
                 dayLabel
               );
         const blob = await renderPlanWallpaperCalendarPng(
@@ -72,10 +70,7 @@ export function PlanWallpaperExport({
         const a = document.createElement("a");
         a.href = url;
         const safeDay = dayLabel.replace(/[^\w\-]+/g, "_");
-        const fileStem =
-          scope === "me" || !titleBase.trim()
-            ? `plan-${safeDay}`
-            : `plan-${titleBase.replace(/[^\w\-]+/g, "_")}-${safeDay}`;
+        const fileStem = `plan-${titleBase.replace(/[^\w\-]+/g, "_")}-${safeDay}`;
         a.download = `${fileStem}.png`;
         a.click();
         URL.revokeObjectURL(url);
@@ -95,17 +90,6 @@ export function PlanWallpaperExport({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setScope("me")}
-            className={`border-2 px-2 py-1 text-xs font-semibold ${
-              scope === "me"
-                ? "border-zinc-900 bg-zinc-900 text-white"
-                : "border-zinc-900 bg-white text-zinc-900"
-            }`}
-          >
-            Mine
-          </button>
-          <button
-            type="button"
             onClick={() => setScope("member")}
             className={`border-2 px-2 py-1 text-xs font-semibold ${
               scope === "member"
@@ -113,7 +97,7 @@ export function PlanWallpaperExport({
                 : "border-zinc-900 bg-white text-zinc-900"
             }`}
           >
-            Member
+            One person
           </button>
           <button
             type="button"
@@ -124,7 +108,7 @@ export function PlanWallpaperExport({
                 : "border-zinc-900 bg-white text-zinc-900"
             }`}
           >
-            Everyone
+            Group
           </button>
         </div>
         {scope === "member" ? (

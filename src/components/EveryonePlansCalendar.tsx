@@ -11,13 +11,51 @@ type Slot = FestivalSnapshot["schedule"][0];
 
 const pxPerSlot = 28;
 
+export type EveryonePlansColumn =
+  | {
+      key: string;
+      label: string;
+      accent?: boolean;
+      mode: "member";
+      memberId: string;
+    }
+  | {
+      key: string;
+      label: string;
+      accent?: boolean;
+      mode: "groupUnion";
+    };
+
+function unionWantedSlotIdsForDay(
+  group: FestivalSnapshot,
+  dayKey: string
+): Set<string> {
+  const ids = new Set<string>();
+  for (const m of group.members) {
+    for (const s of group.schedule) {
+      if (
+        s.dayLabel.trim() === dayKey &&
+        effectiveMemberWantsSlot(group, m.id, s.id)
+      ) {
+        ids.add(s.id);
+      }
+    }
+  }
+  return ids;
+}
+
 export function EveryonePlansCalendar({
   group,
   activeDay,
+  columns,
+  /** When opening a slot from the combined Group column, attribute the detail dialog to this member (e.g. current user). */
+  groupUnionOpenAsMemberId,
   onSlotOpenDetail,
 }: {
   group: FestivalSnapshot;
   activeDay: string;
+  columns?: EveryonePlansColumn[];
+  groupUnionOpenAsMemberId?: string;
   onSlotOpenDetail?: (slot: Slot, memberId: string) => void;
 }) {
   const dayKey = activeDay.trim();
@@ -57,7 +95,20 @@ export function EveryonePlansCalendar({
       };
     }, [group.schedule, dayKey]);
 
-  const members = group.members;
+  const columnPlan = useMemo((): EveryonePlansColumn[] => {
+    if (columns?.length) return columns;
+    return group.members.map((mem) => ({
+      key: mem.id,
+      label: mem.displayName,
+      mode: "member",
+      memberId: mem.id,
+    }));
+  }, [columns, group.members]);
+
+  const unionIds = useMemo(
+    () => unionWantedSlotIdsForDay(group, dayKey),
+    [group, dayKey]
+  );
 
   if (!ticksRender.length) {
     return <p className="text-sm text-zinc-600">No schedule for this day.</p>;
@@ -84,27 +135,52 @@ export function EveryonePlansCalendar({
           ))}
         </div>
 
-        {members.map((mem) => {
-          const slots = group.schedule
-            .filter(
-              (s) =>
-                s.dayLabel.trim() === dayKey &&
-                effectiveMemberWantsSlot(group, mem.id, s.id)
-            )
-            .sort(
-              (a, b) =>
-                effectiveWindowMinutes(group, mem.id, a).start -
-                effectiveWindowMinutes(group, mem.id, b).start
-            );
+        {columnPlan.map((col, colIndex) => {
+          const slots =
+            col.mode === "groupUnion"
+              ? group.schedule
+                  .filter(
+                    (s) =>
+                      s.dayLabel.trim() === dayKey && unionIds.has(s.id)
+                  )
+                  .sort(
+                    (a, b) => parseHm(a.start) - parseHm(b.start)
+                  )
+              : group.schedule
+                  .filter(
+                    (s) =>
+                      s.dayLabel.trim() === dayKey &&
+                      effectiveMemberWantsSlot(group, col.memberId, s.id)
+                  )
+                  .sort(
+                    (a, b) =>
+                      effectiveWindowMinutes(group, col.memberId, a).start -
+                      effectiveWindowMinutes(group, col.memberId, b).start
+                  );
+
+          const detailMemberId =
+            col.mode === "groupUnion"
+              ? (groupUnionOpenAsMemberId ??
+                group.members[0]?.id ??
+                "")
+              : col.memberId;
 
           return (
             <div
-              key={mem.id}
-              className="relative min-w-[132px] flex-1 border-r-2 border-zinc-900 last:border-r-0"
+              key={col.key}
+              className={`relative min-w-[132px] flex-1 border-r-2 border-zinc-900 ${
+                colIndex === columnPlan.length - 1 ? "last:border-r-0" : ""
+              }`}
               style={{ minHeight: timelineHRender }}
             >
-              <div className="sticky top-0 z-20 h-8 border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-8 text-zinc-900 shadow-[0_6px_10px_-4px_rgba(0,0,0,0.1)]">
-                <span className="line-clamp-2">{mem.displayName}</span>
+              <div
+                className={`sticky top-0 z-20 h-8 border-b-2 px-1 text-center text-[11px] font-semibold leading-8 shadow-[0_6px_10px_-4px_rgba(0,0,0,0.1)] ${
+                  col.accent
+                    ? "border-zinc-900 bg-[var(--accent)] text-white"
+                    : "border-zinc-900 bg-zinc-100 text-zinc-900"
+                }`}
+              >
+                <span className="line-clamp-2">{col.label}</span>
               </div>
               <div
                 className="relative"
@@ -118,11 +194,16 @@ export function EveryonePlansCalendar({
                   />
                 ))}
                 {slots.map((slot, slotIndex) => {
-                  const { start: sm, end: em } = effectiveWindowMinutes(
-                    group,
-                    mem.id,
-                    slot
-                  );
+                  let sm: number;
+                  let em: number;
+                  if (col.mode === "groupUnion") {
+                    sm = parseHm(slot.start);
+                    em = parseHm(slot.end);
+                  } else {
+                    const w = effectiveWindowMinutes(group, col.memberId, slot);
+                    sm = w.start;
+                    em = w.end;
+                  }
                   if (range <= 0 || Number.isNaN(sm) || Number.isNaN(em)) {
                     return null;
                   }
@@ -139,7 +220,13 @@ export function EveryonePlansCalendar({
                       tabIndex={open ? 0 : undefined}
                       onClick={
                         open
-                          ? () => onSlotOpenDetail?.(slot, mem.id)
+                          ? () =>
+                              onSlotOpenDetail?.(
+                                slot,
+                                col.mode === "groupUnion"
+                                  ? detailMemberId
+                                  : col.memberId
+                              )
                           : undefined
                       }
                       onKeyDown={
@@ -147,7 +234,12 @@ export function EveryonePlansCalendar({
                           ? (e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
-                                onSlotOpenDetail?.(slot, mem.id);
+                                onSlotOpenDetail?.(
+                                  slot,
+                                  col.mode === "groupUnion"
+                                    ? detailMemberId
+                                    : col.memberId
+                                );
                               }
                             }
                           : undefined

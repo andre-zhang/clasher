@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { EveryonePlansCalendar } from "@/components/EveryonePlansCalendar";
+import {
+  EveryonePlansCalendar,
+  type EveryonePlansColumn,
+} from "@/components/EveryonePlansCalendar";
 import { PlanWallpaperExport } from "@/components/PlanWallpaperExport";
-import { ScheduleCalendar } from "@/components/ScheduleCalendar";
 import { useClasher } from "@/context/ClasherContext";
 import {
   effectiveMemberSlotPlanWindow,
@@ -36,10 +38,11 @@ function planDetailSummary(
 
 export default function PlansPage() {
   const { session, group, putSlotIntents, addSlotComment } = useClasher();
-  const [tab, setTab] = useState<"person" | "everyone">("person");
-  const [memberId, setMemberId] = useState<string | null>(null);
   const [day, setDay] = useState<string | null>(null);
   const [planDetailSlotId, setPlanDetailSlotId] = useState<string | null>(
+    null
+  );
+  const [planDetailMemberId, setPlanDetailMemberId] = useState<string | null>(
     null
   );
   const [planNoteDraft, setPlanNoteDraft] = useState("");
@@ -48,7 +51,6 @@ export default function PlansPage() {
   const planDetailRef = useRef<HTMLDialogElement>(null);
 
   const me = session?.memberId ?? null;
-  const activeMember = memberId ?? me;
 
   const days = useMemo(() => {
     if (!group) return [];
@@ -58,18 +60,39 @@ export default function PlansPage() {
 
   const activeDay = day ?? days[0] ?? null;
 
-  /** Remount calendar when this member's intents change so layout matches saved plan windows. */
-  const memberIntentsKey = useMemo(() => {
-    if (!group || !activeMember) return "0";
-    return group.allMemberSlotIntents
-      .filter((i) => i.memberId === activeMember)
-      .map(
-        (i) =>
-          `${i.slotId}:${i.wants ? 1 : 0}:${i.planFrom ?? ""}:${i.planTo ?? ""}`
-      )
-      .sort()
-      .join("|");
-  }, [group, activeMember]);
+  const activeDetailMember = planDetailMemberId ?? me;
+
+  const planColumns = useMemo((): EveryonePlansColumn[] => {
+    if (!group || !me) return [];
+    const others = group.members
+      .filter((m) => m.id !== me)
+      .sort((a, b) =>
+        a.displayName.localeCompare(b.displayName, undefined, {
+          sensitivity: "base",
+        })
+      );
+    return [
+      {
+        key: "mine",
+        label: "Mine",
+        accent: true,
+        mode: "member",
+        memberId: me,
+      },
+      {
+        key: "group",
+        label: "Group",
+        accent: true,
+        mode: "groupUnion",
+      },
+      ...others.map((m) => ({
+        key: m.id,
+        label: m.displayName,
+        mode: "member" as const,
+        memberId: m.id,
+      })),
+    ];
+  }, [group, me]);
 
   const detailSlot = useMemo(
     () =>
@@ -80,9 +103,9 @@ export default function PlansPage() {
   );
 
   const openPlanSummary = useMemo(() => {
-    if (!group || !activeMember || !detailSlot) return null;
-    return planDetailSummary(group, activeMember, detailSlot);
-  }, [group, activeMember, detailSlot]);
+    if (!group || !activeDetailMember || !detailSlot) return null;
+    return planDetailSummary(group, activeDetailMember, detailSlot);
+  }, [group, activeDetailMember, detailSlot]);
 
   useEffect(() => {
     if (planDetailSlotId) planDetailRef.current?.showModal();
@@ -100,99 +123,38 @@ export default function PlansPage() {
 
       <PlanWallpaperExport group={group} sessionMemberId={session.memberId} />
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setTab("person")}
-          className={`border-2 px-3 py-1.5 text-xs font-semibold ${
-            tab === "person"
-              ? "border-zinc-900 bg-zinc-900 text-white"
-              : "border-zinc-900 bg-white text-zinc-900"
-          }`}
-        >
-          One person
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("everyone")}
-          className={`border-2 px-3 py-1.5 text-xs font-semibold ${
-            tab === "everyone"
-              ? "border-zinc-900 bg-zinc-900 text-white"
-              : "border-zinc-900 bg-white text-zinc-900"
-          }`}
-        >
-          Everyone
-        </button>
-      </div>
-
-      {tab === "person" ? (
-        <div className="space-y-3">
-          <label className="flex flex-wrap items-center gap-2 text-sm text-zinc-800">
-            <span className="font-medium">Member</span>
-            <select
-              className="border-2 border-zinc-900 bg-white px-2 py-1 text-sm"
-              value={activeMember ?? ""}
-              onChange={(e) => setMemberId(e.target.value || null)}
+      {days.length > 1 ? (
+        <div className="flex flex-wrap gap-1">
+          {days.map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDay(d)}
+              className={`border-2 px-2 py-1 text-xs font-medium ${
+                activeDay === d
+                  ? "border-zinc-900 bg-zinc-900 text-white"
+                  : "border-zinc-900 bg-white"
+              }`}
             >
-              {group.members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.displayName}
-                  {m.id === session.memberId ? " (you)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          {activeMember ? (
-            <ScheduleCalendar
-              key={memberIntentsKey}
-              schedule={group.schedule}
-              memberId={activeMember}
-              allMemberSlotIntents={group.allMemberSlotIntents}
-              group={group}
-              slotComments={group.slotComments}
-              visibilityMode="effectivePlan"
-              showEffectivePlanLayer
-              singleColumnTimeline
-              hideSlotReactions
-              onSlotOpenDetail={(slot) => setPlanDetailSlotId(slot.id)}
-            />
-          ) : null}
+              {d}
+            </button>
+          ))}
         </div>
-      ) : (
-        <div className="space-y-3">
-          {days.length > 1 ? (
-            <div className="flex flex-wrap gap-1">
-              {days.map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setDay(d)}
-                  className={`border-2 px-2 py-1 text-xs font-medium ${
-                    activeDay === d
-                      ? "border-zinc-900 bg-zinc-900 text-white"
-                      : "border-zinc-900 bg-white"
-                  }`}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-          ) : null}
+      ) : null}
 
-          {!activeDay ? (
-            <p className="text-sm text-zinc-600">No schedule for this day.</p>
-          ) : (
-            <EveryonePlansCalendar
-              group={group}
-              activeDay={activeDay}
-              onSlotOpenDetail={(slot, forMemberId) => {
-                setMemberId(forMemberId);
-                setTab("person");
-                setPlanDetailSlotId(slot.id);
-              }}
-            />
-          )}
-        </div>
+      {!activeDay ? (
+        <p className="text-sm text-zinc-600">No schedule for this day.</p>
+      ) : (
+        <EveryonePlansCalendar
+          group={group}
+          activeDay={activeDay}
+          columns={planColumns}
+          groupUnionOpenAsMemberId={session.memberId}
+          onSlotOpenDetail={(slot, forMemberId) => {
+            setPlanDetailMemberId(forMemberId);
+            setPlanDetailSlotId(slot.id);
+          }}
+        />
       )}
 
       <dialog
@@ -200,10 +162,11 @@ export default function PlansPage() {
         className="max-w-md border-2 border-zinc-900 bg-white p-4 shadow-[4px_4px_0_0_#18181b] backdrop:bg-black/40"
         onClose={() => {
           setPlanDetailSlotId(null);
+          setPlanDetailMemberId(null);
           setPlanNoteDraft("");
         }}
       >
-        {detailSlot && activeMember ? (
+        {detailSlot && activeDetailMember ? (
           <>
             <h3 className="text-base font-bold text-zinc-900">
               {detailSlot.artistName}
@@ -223,7 +186,12 @@ export default function PlansPage() {
                 </div>
                 <div className="rounded border-2 border-zinc-900 bg-white px-3 py-2">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                    Your plan
+                    {activeDetailMember === session.memberId
+                      ? "Your plan"
+                      : `${
+                          group.members.find((m) => m.id === activeDetailMember)
+                            ?.displayName ?? "Member"
+                        }'s plan`}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-zinc-900">
                     {openPlanSummary.planLine}
@@ -231,7 +199,7 @@ export default function PlansPage() {
                 </div>
               </div>
             ) : null}
-            {activeMember === session.memberId &&
+            {activeDetailMember === session.memberId &&
             effectiveMemberWantsSlot(group, session.memberId, detailSlot.id) ? (
               <button
                 type="button"

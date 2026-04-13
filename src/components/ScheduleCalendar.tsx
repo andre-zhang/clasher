@@ -362,11 +362,24 @@ export function ScheduleCalendar({
       : showAllStages
         ? schedule.filter((s) => s.dayLabel.trim() === activeDay)
         : filtered;
-    if (!rows.length) {
+    const dayKey = activeDay?.trim() ?? "";
+    const byId = new Map<string, Slot>();
+    for (const s of rows) {
+      byId.set(s.id, s);
+    }
+    /** Strip can include slots not on the filtered grid (e.g. group scope); include them so Y↔time mapping matches the plan strip and resize stays within real set times. */
+    if (buildPlanner && dayKey) {
+      for (const id of stripIds) {
+        const s = schedule.find((x) => x.id === id);
+        if (s && s.dayLabel.trim() === dayKey) byId.set(s.id, s);
+      }
+    }
+    const unionRows = [...byId.values()];
+    if (!unionRows.length) {
       return { minM: 0, maxM: 60 };
     }
     const mins: number[] = [];
-    for (const s of rows) {
+    for (const s of unionRows) {
       const a = parseHm(s.start);
       const b = parseHm(s.end);
       if (!Number.isNaN(a)) mins.push(a);
@@ -377,7 +390,15 @@ export function ScheduleCalendar({
     const minM = Math.floor(lo / 30) * 30;
     const maxM = Math.max(minM + 60, Math.ceil(hi / 30) * 30);
     return { minM, maxM };
-  }, [singleCol, showAllStages, schedule, activeDay, filtered]);
+  }, [
+    singleCol,
+    showAllStages,
+    schedule,
+    activeDay,
+    filtered,
+    buildPlanner,
+    stripIds,
+  ]);
 
   const ticksRender = useMemo(() => {
     const t: number[] = [];
