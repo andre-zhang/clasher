@@ -12,14 +12,18 @@ import {
 import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
-import { parseHm } from "@/lib/timeHm";
+import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
 import { clampPlanWindowToSlot } from "@/lib/walkFeasibility";
 import type { FestivalSnapshot } from "@/lib/types";
 
 type Slot = FestivalSnapshot["schedule"][number];
 
-/** Invisible hit band on top/bottom border; ≥12px for touch targets (WCAG). */
+/** Hit band on top/bottom border; ≥12px for touch targets (WCAG). */
 const STRIP_EDGE_HIT_PX = 14;
+
+function snapMinutesTo5(m: number): number {
+  return Math.round(m / 5) * 5;
+}
 
 type IntentPatch = {
   slotId: string;
@@ -82,7 +86,6 @@ export function SchedulePlannerStrip({
   onStripUserAddedSlot,
   onStripUserRemovedUserAdd,
   onApply,
-  onStripTimeResize,
   stripPinned,
   onStripPinnedChange,
   timelineMinM,
@@ -105,11 +108,6 @@ export function SchedulePlannerStrip({
   stripUserAddedIds: Set<string>;
   onStripUserAddedSlot?: (slotId: string) => void;
   onStripUserRemovedUserAdd?: (slotId: string) => void;
-  onStripTimeResize?: (
-    slot: Slot,
-    edge: "start" | "end",
-    e: ReactPointerEvent
-  ) => void;
   /** When true, outer calendar keeps this column pinned like the time rail while scrolling. */
   stripPinned?: boolean;
   onStripPinnedChange?: (pinned: boolean) => void;
@@ -130,9 +128,169 @@ export function SchedulePlannerStrip({
   const onApplyRef = useRef(onApply);
   onApplyRef.current = onApply;
 
+  /** Same time axis as the main schedule column; used to map pointer Y → minutes. */
+  const stripTimelineBodyRef = useRef<HTMLDivElement>(null);
+  const timelineAxisRef = useRef({ minM: 0, maxM: 60 });
+  timelineAxisRef.current = { minM: timelineMinM, maxM: timelineMaxM };
+  const stripDragCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      stripDragCleanupRef.current?.();
+      stripDragCleanupRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     lastSuccessfulSaveIdsRef.current = [];
   }, [activeDay, plannerMemberId, stripScope]);
+
+  function beginStripEdgeDrag(
+    slot: Slot,
+    edge: "start" | "end",
+    e: ReactPointerEvent<HTMLDivElement>
+  ) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    stripDragCleanupRef.current?.();
+    stripDragCleanupRef.current = null;
+
+    const pointerId = e.pointerId;
+    const target = e.currentTarget;
+    try {
+      target.setPointerCapture(pointerId);
+    } catch {
+      /* ignore */
+    }
+
+    const slotId = slot.id;
+    const listenerOpts: AddEventListenerOptions = {
+      capture: true,
+      passive: false,
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      ev.preventDefault();
+      const body = stripTimelineBodyRef.current;
+      if (!body) return;
+      const { minM, maxM } = timelineAxisRef.current;
+      const range = maxM - minM;
+      if (range <= 0) return;
+      const rect = body.getBoundingClientRect();
+      const h = rect.height;
+      if (h <= 0) return;
+      const frac = Math.max(0, Math.min(1, (ev.clientY - rect.top) / h));
+      const minutesAtPointer = minM + frac * range;
+
+      setWindows((prev) => {
+        const w = prev[slotId] ?? {
+          planFrom: slot.start,
+          planTo: slot.end,
+        };
+        let sm = parseHm(w.planFrom);
+        let em = parseHm(w.planTo);
+        const slotLo = parseHm(slot.start);
+        const slotHi = parseHm(slot.end);
+        if (Number.isNaN(sm)) sm = slotLo;
+        if (Number.isNaN(em)) em = slotHi;
+        const span =
+          !Number.isNaN(slotLo) &&
+          !Number.isNaN(slotHi) &&
+          slotHi > slotLo
+            ? slotHi - slotLo
+            : 60;
+        const minDur = Math.max(1, Math.min(5, span));
+
+        if (edge === "start") {
+          if (Number.isNaN(slotLo) || Number.isNaN(slotHi)) {
+            return {
+              ...prev,
+              [slotId]: {
+                planFrom: hhmmFromMinutes(minutesAtPointer),
+                planTo: w.planTo,
+              },
+            };
+          }
+          let newSm = minutesAtPointer;
+          newSm = Math.max(slotLo, Math.min(slotHi, newSm));
+          newSm = Math.min(newSm, em - minDur);
+          newSm = Math.max(newSm, slotLo);
+          return {
+            ...prev,
+            [slotId]: { planFrom: hhmmFromMinutes(newSm), planTo: w.planTo },
+          };
+        }
+
+        if (Number.isNaN(slotLo) || Number.isNaN(slotHi)) {
+          return {
+            ...prev,
+            [slotId]: {
+              planFrom: w.planFrom,
+              planTo: hhmmFromMinutes(minutesAtPointer),
+            },
+          };
+        }
+        let newEm = minutesAtPointer;
+        newEm = Math.max(slotLo, Math.min(slotHi, newEm));
+        newEm = Math.max(newEm, sm + minDur);
+        newEm = Math.min(newEm, slotHi);
+        return {
+          ...prev,
+          [slotId]: { planFrom: w.planFrom, planTo: hhmmFromMinutes(newEm) },
+        };
+      });
+    };
+
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      try {
+        target.releasePointerCapture(pointerId);
+      } catch {
+        /* ignore */
+      }
+      window.removeEventListener("pointermove", onMove, listenerOpts);
+      window.removeEventListener("pointerup", onUp, listenerOpts);
+      window.removeEventListener("pointercancel", onUp, listenerOpts);
+      stripDragCleanupRef.current = null;
+
+      setWindows((prev) => {
+        const cur = prev[slotId];
+        if (!cur) return prev;
+        const c = clampPlanWindowToSlot(slot, cur.planFrom, cur.planTo);
+        let sm = parseHm(c.planFrom);
+        let em = parseHm(c.planTo);
+        if (Number.isNaN(sm) || Number.isNaN(em)) {
+          return { ...prev, [slotId]: c };
+        }
+        sm = snapMinutesTo5(Math.round(sm));
+        em = snapMinutesTo5(Math.round(em));
+        const fin = clampPlanWindowToSlot(
+          slot,
+          hhmmFromMinutes(sm),
+          hhmmFromMinutes(em)
+        );
+        return { ...prev, [slotId]: fin };
+      });
+    };
+
+    const cleanup = () => {
+      window.removeEventListener("pointermove", onMove, listenerOpts);
+      window.removeEventListener("pointerup", onUp, listenerOpts);
+      window.removeEventListener("pointercancel", onUp, listenerOpts);
+      try {
+        target.releasePointerCapture(pointerId);
+      } catch {
+        /* ignore */
+      }
+    };
+    stripDragCleanupRef.current = cleanup;
+
+    window.addEventListener("pointermove", onMove, listenerOpts);
+    window.addEventListener("pointerup", onUp, listenerOpts);
+    window.addEventListener("pointercancel", onUp, listenerOpts);
+  }
 
   const daySlots = useMemo(
     () =>
@@ -430,6 +588,7 @@ export function SchedulePlannerStrip({
       </div>
 
       <div
+        ref={stripTimelineBodyRef}
         className="relative w-full touch-pan-y overflow-hidden overscroll-y-contain border-b border-zinc-200 [-webkit-tap-highlight-color:transparent]"
         style={{ height: timelineBodyPx, minHeight: 120 }}
       >
@@ -504,80 +663,58 @@ export function SchedulePlannerStrip({
               }}
             >
               <div className="relative min-h-0 flex-1 overflow-hidden">
-                {onStripTimeResize ? (
-                  <div
-                    data-strip-resize="start"
-                    role="slider"
-                    aria-label="Drag to adjust arrival time (not before set start)"
-                    aria-valuemin={ariaMin}
-                    aria-valuemax={ariaMax}
-                    aria-valuenow={
-                      Number.isNaN(planFromM)
-                        ? ariaMin
-                        : Math.round(
-                            Math.min(ariaMax, Math.max(ariaMin, planFromM))
-                          )
-                    }
-                    title="Drag to adjust arrival"
-                    className="absolute inset-x-[-2px] top-[-2px] z-[32] flex cursor-ns-resize touch-none select-none items-start justify-center bg-transparent pt-0.5"
-                    style={{
-                      height: edgeHitH,
-                      touchAction: "none",
-                    }}
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      try {
-                        e.currentTarget.setPointerCapture(e.pointerId);
-                      } catch {
-                        /* ignore */
-                      }
-                      onStripTimeResize(slot, "start", e);
-                    }}
-                  >
-                    <span
-                      className="pointer-events-none h-0.5 w-7 rounded-full bg-zinc-400"
-                      aria-hidden
-                    />
-                  </div>
-                ) : null}
-                {onStripTimeResize ? (
-                  <div
-                    data-strip-resize="end"
-                    role="slider"
-                    aria-label="Drag to adjust departure time (not after set end)"
-                    aria-valuemin={ariaMin}
-                    aria-valuemax={ariaMax}
-                    aria-valuenow={
-                      Number.isNaN(planToM)
-                        ? ariaMax
-                        : Math.round(
-                            Math.min(ariaMax, Math.max(ariaMin, planToM))
-                          )
-                    }
-                    title="Drag to adjust departure"
-                    className="absolute inset-x-[-2px] bottom-[-2px] z-[32] flex cursor-ns-resize touch-none select-none items-end justify-center bg-transparent pb-0.5"
-                    style={{
-                      height: edgeHitH,
-                      touchAction: "none",
-                    }}
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      try {
-                        e.currentTarget.setPointerCapture(e.pointerId);
-                      } catch {
-                        /* ignore */
-                      }
-                      onStripTimeResize(slot, "end", e);
-                    }}
-                  >
-                    <span
-                      className="pointer-events-none h-0.5 w-7 rounded-full bg-zinc-400"
-                      aria-hidden
-                    />
-                  </div>
-                ) : null}
+                <div
+                  data-strip-resize="start"
+                  role="slider"
+                  aria-label="Drag to adjust arrival time (not before set start)"
+                  aria-valuemin={ariaMin}
+                  aria-valuemax={ariaMax}
+                  aria-valuenow={
+                    Number.isNaN(planFromM)
+                      ? ariaMin
+                      : Math.round(
+                          Math.min(ariaMax, Math.max(ariaMin, planFromM))
+                        )
+                  }
+                  title="Drag to adjust arrival"
+                  className="absolute inset-x-[-2px] top-[-2px] z-[32] flex cursor-ns-resize touch-none select-none items-start justify-center bg-transparent pt-0.5"
+                  style={{
+                    height: edgeHitH,
+                    touchAction: "none",
+                  }}
+                  onPointerDown={(e) => beginStripEdgeDrag(slot, "start", e)}
+                >
+                  <span
+                    className="pointer-events-none h-0.5 w-7 rounded-full bg-zinc-400"
+                    aria-hidden
+                  />
+                </div>
+                <div
+                  data-strip-resize="end"
+                  role="slider"
+                  aria-label="Drag to adjust departure time (not after set end)"
+                  aria-valuemin={ariaMin}
+                  aria-valuemax={ariaMax}
+                  aria-valuenow={
+                    Number.isNaN(planToM)
+                      ? ariaMax
+                      : Math.round(
+                          Math.min(ariaMax, Math.max(ariaMin, planToM))
+                        )
+                  }
+                  title="Drag to adjust departure"
+                  className="absolute inset-x-[-2px] bottom-[-2px] z-[32] flex cursor-ns-resize touch-none select-none items-end justify-center bg-transparent pb-0.5"
+                  style={{
+                    height: edgeHitH,
+                    touchAction: "none",
+                  }}
+                  onPointerDown={(e) => beginStripEdgeDrag(slot, "end", e)}
+                >
+                  <span
+                    className="pointer-events-none h-0.5 w-7 rounded-full bg-zinc-400"
+                    aria-hidden
+                  />
+                </div>
                 <div
                   className="relative z-[5] flex h-full min-h-0 flex-row items-start gap-1 py-1 pl-1 pr-7 text-left touch-manipulation"
                   onPointerDown={(e) => bodyPointerDown(slot, e)}
