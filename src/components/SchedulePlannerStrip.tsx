@@ -68,8 +68,10 @@ function stripBoxLayout(
     return { topPx: 0, heightPx: 28 };
   }
   const topPx = ((sm - timelineMinM) / range) * timelineBodyPx;
-  // Tall enough for edge resize hit areas + two text lines (avoids overflow on short slots).
-  const heightPx = Math.max(((em - sm) / range) * timelineBodyPx, 40);
+  const rawH = ((em - sm) / range) * timelineBodyPx;
+  // Tiny floor so slivers stay visible; avoid a large constant (e.g. 40px) that made
+  // every sub-hour plan look the same height on long festival timelines.
+  const heightPx = em <= sm ? 4 : Math.max(rawH, 5);
   return { topPx, heightPx };
 }
 
@@ -686,9 +688,10 @@ export function SchedulePlannerStrip({
           const gap = 3;
           const widthPct = 100 / cols;
           const leftPct = col * widthPct;
+          const tentative = Math.floor(heightPx / 2) - 1;
           const edgeHitH = Math.min(
             STRIP_EDGE_HIT_PX,
-            Math.max(8, Math.floor((heightPx - 6) / 2))
+            Math.max(4, Math.min(tentative, STRIP_EDGE_HIT_PX))
           );
           const wCur = windows[slot.id] ?? {
             planFrom: slot.start,
