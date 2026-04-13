@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
+import { LeaveSquadDialog } from "@/components/LeaveSquadDialog";
 import { useClasher } from "@/context/ClasherContext";
 
 const tabs = [
@@ -24,6 +25,7 @@ export function SquadShell({
   const router = useRouter();
   const pathname = usePathname();
   const { session, loading, error, leave, refresh } = useClasher();
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -44,6 +46,11 @@ export function SquadShell({
 
   return (
     <div className="min-h-screen pb-20">
+      <LeaveSquadDialog
+        open={leaveDialogOpen}
+        onClose={() => setLeaveDialogOpen(false)}
+        onConfirmLeave={leave}
+      />
       <header className="sticky top-0 z-10 border-b-2 border-zinc-900 bg-zinc-100">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-3">
           <Link
@@ -81,16 +88,7 @@ export function SquadShell({
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (
-                  !confirm(
-                    "Leave this group? You will be removed from the squad and your ratings and plans here will be deleted."
-                  )
-                ) {
-                  return;
-                }
-                void leave();
-              }}
+              onClick={() => setLeaveDialogOpen(true)}
               className="border-2 border-red-800 bg-white px-2 py-0.5 text-xs font-semibold text-red-800"
             >
               Leave
