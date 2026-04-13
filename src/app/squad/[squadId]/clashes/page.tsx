@@ -99,6 +99,7 @@ export default function ClashesPage() {
         type="button"
         disabled={busy || !group.schedule.length}
         onClick={() => void syncHotFlags()}
+        title="Pins acts whose artists are must/want on Lineup. Does not change plan acts or times."
         className="border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40"
       >
         Sync from Lineup

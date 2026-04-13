@@ -132,6 +132,7 @@ export default function SchedulePage() {
             type="button"
             disabled={syncBusy || !group.schedule.length}
             onClick={() => void syncHotToShortlist()}
+            title="Pins acts whose artists are must/want on Lineup. Does not add/remove plan acts or change plan times."
             className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-2.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40 min-h-11 sm:min-h-0 sm:py-1.5"
           >
             Sync from Lineup

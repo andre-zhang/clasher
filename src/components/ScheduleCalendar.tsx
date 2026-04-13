@@ -179,6 +179,8 @@ export function ScheduleCalendar({
     pointerId: number;
   } | null>(null);
   const [stripScope, setStripScope] = useState<"mine" | "group">("mine");
+  /** Pin plan strip beside the time rail while scrolling (like sticky time column). */
+  const [stripPinned, setStripPinned] = useState(false);
   /** “Everyone” strip: slots you added from the grid before first save (not from others’ plans). */
   const [stripUserAddedIds, setStripUserAddedIds] = useState<Set<string>>(
     () => new Set()
@@ -709,35 +711,45 @@ export function ScheduleCalendar({
             </div>
           </div>
           {buildPlanner && group && activeDay ? (
-            <SchedulePlannerStrip
-              group={group}
-              activeDay={activeDay}
-              schedule={schedule}
-              plannerMemberId={buildPlanner.memberId}
-              stripIds={stripIds}
-              setStripIds={setStripIds}
-              windows={stripWindows}
-              setWindows={setStripWindows}
-              stripScope={stripScope}
-              setStripScope={setStripScope}
-              stripUserAddedIds={stripUserAddedIds}
-              onStripUserAddedSlot={(id) =>
-                setStripUserAddedIds((prev) => new Set(prev).add(id))
+            <div
+              className={
+                stripPinned
+                  ? "sticky left-16 z-[99] shrink-0 self-start sm:left-14"
+                  : "shrink-0"
               }
-              onStripUserRemovedUserAdd={(id) =>
-                setStripUserAddedIds((prev) => {
-                  const next = new Set(prev);
-                  next.delete(id);
-                  return next;
-                })
-              }
-              onApply={buildPlanner.onApplyPlan}
-              onStripTimeResize={beginStripResize}
-              resizeBusy={Boolean(stripResize)}
-              timelineMinM={minMR}
-              timelineMaxM={maxMR}
-              timelineBodyPx={timelineBodyPx}
-            />
+            >
+              <SchedulePlannerStrip
+                group={group}
+                activeDay={activeDay}
+                schedule={schedule}
+                plannerMemberId={buildPlanner.memberId}
+                stripIds={stripIds}
+                setStripIds={setStripIds}
+                windows={stripWindows}
+                setWindows={setStripWindows}
+                stripScope={stripScope}
+                setStripScope={setStripScope}
+                stripUserAddedIds={stripUserAddedIds}
+                onStripUserAddedSlot={(id) =>
+                  setStripUserAddedIds((prev) => new Set(prev).add(id))
+                }
+                onStripUserRemovedUserAdd={(id) =>
+                  setStripUserAddedIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                  })
+                }
+                onApply={buildPlanner.onApplyPlan}
+                onStripTimeResize={beginStripResize}
+                resizeBusy={Boolean(stripResize)}
+                stripPinned={stripPinned}
+                onStripPinnedChange={setStripPinned}
+                timelineMinM={minMR}
+                timelineMaxM={maxMR}
+                timelineBodyPx={timelineBodyPx}
+              />
+            </div>
           ) : null}
           <div className="relative flex min-h-0 min-w-0 flex-1 w-full">
             <div className="relative flex min-w-0 flex-1 w-full">
