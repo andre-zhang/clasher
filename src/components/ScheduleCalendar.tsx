@@ -521,6 +521,14 @@ export function ScheduleCalendar({
     const baseToM = stripResize.baseToM;
     const anchorClientY = stripResize.anchorClientY;
 
+    const slotSpanMin =
+      !Number.isNaN(slotLo) &&
+      !Number.isNaN(slotHi) &&
+      slotHi > slotLo
+        ? slotHi - slotLo
+        : 60;
+    const minBlockMin = Math.max(1, Math.min(5, slotSpanMin));
+
     const onMove = (e: PointerEvent) => {
       if (e.pointerId !== pointerId) return;
       const { minMR: loR, maxMR: hiR, timelineBodyPx: tb } =
@@ -541,10 +549,17 @@ export function ScheduleCalendar({
       if (!Number.isNaN(slotLo) && !Number.isNaN(slotHi)) {
         sm = Math.max(slotLo, Math.min(slotHi, sm));
         em = Math.max(slotLo, Math.min(slotHi, em));
+        if (edge === "end") {
+          em = Math.max(em, sm + minBlockMin);
+          em = Math.min(em, slotHi);
+        } else {
+          sm = Math.min(sm, em - minBlockMin);
+          sm = Math.max(sm, slotLo);
+        }
       }
       if (em < sm) {
-        if (edge === "end") em = sm;
-        else sm = em;
+        if (edge === "end") em = sm + minBlockMin;
+        else sm = em - minBlockMin;
       }
       setStripWindows((prev) => ({
         ...prev,
@@ -574,13 +589,13 @@ export function ScheduleCalendar({
       });
       setStripResize(null);
     };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onUp);
     return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onUp);
     };
   }, [stripResize, schedule, buildPlanner]);
 
@@ -633,13 +648,13 @@ export function ScheduleCalendar({
       if (e.pointerId !== stripMove.pointerId) return;
       setStripMove(null);
     };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onUp);
     return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onUp);
     };
   }, [stripMove, schedule, buildPlanner]);
 
@@ -658,11 +673,6 @@ export function ScheduleCalendar({
     e.stopPropagation();
     e.preventDefault();
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    try {
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
-    }
     const w = stripWindows[slot.id] ?? {
       planFrom: slot.start,
       planTo: slot.end,

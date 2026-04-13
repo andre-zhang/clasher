@@ -510,7 +510,7 @@ export function SchedulePlannerStrip({
                   />
                 ) : null}
                 <div
-                  className={`relative z-[5] flex h-full min-h-0 flex-col items-center justify-center gap-0.5 px-2 py-1.5 pr-9 text-center sm:pr-8 ${
+                  className={`relative z-[5] flex h-full min-h-0 flex-col items-end justify-center gap-0.5 py-1.5 pl-2 pr-10 text-right sm:pr-9 ${
                     onStripWindowMoveStart
                       ? "touch-manipulation cursor-grab active:cursor-grabbing"
                       : ""
@@ -521,7 +521,7 @@ export function SchedulePlannerStrip({
                     data-strip-drag
                     draggable={!resizeBusy && !moveBusy}
                     aria-label="Drag to reorder in plan"
-                    className="touch-none select-none text-[11px] font-bold leading-tight text-zinc-900 [overflow-wrap:anywhere] cursor-grab active:cursor-grabbing"
+                    className="w-full touch-none select-none text-[11px] font-bold leading-tight text-zinc-900 [overflow-wrap:anywhere] cursor-grab active:cursor-grabbing"
                     onDragStart={(e) => {
                       e.stopPropagation();
                       e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
@@ -530,7 +530,7 @@ export function SchedulePlannerStrip({
                   >
                     {slot.artistName}
                   </p>
-                  <p className="max-w-full shrink-0 text-[8px] leading-tight text-zinc-500 [overflow-wrap:anywhere]">
+                  <p className="w-full max-w-full shrink-0 text-[8px] leading-tight text-zinc-500 [overflow-wrap:anywhere]">
                     {slot.stageName}
                   </p>
                 </div>
