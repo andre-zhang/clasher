@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Clasher">
+  <rect width="32" height="32" rx="8" fill="#4f46e5"/>
+  <!-- Quarter note: head + stem (reads clearly at 16–32px) -->
+  <ellipse cx="12.5" cy="22.5" rx="5.5" ry="3.8" fill="#ffffff" transform="rotate(-24 12.5 22.5)"/>
+  <rect x="18.5" y="8" width="2.5" height="15.5" fill="#ffffff" rx="0.6"/>
+</svg>
