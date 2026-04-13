@@ -2,15 +2,8 @@ import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
 } from "@/lib/effectiveIntents";
-import { parseHm, parseHmRelaxed } from "@/lib/timeHm";
+import { parseHmRelaxed } from "@/lib/timeHm";
 import type { FestivalSnapshot } from "@/lib/types";
-
-export type PlanWallpaperLine = {
-  dayLabel: string;
-  time: string;
-  act: string;
-  stage: string;
-};
 
 export type PlanCalendarSlot = {
   start: string;
@@ -31,64 +24,117 @@ const STAGE_BG = [
   "rgba(251,146,60,0.3)",
 ];
 
-function slotSortKey(s: FestivalSnapshot["schedule"][0]): number {
-  const d = s.dayLabel.trim().toLowerCase();
-  const t = parseHm(s.start);
-  let day = 0;
-  for (let i = 0; i < d.length; i++) day = day * 31 + d.charCodeAt(i);
-  return day * 100000 + (Number.isNaN(t) ? 0 : t);
+const ACT_FONT =
+  "700 {px}px system-ui, -apple-system, Segoe UI, sans-serif";
+const REST_FONT =
+  "400 {px}px system-ui, -apple-system, Segoe UI, sans-serif";
+const SEP = " | ";
+
+function lineHeightPx(fontPx: number): number {
+  return fontPx * 1.22;
 }
 
-function lineForMemberSlot(
-  group: FestivalSnapshot,
-  memberId: string,
-  slot: FestivalSnapshot["schedule"][0]
-): PlanWallpaperLine {
-  const win = effectiveMemberSlotPlanWindow(group, memberId, slot);
-  const time =
-    win.planFrom && win.planTo
-      ? `${win.planFrom}-${win.planTo}`
-      : `${slot.start}-${slot.end}`;
-  return {
-    dayLabel: slot.dayLabel.trim(),
-    time,
-    act: slot.artistName,
-    stage: slot.stageName.trim(),
-  };
+type SlotBox = { y0: number; h: number; w: number; x: number };
+
+function measureSlotRowWidth(
+  ctx: CanvasRenderingContext2D,
+  s: PlanCalendarSlot,
+  px: number
+): number {
+  ctx.font = ACT_FONT.replace("{px}", String(px));
+  const wAct = ctx.measureText(s.act).width;
+  ctx.font = REST_FONT.replace("{px}", String(px));
+  return (
+    wAct +
+    ctx.measureText(SEP).width +
+    ctx.measureText(s.stage).width +
+    ctx.measureText(SEP).width +
+    ctx.measureText(`${s.start}-${s.end}`).width
+  );
 }
 
-/** Slots at least one member keeps on their effective plan (combined “everyone” view). */
-export function buildEveryonePlanLines(
-  group: FestivalSnapshot
-): PlanWallpaperLine[] {
-  const ids = new Set<string>();
-  for (const m of group.members) {
-    for (const s of group.schedule) {
-      if (effectiveMemberWantsSlot(group, m.id, s.id)) ids.add(s.id);
+function drawSlotRow(
+  ctx: CanvasRenderingContext2D,
+  s: PlanCalendarSlot,
+  tx: number,
+  ty: number,
+  fontPx: number
+): void {
+  let x = tx;
+  ctx.font = ACT_FONT.replace("{px}", String(fontPx));
+  ctx.fillStyle = "#0f172a";
+  ctx.fillText(s.act, x, ty);
+  x += ctx.measureText(s.act).width;
+
+  ctx.font = REST_FONT.replace("{px}", String(fontPx));
+  ctx.fillStyle = "#334155";
+  ctx.fillText(SEP, x, ty);
+  x += ctx.measureText(SEP).width;
+  ctx.fillText(s.stage, x, ty);
+  x += ctx.measureText(s.stage).width;
+  ctx.fillText(SEP, x, ty);
+  x += ctx.measureText(SEP).width;
+  ctx.fillText(`${s.start}-${s.end}`, x, ty);
+}
+
+/**
+ * Largest shared font size so each row “artist | stage | time” fits;
+ * per-slot step-down if one slot is tighter.
+ */
+function planRowLineFont(
+  ctx: CanvasRenderingContext2D,
+  slots: PlanCalendarSlot[],
+  boxes: SlotBox[],
+  innerPad: number,
+  minPx: number,
+  maxPx: number
+): number[] {
+  const n = slots.length;
+  const out: number[] = new Array(n);
+  if (n === 0) return out;
+
+  let lo = minPx;
+  let hi = maxPx;
+  let uniform = minPx;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    let ok = true;
+    const lh = lineHeightPx(mid);
+    for (let i = 0; i < n; i++) {
+      const s = slots[i]!;
+      const b = boxes[i]!;
+      const maxTextW = b.w - innerPad * 2;
+      if (lh + innerPad * 2 > b.h || maxTextW <= 0) {
+        ok = false;
+        break;
+      }
+      if (measureSlotRowWidth(ctx, s, mid) > maxTextW) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) {
+      uniform = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
     }
   }
-  return [...group.schedule]
-    .filter((s) => ids.has(s.id))
-    .sort((a, b) => slotSortKey(a) - slotSortKey(b))
-    .map((s) => ({
-      dayLabel: s.dayLabel.trim(),
-      time: `${s.start}-${s.end}`,
-      act: s.artistName,
-      stage: s.stageName.trim(),
-    }));
-}
 
-/** @deprecated Use buildEveryonePlanLines */
-export const buildGroupUnionLines = buildEveryonePlanLines;
-
-export function buildMemberPlanLines(
-  group: FestivalSnapshot,
-  memberId: string
-): PlanWallpaperLine[] {
-  return [...group.schedule]
-    .filter((s) => effectiveMemberWantsSlot(group, memberId, s.id))
-    .sort((a, b) => slotSortKey(a) - slotSortKey(b))
-    .map((s) => lineForMemberSlot(group, memberId, s));
+  for (let i = 0; i < n; i++) {
+    const s = slots[i]!;
+    const b = boxes[i]!;
+    const maxTextW = Math.max(4, b.w - innerPad * 2);
+    let px = uniform;
+    const fits = (size: number): boolean => {
+      const lh = lineHeightPx(size);
+      if (lh + innerPad * 2 > b.h) return false;
+      return measureSlotRowWidth(ctx, s, size) <= maxTextW;
+    };
+    while (!fits(px) && px > minPx) px -= 1;
+    out[i] = px;
+  }
+  return out;
 }
 
 export function buildMemberPlanCalendarSlotsForDay(
@@ -137,85 +183,6 @@ export function buildEveryoneCalendarSlotsForDay(
     .sort((a, b) => parseHmRelaxed(a.start) - parseHmRelaxed(b.start));
 }
 
-/** @deprecated Use buildEveryoneCalendarSlotsForDay */
-export const buildUnionCalendarSlotsForDay = buildEveryoneCalendarSlotsForDay;
-
-const ROW_FONT_FAMILY =
-  "700 {px}px system-ui, -apple-system, Segoe UI, sans-serif";
-
-function lineHeightPx(fontPx: number): number {
-  return fontPx * 1.2;
-}
-
-type SlotBox = { y0: number; h: number; w: number; x: number };
-
-function slotRowLabel(s: PlanCalendarSlot): string {
-  return `${s.act} | ${s.stage} | ${s.start}-${s.end}`;
-}
-
-/**
- * One shared font size (as large as possible): single horizontal row per slot
- * "artist | stage | start–end" must fit width and height of each block.
- */
-function planRowLineFont(
-  ctx: CanvasRenderingContext2D,
-  slots: PlanCalendarSlot[],
-  boxes: SlotBox[],
-  innerPad: number,
-  minPx: number,
-  maxPx: number
-): number[] {
-  const n = slots.length;
-  const out: number[] = new Array(n);
-  if (n === 0) return out;
-
-  let lo = minPx;
-  let hi = maxPx;
-  let uniform = minPx;
-  while (lo <= hi) {
-    const mid = Math.floor((lo + hi) / 2);
-    let ok = true;
-    ctx.font = ROW_FONT_FAMILY.replace("{px}", String(mid));
-    const lh = lineHeightPx(mid);
-    for (let i = 0; i < n; i++) {
-      const s = slots[i]!;
-      const b = boxes[i]!;
-      const maxTextW = b.w - innerPad * 2;
-      if (lh + innerPad * 2 > b.h || maxTextW <= 0) {
-        ok = false;
-        break;
-      }
-      if (ctx.measureText(slotRowLabel(s)).width > maxTextW) {
-        ok = false;
-        break;
-      }
-    }
-    if (ok) {
-      uniform = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  for (let i = 0; i < n; i++) {
-    const s = slots[i]!;
-    const b = boxes[i]!;
-    const maxTextW = Math.max(4, b.w - innerPad * 2);
-    let px = uniform;
-    ctx.font = ROW_FONT_FAMILY.replace("{px}", String(px));
-    const fits = (size: number): boolean => {
-      ctx.font = ROW_FONT_FAMILY.replace("{px}", String(size));
-      const lh = lineHeightPx(size);
-      if (lh + innerPad * 2 > b.h) return false;
-      return ctx.measureText(slotRowLabel(s)).width <= maxTextW;
-    };
-    while (!fits(px) && px > minPx) px -= 1;
-    out[i] = px;
-  }
-  return out;
-}
-
 /** Portrait 9:16; top ~1/3 reserved for lock-screen clock, grid below. */
 export function renderPlanWallpaperCalendarPng(
   dayLabel: string,
@@ -226,8 +193,8 @@ export function renderPlanWallpaperCalendarPng(
   const H = 1920;
   const pad = 24;
   const lockReserveY = Math.floor(H / 3);
-  const headerBlock = title.trim() ? 96 : 56;
-  const titleBlock = 48;
+  const headerBlock = title.trim() ? 112 : 62;
+  const titleBlock = 54;
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -273,12 +240,12 @@ export function renderPlanWallpaperCalendarPng(
 
   const headerStartY = lockReserveY + 20;
   ctx.fillStyle = "#312e81";
-  ctx.font = "700 42px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText(dayLabel, pad, headerStartY + 36);
+  ctx.font = "700 52px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText(dayLabel, pad, headerStartY + 40);
   if (title.trim()) {
-    ctx.font = "600 26px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctx.font = "600 34px system-ui, -apple-system, Segoe UI, sans-serif";
     ctx.fillStyle = "#6366f1";
-    ctx.fillText(title.trim(), pad, headerStartY + 72);
+    ctx.fillText(title.trim(), pad, headerStartY + 82);
   }
 
   const topY = headerStartY + headerBlock;
@@ -288,8 +255,8 @@ export function renderPlanWallpaperCalendarPng(
 
   if (!Number.isFinite(contentMin) || !Number.isFinite(contentMax)) {
     ctx.fillStyle = "#475569";
-    ctx.font = "600 30px system-ui, sans-serif";
-    ctx.fillText("Nothing planned this day", pad, topY + 80);
+    ctx.font = "600 38px system-ui, sans-serif";
+    ctx.fillText("Nothing planned this day", pad, topY + 88);
     return new Promise((resolve, reject) => {
       canvas.toBlob(
         (b) => (b ? resolve(b) : reject(new Error("toBlob failed"))),
@@ -320,16 +287,16 @@ export function renderPlanWallpaperCalendarPng(
 
   const tickCount = Math.floor((maxM - minM) / stepM) + 1;
   const tickFontPx =
-    tickCount > 28 ? 18 : tickCount > 18 ? 22 : tickCount > 12 ? 26 : 30;
-  const timeGutter = tickFontPx >= 26 ? 112 : tickFontPx >= 22 ? 104 : 94;
+    tickCount > 28 ? 22 : tickCount > 18 ? 26 : tickCount > 12 ? 30 : 36;
+  const timeGutter = tickFontPx >= 30 ? 124 : tickFontPx >= 26 ? 116 : 104;
   const gridLeft = pad + timeGutter;
   const gridW = bodyW - timeGutter;
 
   ctx.fillStyle = "rgba(99,102,241,0.12)";
   ctx.fillRect(gridLeft, topY, gridW, titleBlock - 2);
   ctx.fillStyle = "#334155";
-  ctx.font = "700 24px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText("Plan", gridLeft + 8, topY + 28);
+  ctx.font = "700 30px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText("Plan", gridLeft + 8, topY + 32);
 
   ctx.fillStyle = "rgba(255,255,255,0.72)";
   ctx.fillRect(gridLeft, topY + titleBlock, gridW, timelineH);
@@ -359,8 +326,14 @@ export function renderPlanWallpaperCalendarPng(
     return STAGE_BG[h % STAGE_BG.length]!;
   };
 
-  const innerPad = 12;
-  type Placed = { slot: PlanCalendarSlot; y0: number; h: number; x: number; w: number };
+  const innerPad = 14;
+  type Placed = {
+    slot: PlanCalendarSlot;
+    y0: number;
+    h: number;
+    x: number;
+    w: number;
+  };
   const placed: Placed[] = [];
   for (const s of slots) {
     const ss = parseHmRelaxed(s.start);
@@ -383,7 +356,7 @@ export function renderPlanWallpaperCalendarPng(
   const slotArr = placed.map((p) => p.slot);
   const rowFonts =
     slotArr.length > 0
-      ? planRowLineFont(ctx, slotArr, boxes, innerPad, 14, 72)
+      ? planRowLineFont(ctx, slotArr, boxes, innerPad, 20, 92)
       : [];
 
   const prevBaseline = ctx.textBaseline;
@@ -400,14 +373,12 @@ export function renderPlanWallpaperCalendarPng(
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y0, w, h);
 
-    const fontPx = rowFonts[i] ?? 16;
+    const fontPx = rowFonts[i] ?? 22;
     const tx = x + innerPad;
     const lh = lineHeightPx(fontPx);
     const ty = y0 + Math.max(innerPad, (h - lh) / 2);
 
-    ctx.fillStyle = "#0f172a";
-    ctx.font = ROW_FONT_FAMILY.replace("{px}", String(fontPx));
-    ctx.fillText(slotRowLabel(s), tx, ty);
+    drawSlotRow(ctx, s, tx, ty, fontPx);
   });
 
   ctx.textBaseline = prevBaseline;
@@ -419,22 +390,4 @@ export function renderPlanWallpaperCalendarPng(
       0.92
     );
   });
-}
-
-/** @deprecated list-style export; prefer renderPlanWallpaperCalendarPng */
-export function renderPlanWallpaperPng(
-  lines: PlanWallpaperLine[],
-  title: string
-): Promise<Blob> {
-  const day = lines[0]?.dayLabel ?? "Day";
-  const slots: PlanCalendarSlot[] = lines.map((row) => {
-    const parts = row.time.split(/[–-]/);
-    return {
-      start: (parts[0] ?? "").trim(),
-      end: (parts[1] ?? "").trim(),
-      act: row.act,
-      stage: row.stage,
-    };
-  });
-  return renderPlanWallpaperCalendarPng(day, title, slots);
 }

@@ -463,6 +463,7 @@ export function SchedulePlannerStrip({
     syncWindowsForOrder(next);
   }
 
+  /* Debounced save: mySaveSig / windowsSig encode strip order + window times (stable strings). */
   useEffect(() => {
     const saveOrdered = mySaveOrdered;
     const t = window.setTimeout(() => {
@@ -518,7 +519,7 @@ export function SchedulePlannerStrip({
       })();
     }, 500);
     return () => window.clearTimeout(t);
-  }, [mySaveSig, windowsSig, plannerMemberId, slotsById, schedule]);
+  }, [mySaveSig, windowsSig, plannerMemberId, slotsById, schedule]); // eslint-disable-line react-hooks/exhaustive-deps -- mySaveSig/windowsSig
 
   function applyDraftTimes() {
     if (!editId) return;

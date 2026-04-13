@@ -122,7 +122,7 @@ export function EveryonePlansCalendar({
   const range = maxMR - minMR;
 
   return (
-    <div className="max-h-[min(72vh,calc(100vh-10rem))] overflow-auto border-2 border-zinc-900 bg-white">
+    <div className="touch-scroll max-h-[min(72vh,calc(100dvh-10rem))] overflow-x-auto overflow-y-auto border-2 border-zinc-900 bg-white">
       <div className="flex min-w-max">
         <div
           className="sticky left-0 z-30 flex shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 shadow-[6px_0_12px_-4px_rgba(0,0,0,0.12)]"

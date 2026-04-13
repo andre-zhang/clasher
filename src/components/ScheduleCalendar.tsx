@@ -28,7 +28,10 @@ import { memberKeepsSlotOnScheduleShortlist } from "@/lib/scheduleShortlist";
 import { TIER_EMOJI, TIERS_ORDER } from "@/lib/tiers";
 import type { FestivalSnapshot, RatingTier } from "@/lib/types";
 
-type Slot = FestivalSnapshot["schedule"][0];
+type Slot = FestivalSnapshot["schedule"][number];
+
+/** Sticky stage / “Plan” header height (h-8); walk-time overlay must align below it. */
+const TIMELINE_HEADER_PX = 32;
 
 function memberWantsSlotRaw(
   all: FestivalSnapshot["allMemberSlotIntents"],
@@ -538,7 +541,7 @@ export function ScheduleCalendar({
       ) : showAllStages && !allStagesForDay.length ? (
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : (
-        <div className="touch-scroll max-h-[min(72vh,calc(100vh-10rem))] overflow-auto border-2 border-zinc-900 bg-white">
+        <div className="touch-scroll max-h-[min(72vh,calc(100dvh-10rem))] overflow-x-auto overflow-y-auto border-2 border-zinc-900 bg-white">
           <div
             className={`flex min-h-0 items-stretch ${
               singleCol ? "w-full min-w-0" : "min-w-max"
@@ -618,7 +621,7 @@ export function ScheduleCalendar({
                       key={`walk-span-${bi}`}
                       className="pointer-events-none absolute left-0 right-0 z-[3] bg-zinc-900/20"
                       style={{
-                        top: 32 + topPx,
+                        top: TIMELINE_HEADER_PX + topPx,
                         height: heightPx,
                       }}
                       aria-hidden
@@ -801,11 +804,11 @@ export function ScheduleCalendar({
                         </span>
                       ) : null}
                       <div className="relative z-[2] flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-                        <p className="shrink-0 break-words text-[11px] font-semibold leading-snug text-zinc-900 [overflow-wrap:anywhere]">
+                        <p className="shrink-0 break-words text-xs font-semibold leading-snug text-zinc-900 [overflow-wrap:anywhere]">
                           {slot.artistName}
                         </p>
                         {singleCol || hideSlotReactions ? (
-                          <p className="shrink-0 text-[9px] font-medium leading-tight text-zinc-600 [overflow-wrap:anywhere]">
+                          <p className="shrink-0 text-[10px] font-medium leading-tight text-zinc-600 [overflow-wrap:anywhere]">
                             {slot.stageName}
                           </p>
                         ) : null}
