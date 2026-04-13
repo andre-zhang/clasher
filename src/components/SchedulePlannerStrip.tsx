@@ -59,7 +59,8 @@ function stripBoxLayout(
     return { topPx: 0, heightPx: 28 };
   }
   const topPx = ((sm - timelineMinM) / range) * timelineBodyPx;
-  const heightPx = Math.max(((em - sm) / range) * timelineBodyPx, 20);
+  // Tall enough for edge resize hit areas + two text lines (avoids overflow on short slots).
+  const heightPx = Math.max(((em - sm) / range) * timelineBodyPx, 40);
   return { topPx, heightPx };
 }
 
@@ -483,11 +484,11 @@ export function SchedulePlannerStrip({
                 syncWindowsForOrder(next);
               }}
             >
-              <div className="relative flex min-h-0 flex-1 flex-col">
+              <div className="relative min-h-0 flex-1 overflow-hidden">
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="start"
-                    className="z-30 min-h-11 w-full shrink-0 cursor-ns-resize touch-none sm:min-h-9"
+                    className="absolute left-0 right-0 top-0 z-30 min-h-9 cursor-ns-resize touch-none sm:min-h-8"
                     style={{ touchAction: "none" }}
                     onPointerDown={(e) => {
                       e.preventDefault();
@@ -496,37 +497,10 @@ export function SchedulePlannerStrip({
                     }}
                   />
                 ) : null}
-                <div className="relative flex min-h-0 flex-1 flex-col justify-center px-2 pb-1 pt-0.5 pr-11 text-center sm:pr-10">
-                  <p
-                    data-strip-drag
-                    draggable={!resizeBusy && !moveBusy}
-                    aria-label="Drag to reorder in plan"
-                    className="touch-none select-none text-[11px] font-bold leading-snug text-zinc-900 [overflow-wrap:anywhere] cursor-grab active:cursor-grabbing"
-                    onDragStart={(e) => {
-                      e.stopPropagation();
-                      e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
-                      e.dataTransfer.effectAllowed = "move";
-                    }}
-                  >
-                    {slot.artistName}
-                  </p>
-                  <div
-                    className={`min-h-0 flex-1 touch-manipulation ${
-                      onStripWindowMoveStart
-                        ? "cursor-grab active:cursor-grabbing"
-                        : ""
-                    }`}
-                    onPointerDown={(e) => bodyPointerDown(slot, e)}
-                  >
-                    <p className="text-[8px] leading-snug text-zinc-500 [overflow-wrap:anywhere]">
-                      {slot.stageName}
-                    </p>
-                  </div>
-                </div>
                 {onStripTimeResize ? (
                   <div
                     data-strip-resize="end"
-                    className="z-30 min-h-11 w-full shrink-0 cursor-ns-resize touch-none sm:min-h-9"
+                    className="absolute bottom-0 left-0 right-0 z-30 min-h-9 cursor-ns-resize touch-none sm:min-h-8"
                     style={{ touchAction: "none" }}
                     onPointerDown={(e) => {
                       e.preventDefault();
@@ -535,11 +509,36 @@ export function SchedulePlannerStrip({
                     }}
                   />
                 ) : null}
+                <div
+                  className={`relative z-[5] flex h-full min-h-0 flex-col items-center justify-center gap-0.5 px-2 py-1.5 pr-9 text-center sm:pr-8 ${
+                    onStripWindowMoveStart
+                      ? "touch-manipulation cursor-grab active:cursor-grabbing"
+                      : ""
+                  }`}
+                  onPointerDown={(e) => bodyPointerDown(slot, e)}
+                >
+                  <p
+                    data-strip-drag
+                    draggable={!resizeBusy && !moveBusy}
+                    aria-label="Drag to reorder in plan"
+                    className="touch-none select-none text-[11px] font-bold leading-tight text-zinc-900 [overflow-wrap:anywhere] cursor-grab active:cursor-grabbing"
+                    onDragStart={(e) => {
+                      e.stopPropagation();
+                      e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                  >
+                    {slot.artistName}
+                  </p>
+                  <p className="max-w-full shrink-0 text-[8px] leading-tight text-zinc-500 [overflow-wrap:anywhere]">
+                    {slot.stageName}
+                  </p>
+                </div>
               </div>
               {canRemoveFromMyPlan ? (
                 <button
                   type="button"
-                  className="touch-manipulation absolute right-0.5 top-0.5 z-[25] flex min-h-11 min-w-11 items-center justify-center border border-zinc-400 bg-white text-base leading-none text-red-800 sm:min-h-9 sm:min-w-9 sm:text-sm"
+                  className="touch-manipulation absolute right-1 top-1 z-[35] flex h-7 w-7 items-center justify-center border border-zinc-400 bg-white text-[13px] font-semibold leading-none text-red-800 sm:right-0.5 sm:top-0.5 sm:h-6 sm:w-6 sm:text-xs"
                   aria-label="Remove from strip"
                   onClick={(e) => {
                     e.stopPropagation();

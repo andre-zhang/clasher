@@ -996,6 +996,11 @@ export function ScheduleCalendar({
                         <p className="shrink-0 break-words text-[11px] font-semibold leading-snug text-zinc-900 [overflow-wrap:anywhere]">
                           {slot.artistName}
                         </p>
+                        {singleCol || hideSlotReactions ? (
+                          <p className="shrink-0 text-[9px] font-medium leading-tight text-zinc-600 [overflow-wrap:anywhere]">
+                            {slot.stageName}
+                          </p>
+                        ) : null}
 
                         {!hideSlotReactions &&
                         (showQuickRate || squadPills.length > 0) ? (
