@@ -21,6 +21,7 @@ import {
   apiParseScheduleImages,
   apiPatchScheduleKeep,
   apiPatchSquadOptions,
+  apiLeaveSquad,
   apiPeekInvite,
   apiPutSlotIntents,
   apiSyncPlanFromGroup,
@@ -79,7 +80,7 @@ type ClasherContextValue = {
   error: string | null;
   setSessionFromAuth: (session: ClasherSession, group: FestivalSnapshot) => void;
   refresh: () => Promise<void>;
-  leave: () => void;
+  leave: () => Promise<void>;
   peekInvite: (token: string) => ReturnType<typeof apiPeekInvite>;
   setRating: (artistId: string, tier: RatingTier) => Promise<void>;
   addComment: (artistId: string, body: string) => Promise<void>;
@@ -170,13 +171,28 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const leave = useCallback(() => {
-    saveSession(null);
-    setSession(null);
-    setGroup(null);
+  const leave = useCallback(async () => {
+    const s = session;
+    if (!s) {
+      saveSession(null);
+      setSession(null);
+      setGroup(null);
+      setError(null);
+      router.push("/");
+      return;
+    }
     setError(null);
-    router.push("/");
-  }, [router]);
+    try {
+      await apiLeaveSquad(s);
+      saveSession(null);
+      setSession(null);
+      setGroup(null);
+      router.push("/");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+    }
+  }, [session, router]);
 
   const requireSession = useCallback(() => {
     const s = session;

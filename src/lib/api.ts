@@ -144,6 +144,18 @@ export async function apiDeleteSquad(session: ClasherSession): Promise<void> {
   await ensureOk(r);
 }
 
+/** Remove this member from the squad (server + cascade); clears auth for that member. */
+export async function apiLeaveSquad(session: ClasherSession): Promise<void> {
+  const r = await fetch(
+    apiUrl(`/squads/${encodeURIComponent(session.squadId)}/members/me`),
+    {
+      method: "DELETE",
+      headers: bearer(session.memberSecret),
+    }
+  );
+  await ensureOk(r);
+}
+
 export async function apiSnapshot(
   session: ClasherSession
 ): Promise<FestivalSnapshot> {

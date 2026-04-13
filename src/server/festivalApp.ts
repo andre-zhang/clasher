@@ -18,7 +18,7 @@ import {
   patchIntentsForConflict,
 } from "./applyConflictIntents";
 import { normalizeScheduleTimesForImport } from "@/lib/scheduleTimeNormalize";
-import { memberDisplaySlug } from "@/lib/memberSlug";
+import { displayNameTakenInSquad, memberDisplaySlug } from "@/lib/memberSlug";
 
 import {
   buildWalkMatrixFromStageOrder,
@@ -154,6 +154,23 @@ export function createFestivalApp(apiBasePath: string): Hono {
     const displayName = (body.displayName ?? "Friend").trim() || "Friend";
     const squad = await prisma.squad.findFirst({ where: { inviteToken } });
     if (!squad) return c.json({ error: "not_found" }, 404);
+
+    const existingNames = (
+      await prisma.member.findMany({
+        where: { squadId: squad.id },
+        select: { displayName: true },
+      })
+    ).map((m) => m.displayName);
+    if (displayNameTakenInSquad(existingNames, displayName)) {
+      return c.json(
+        {
+          error: "name_taken",
+          message:
+            "That name is already in this group. Use Log back in instead of Join.",
+        },
+        409
+      );
+    }
 
     const member = await prisma.$transaction(async (tx) => {
       const m = await tx.member.create({
@@ -1059,6 +1076,19 @@ export function createFestivalApp(apiBasePath: string): Hono {
 
     const snap = await buildSnapshot(prisma, sid, member.id);
     return c.json({ group: snap });
+  });
+
+  app.delete("/squads/:squadId/members/me", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) {
+      return c.json({ error: "unauthorized", message: "Not signed in." }, 401);
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.comment.deleteMany({ where: { memberId: member.id } });
+      await tx.member.delete({ where: { id: member.id } });
+    });
+    return c.json({ ok: true });
   });
 
   app.delete("/squads/:squadId", async (c) => {

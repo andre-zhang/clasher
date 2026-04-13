@@ -81,7 +81,7 @@ export function SquadShell({
             </button>
             <button
               type="button"
-              onClick={() => leave()}
+              onClick={() => void leave()}
               className="border-2 border-red-800 bg-white px-2 py-0.5 text-xs font-semibold text-red-800"
             >
               Leave
