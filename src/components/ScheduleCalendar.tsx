@@ -192,8 +192,6 @@ export function ScheduleCalendar({
   scheduleRef.current = schedule;
   const stripResizeRef = useRef(false);
   stripResizeRef.current = Boolean(stripResize);
-  /** Element that called setPointerCapture during plan-strip edge drag (mobile / scroll containers). */
-  const stripResizeCaptureElRef = useRef<HTMLElement | null>(null);
 
   const timelineMetricsRef = useRef({
     minMR: 0,
@@ -589,15 +587,6 @@ export function ScheduleCalendar({
     const onUp = (ev: Event) => {
       const e = ev as PointerEvent;
       if (e.pointerId !== pointerId) return;
-      const cap = stripResizeCaptureElRef.current;
-      if (cap) {
-        try {
-          cap.releasePointerCapture(pointerId);
-        } catch {
-          /* already released */
-        }
-        stripResizeCaptureElRef.current = null;
-      }
       setStripWindows((prev) => {
         const cur = prev[slotId];
         if (!cur) return prev;
@@ -616,24 +605,13 @@ export function ScheduleCalendar({
       });
       setStripResize(null);
     };
-    const moveTarget: HTMLElement | Window =
-      stripResizeCaptureElRef.current ?? window;
-    moveTarget.addEventListener("pointermove", onMove, { passive: false });
-    moveTarget.addEventListener("pointerup", onUp);
-    moveTarget.addEventListener("pointercancel", onUp);
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
-      moveTarget.removeEventListener("pointermove", onMove);
-      moveTarget.removeEventListener("pointerup", onUp);
-      moveTarget.removeEventListener("pointercancel", onUp);
-      const cap = stripResizeCaptureElRef.current;
-      if (cap) {
-        try {
-          cap.releasePointerCapture(pointerId);
-        } catch {
-          /* noop */
-        }
-        stripResizeCaptureElRef.current = null;
-      }
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, [stripResize, schedule, buildPlanner]);
 
@@ -659,15 +637,6 @@ export function ScheduleCalendar({
     const sm = parseHm(w.planFrom);
     const em = parseHm(w.planTo);
     if (Number.isNaN(sm) || Number.isNaN(em)) return;
-    const capEl = e.currentTarget;
-    if (capEl instanceof HTMLElement) {
-      stripResizeCaptureElRef.current = capEl;
-      try {
-        capEl.setPointerCapture(e.pointerId);
-      } catch {
-        /* unsupported or already captured */
-      }
-    }
     setStripResize({
       slotId: slot.id,
       edge,

@@ -541,28 +541,29 @@ export function SchedulePlannerStrip({
                   />
                 ) : null}
                 <div
-                  className="relative z-[5] flex h-full min-h-0 flex-row items-stretch gap-0.5 py-1 pl-0.5 pr-8 text-right sm:pr-7 touch-manipulation"
+                  className="relative z-[5] flex h-full min-h-0 flex-row items-start gap-1 py-1 pl-1 pr-7 text-left touch-manipulation"
                   onPointerDown={(e) => bodyPointerDown(slot, e)}
                 >
                   <span
                     data-strip-reorder
                     draggable={!resizeBusy}
                     aria-label="Drag to reorder in plan"
-                    className="mt-0.5 flex h-5 w-3.5 shrink-0 cursor-grab touch-none select-none items-start justify-center rounded border border-zinc-300 bg-zinc-100 px-px text-[9px] font-bold leading-none text-zinc-500 active:cursor-grabbing"
                     title="Reorder"
+                    className="mt-0.5 inline-flex shrink-0 cursor-grab touch-none select-none flex-col justify-center gap-[3px] rounded border border-zinc-200 bg-zinc-50 px-1 py-1 active:cursor-grabbing"
                     onDragStart={(e) => {
                       e.stopPropagation();
                       e.dataTransfer.setData("text/plain", `reorder:${slot.id}`);
                       e.dataTransfer.effectAllowed = "move";
                     }}
                   >
-                    ⋮
+                    <span className="block h-[2px] w-3.5 rounded-sm bg-zinc-400" />
+                    <span className="block h-[2px] w-3.5 rounded-sm bg-zinc-400" />
                   </span>
-                  <div className="flex min-h-0 min-w-0 flex-1 flex-col items-end justify-center gap-0.5">
-                    <p className="w-full select-none text-[11px] font-bold leading-tight text-zinc-900 [overflow-wrap:anywhere]">
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col items-stretch justify-center gap-0.5 text-left">
+                    <p className="w-full select-none text-left text-[11px] font-bold leading-tight text-zinc-900 [overflow-wrap:anywhere]">
                       {slot.artistName}
                     </p>
-                    <p className="w-full max-w-full shrink-0 text-[8px] leading-tight text-zinc-500 [overflow-wrap:anywhere]">
+                    <p className="w-full max-w-full shrink-0 text-left text-[8px] leading-tight text-zinc-500 [overflow-wrap:anywhere]">
                       {slot.stageName}
                     </p>
                   </div>
