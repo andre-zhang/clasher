@@ -26,14 +26,17 @@ export function hhmmFromMinutes(total: number): string {
   return `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
 }
 
-/** Timeline row spacing in the schedule UI and snap step for plan windows (minutes). */
+/** Timeline row spacing in the schedule grid (minutes). */
 export const CALENDAR_TIME_STEP_MINUTES = 15;
+
+/** Plan strip / dialog: snap planFrom and planTo to this grid (minutes). */
+export const PLAN_WINDOW_SNAP_MINUTES = 5;
 
 /** Smallest plan window when the slot is long enough (minutes). */
 export const PLAN_WINDOW_MIN_DURATION_MINUTES = 10;
 
-export function snapMinutesToCalendarStep(m: number): number {
-  const s = CALENDAR_TIME_STEP_MINUTES;
+export function snapPlanWindowMinutes(m: number): number {
+  const s = PLAN_WINDOW_SNAP_MINUTES;
   return Math.round(m / s) * s;
 }
 

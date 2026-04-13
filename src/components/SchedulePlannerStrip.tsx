@@ -13,11 +13,11 @@ import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
 import {
-  CALENDAR_TIME_STEP_MINUTES,
   hhmmFromMinutes,
   parseHm,
   PLAN_WINDOW_MIN_DURATION_MINUTES,
-  snapMinutesToCalendarStep,
+  PLAN_WINDOW_SNAP_MINUTES,
+  snapPlanWindowMinutes,
 } from "@/lib/timeHm";
 import { clampPlanWindowToSlot } from "@/lib/walkFeasibility";
 import type { FestivalSnapshot } from "@/lib/types";
@@ -271,8 +271,8 @@ export function SchedulePlannerStrip({
         if (Number.isNaN(sm) || Number.isNaN(em)) {
           return { ...prev, [slotId]: c };
         }
-        sm = snapMinutesToCalendarStep(Math.round(sm));
-        em = snapMinutesToCalendarStep(Math.round(em));
+        sm = snapPlanWindowMinutes(Math.round(sm));
+        em = snapPlanWindowMinutes(Math.round(em));
         if (em < sm) em = sm;
         const slotLo = parseHm(slot.start);
         const slotHi = parseHm(slot.end);
@@ -291,7 +291,7 @@ export function SchedulePlannerStrip({
           !Number.isNaN(slotLo) &&
           !Number.isNaN(slotHi)
         ) {
-          const step = CALENDAR_TIME_STEP_MINUTES;
+          const step = PLAN_WINDOW_SNAP_MINUTES;
           const targetEnd = sm + minDur;
           em = Math.ceil(targetEnd / step) * step;
           if (em > slotHi) {
@@ -540,8 +540,8 @@ export function SchedulePlannerStrip({
       Math.min(PLAN_WINDOW_MIN_DURATION_MINUTES, span)
     );
     if (!Number.isNaN(sm) && !Number.isNaN(em)) {
-      sm = snapMinutesToCalendarStep(Math.round(sm));
-      em = snapMinutesToCalendarStep(Math.round(em));
+      sm = snapPlanWindowMinutes(Math.round(sm));
+      em = snapPlanWindowMinutes(Math.round(em));
       if (em < sm) em = sm;
       if (em - sm < minDur && !Number.isNaN(slotLo) && !Number.isNaN(slotHi)) {
         em = Math.min(slotHi, sm + minDur);
