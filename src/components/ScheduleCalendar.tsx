@@ -17,7 +17,11 @@ import {
 import { effectiveWindowMinutes } from "@/lib/planMemberDay";
 import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
-import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
+import {
+  CALENDAR_TIME_STEP_MINUTES,
+  hhmmFromMinutes,
+  parseHm,
+} from "@/lib/timeHm";
 import { memberEffectivePlanWindowsInfeasibleTogether } from "@/lib/walkFeasibility";
 import { myTierEmoji, squadReactionPills } from "@/lib/reactionsUi";
 import { memberKeepsSlotOnScheduleShortlist } from "@/lib/scheduleShortlist";
@@ -359,8 +363,9 @@ export function ScheduleCalendar({
     }
     const lo = Math.min(...mins);
     const hi = Math.max(...mins);
-    const minM = Math.floor(lo / 30) * 30;
-    const maxM = Math.max(minM + 60, Math.ceil(hi / 30) * 30);
+    const step = CALENDAR_TIME_STEP_MINUTES;
+    const minM = Math.floor(lo / step) * step;
+    const maxM = Math.max(minM + 60, Math.ceil(hi / step) * step);
     return { minM, maxM };
   }, [
     singleCol,
@@ -375,7 +380,8 @@ export function ScheduleCalendar({
   const ticksRender = useMemo(() => {
     const t: number[] = [];
     const { minM: lo, maxM: hi } = minMaxForStages;
-    for (let m = lo; m <= hi; m += 30) t.push(m);
+    const step = CALENDAR_TIME_STEP_MINUTES;
+    for (let m = lo; m <= hi; m += step) t.push(m);
     return t;
   }, [minMaxForStages]);
 

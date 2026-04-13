@@ -26,6 +26,17 @@ export function hhmmFromMinutes(total: number): string {
   return `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
 }
 
+/** Timeline row spacing in the schedule UI and snap step for plan windows (minutes). */
+export const CALENDAR_TIME_STEP_MINUTES = 15;
+
+/** Smallest plan window when the slot is long enough (minutes). */
+export const PLAN_WINDOW_MIN_DURATION_MINUTES = 10;
+
+export function snapMinutesToCalendarStep(m: number): number {
+  const s = CALENDAR_TIME_STEP_MINUTES;
+  return Math.round(m / s) * s;
+}
+
 /** Midpoint of time overlap on the same day; falls back to average of outer bounds. */
 export function splitSwitchMinutes(
   a: { dayLabel: string; start: string; end: string },

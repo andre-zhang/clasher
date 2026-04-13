@@ -12,7 +12,13 @@ import {
 import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
-import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
+import {
+  CALENDAR_TIME_STEP_MINUTES,
+  hhmmFromMinutes,
+  parseHm,
+  PLAN_WINDOW_MIN_DURATION_MINUTES,
+  snapMinutesToCalendarStep,
+} from "@/lib/timeHm";
 import { clampPlanWindowToSlot } from "@/lib/walkFeasibility";
 import type { FestivalSnapshot } from "@/lib/types";
 
@@ -20,10 +26,6 @@ type Slot = FestivalSnapshot["schedule"][number];
 
 /** Hit band on top/bottom border; ≥12px for touch targets (WCAG). */
 const STRIP_EDGE_HIT_PX = 14;
-
-function snapMinutesTo5(m: number): number {
-  return Math.round(m / 5) * 5;
-}
 
 type IntentPatch = {
   slotId: string;
@@ -201,7 +203,10 @@ export function SchedulePlannerStrip({
           slotHi > slotLo
             ? slotHi - slotLo
             : 60;
-        const minDur = Math.max(1, Math.min(5, span));
+        const minDur = Math.max(
+          1,
+          Math.min(PLAN_WINDOW_MIN_DURATION_MINUTES, span)
+        );
 
         if (edge === "start") {
           if (Number.isNaN(slotLo) || Number.isNaN(slotHi)) {
@@ -264,8 +269,36 @@ export function SchedulePlannerStrip({
         if (Number.isNaN(sm) || Number.isNaN(em)) {
           return { ...prev, [slotId]: c };
         }
-        sm = snapMinutesTo5(Math.round(sm));
-        em = snapMinutesTo5(Math.round(em));
+        sm = snapMinutesToCalendarStep(Math.round(sm));
+        em = snapMinutesToCalendarStep(Math.round(em));
+        if (em < sm) em = sm;
+        const slotLo = parseHm(slot.start);
+        const slotHi = parseHm(slot.end);
+        const span =
+          !Number.isNaN(slotLo) &&
+          !Number.isNaN(slotHi) &&
+          slotHi > slotLo
+            ? slotHi - slotLo
+            : 60;
+        const minDur = Math.max(
+          1,
+          Math.min(PLAN_WINDOW_MIN_DURATION_MINUTES, span)
+        );
+        if (
+          em - sm < minDur &&
+          !Number.isNaN(slotLo) &&
+          !Number.isNaN(slotHi)
+        ) {
+          const step = CALENDAR_TIME_STEP_MINUTES;
+          const targetEnd = sm + minDur;
+          em = Math.ceil(targetEnd / step) * step;
+          if (em > slotHi) {
+            em = slotHi;
+            sm = Math.max(slotLo, em - minDur);
+            sm = Math.floor(sm / step) * step;
+            if (em - sm < minDur) sm = Math.max(slotLo, em - minDur);
+          }
+        }
         const fin = clampPlanWindowToSlot(
           slot,
           hhmmFromMinutes(sm),
@@ -490,9 +523,37 @@ export function SchedulePlannerStrip({
     const slot = slotsById.get(editId);
     if (!slot) return;
     const c = clampPlanWindowToSlot(slot, draftFrom.trim(), draftTo.trim());
+    let sm = parseHm(c.planFrom);
+    let em = parseHm(c.planTo);
+    const slotLo = parseHm(slot.start);
+    const slotHi = parseHm(slot.end);
+    const span =
+      !Number.isNaN(slotLo) &&
+      !Number.isNaN(slotHi) &&
+      slotHi > slotLo
+        ? slotHi - slotLo
+        : 60;
+    const minDur = Math.max(
+      1,
+      Math.min(PLAN_WINDOW_MIN_DURATION_MINUTES, span)
+    );
+    if (!Number.isNaN(sm) && !Number.isNaN(em)) {
+      sm = snapMinutesToCalendarStep(Math.round(sm));
+      em = snapMinutesToCalendarStep(Math.round(em));
+      if (em < sm) em = sm;
+      if (em - sm < minDur && !Number.isNaN(slotLo) && !Number.isNaN(slotHi)) {
+        em = Math.min(slotHi, sm + minDur);
+        if (em - sm < minDur) sm = Math.max(slotLo, em - minDur);
+      }
+    }
+    const fin = clampPlanWindowToSlot(
+      slot,
+      Number.isNaN(sm) ? c.planFrom : hhmmFromMinutes(sm),
+      Number.isNaN(em) ? c.planTo : hhmmFromMinutes(em)
+    );
     setWindows((prev) => ({
       ...prev,
-      [slot.id]: { planFrom: c.planFrom, planTo: c.planTo },
+      [slot.id]: { planFrom: fin.planFrom, planTo: fin.planTo },
     }));
     setEditId(null);
   }

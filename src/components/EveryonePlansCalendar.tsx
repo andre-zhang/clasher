@@ -4,7 +4,11 @@ import { useMemo } from "react";
 
 import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
 import { effectiveWindowMinutes } from "@/lib/planMemberDay";
-import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
+import {
+  CALENDAR_TIME_STEP_MINUTES,
+  hhmmFromMinutes,
+  parseHm,
+} from "@/lib/timeHm";
 import type { FestivalSnapshot } from "@/lib/types";
 
 type Slot = FestivalSnapshot["schedule"][0];
@@ -81,10 +85,11 @@ export function EveryonePlansCalendar({
       }
       const lo = Math.min(...mins);
       const hi = Math.max(...mins);
-      const minM = Math.floor(lo / 30) * 30;
-      const maxM = Math.max(minM + 60, Math.ceil(hi / 30) * 30);
+      const step = CALENDAR_TIME_STEP_MINUTES;
+      const minM = Math.floor(lo / step) * step;
+      const maxM = Math.max(minM + 60, Math.ceil(hi / step) * step);
       const t: number[] = [];
-      for (let m = minM; m <= maxM; m += 30) t.push(m);
+      for (let m = minM; m <= maxM; m += step) t.push(m);
       const bodyPx = t.length * pxPerSlot;
       return {
         minMR: minM,
