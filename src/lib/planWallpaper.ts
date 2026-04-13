@@ -140,98 +140,80 @@ export function buildEveryoneCalendarSlotsForDay(
 /** @deprecated Use buildEveryoneCalendarSlotsForDay */
 export const buildUnionCalendarSlotsForDay = buildEveryoneCalendarSlotsForDay;
 
-const ACT_FONT_FAMILY =
+const ROW_FONT_FAMILY =
   "700 {px}px system-ui, -apple-system, Segoe UI, sans-serif";
-const STAGE_FONT_FAMILY =
-  "600 {px}px system-ui, -apple-system, Segoe UI, sans-serif";
 
 function lineHeightPx(fontPx: number): number {
-  return fontPx * 1.15;
+  return fontPx * 1.2;
 }
 
 type SlotBox = { y0: number; h: number; w: number; x: number };
 
+function slotRowLabel(s: PlanCalendarSlot): string {
+  return `${s.act} | ${s.stage} | ${s.start}-${s.end}`;
+}
+
 /**
- * One shared act/stage size (as large as possible for all slots), then per-slot
- * shrink only when width still overflows at that size.
+ * One shared font size (as large as possible): single horizontal row per slot
+ * "artist | stage | start–end" must fit width and height of each block.
  */
-function planBlockFonts(
+function planRowLineFont(
   ctx: CanvasRenderingContext2D,
   slots: PlanCalendarSlot[],
   boxes: SlotBox[],
   innerPad: number,
-  minAct: number,
-  maxAct: number
-): { act: number[]; stage: number[] } {
+  minPx: number,
+  maxPx: number
+): number[] {
   const n = slots.length;
-  const act: number[] = new Array(n);
-  const stage: number[] = new Array(n);
-  const gap = 4;
+  const out: number[] = new Array(n);
+  if (n === 0) return out;
 
-  let lo = minAct;
-  let hi = maxAct;
-  let uniformAct = minAct;
+  let lo = minPx;
+  let hi = maxPx;
+  let uniform = minPx;
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2);
-    const st = Math.max(8, Math.round(mid * 0.52));
     let ok = true;
+    ctx.font = ROW_FONT_FAMILY.replace("{px}", String(mid));
+    const lh = lineHeightPx(mid);
     for (let i = 0; i < n; i++) {
       const s = slots[i]!;
       const b = boxes[i]!;
       const maxTextW = b.w - innerPad * 2;
-      const stackH =
-        innerPad * 2 +
-        lineHeightPx(mid) +
-        gap +
-        lineHeightPx(st);
-      if (stackH > b.h || maxTextW <= 0) {
+      if (lh + innerPad * 2 > b.h || maxTextW <= 0) {
         ok = false;
         break;
       }
-      ctx.font = ACT_FONT_FAMILY.replace("{px}", String(mid));
-      if (ctx.measureText(s.act).width > maxTextW) {
-        ok = false;
-        break;
-      }
-      ctx.font = STAGE_FONT_FAMILY.replace("{px}", String(st));
-      if (ctx.measureText(s.stage).width > maxTextW) {
+      if (ctx.measureText(slotRowLabel(s)).width > maxTextW) {
         ok = false;
         break;
       }
     }
     if (ok) {
-      uniformAct = mid;
+      uniform = mid;
       lo = mid + 1;
     } else {
       hi = mid - 1;
     }
   }
 
-  const uniformStage = Math.max(8, Math.round(uniformAct * 0.52));
   for (let i = 0; i < n; i++) {
     const s = slots[i]!;
     const b = boxes[i]!;
     const maxTextW = Math.max(4, b.w - innerPad * 2);
-    let a = uniformAct;
-    let st = uniformStage;
-    const fits = (): boolean => {
-      const stackH =
-        innerPad * 2 + lineHeightPx(a) + gap + lineHeightPx(st);
-      if (stackH > b.h) return false;
-      ctx.font = ACT_FONT_FAMILY.replace("{px}", String(a));
-      if (ctx.measureText(s.act).width > maxTextW) return false;
-      ctx.font = STAGE_FONT_FAMILY.replace("{px}", String(st));
-      if (ctx.measureText(s.stage).width > maxTextW) return false;
-      return true;
+    let px = uniform;
+    ctx.font = ROW_FONT_FAMILY.replace("{px}", String(px));
+    const fits = (size: number): boolean => {
+      ctx.font = ROW_FONT_FAMILY.replace("{px}", String(size));
+      const lh = lineHeightPx(size);
+      if (lh + innerPad * 2 > b.h) return false;
+      return ctx.measureText(slotRowLabel(s)).width <= maxTextW;
     };
-    while (!fits() && a > minAct) {
-      a -= 1;
-      st = Math.max(8, Math.round(a * 0.52));
-    }
-    act[i] = a;
-    stage[i] = st;
+    while (!fits(px) && px > minPx) px -= 1;
+    out[i] = px;
   }
-  return { act, stage };
+  return out;
 }
 
 /** Portrait 9:16; top ~1/3 reserved for lock-screen clock, grid below. */
@@ -244,8 +226,8 @@ export function renderPlanWallpaperCalendarPng(
   const H = 1920;
   const pad = 24;
   const lockReserveY = Math.floor(H / 3);
-  const headerBlock = 52;
-  const titleBlock = 42;
+  const headerBlock = title.trim() ? 96 : 56;
+  const titleBlock = 48;
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -291,12 +273,12 @@ export function renderPlanWallpaperCalendarPng(
 
   const headerStartY = lockReserveY + 20;
   ctx.fillStyle = "#312e81";
-  ctx.font = "700 32px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText(dayLabel, pad, headerStartY + 30);
+  ctx.font = "700 42px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText(dayLabel, pad, headerStartY + 36);
   if (title.trim()) {
-    ctx.font = "600 20px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctx.font = "600 26px system-ui, -apple-system, Segoe UI, sans-serif";
     ctx.fillStyle = "#6366f1";
-    ctx.fillText(title.trim(), pad, headerStartY + 58);
+    ctx.fillText(title.trim(), pad, headerStartY + 72);
   }
 
   const topY = headerStartY + headerBlock;
@@ -306,7 +288,7 @@ export function renderPlanWallpaperCalendarPng(
 
   if (!Number.isFinite(contentMin) || !Number.isFinite(contentMax)) {
     ctx.fillStyle = "#475569";
-    ctx.font = "600 24px system-ui, sans-serif";
+    ctx.font = "600 30px system-ui, sans-serif";
     ctx.fillText("Nothing planned this day", pad, topY + 80);
     return new Promise((resolve, reject) => {
       canvas.toBlob(
@@ -338,16 +320,16 @@ export function renderPlanWallpaperCalendarPng(
 
   const tickCount = Math.floor((maxM - minM) / stepM) + 1;
   const tickFontPx =
-    tickCount > 28 ? 14 : tickCount > 18 ? 17 : tickCount > 12 ? 20 : 24;
-  const timeGutter = tickFontPx >= 20 ? 96 : tickFontPx >= 17 ? 88 : 78;
+    tickCount > 28 ? 18 : tickCount > 18 ? 22 : tickCount > 12 ? 26 : 30;
+  const timeGutter = tickFontPx >= 26 ? 112 : tickFontPx >= 22 ? 104 : 94;
   const gridLeft = pad + timeGutter;
   const gridW = bodyW - timeGutter;
 
   ctx.fillStyle = "rgba(99,102,241,0.12)";
   ctx.fillRect(gridLeft, topY, gridW, titleBlock - 2);
   ctx.fillStyle = "#334155";
-  ctx.font = "700 18px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText("Plan", gridLeft + 8, topY + 26);
+  ctx.font = "700 24px system-ui, -apple-system, Segoe UI, sans-serif";
+  ctx.fillText("Plan", gridLeft + 8, topY + 28);
 
   ctx.fillStyle = "rgba(255,255,255,0.72)";
   ctx.fillRect(gridLeft, topY + titleBlock, gridW, timelineH);
@@ -377,8 +359,7 @@ export function renderPlanWallpaperCalendarPng(
     return STAGE_BG[h % STAGE_BG.length]!;
   };
 
-  const innerPad = 10;
-  const gap = 4;
+  const innerPad = 12;
   type Placed = { slot: PlanCalendarSlot; y0: number; h: number; x: number; w: number };
   const placed: Placed[] = [];
   for (const s of slots) {
@@ -400,10 +381,10 @@ export function renderPlanWallpaperCalendarPng(
     x: p.x,
   }));
   const slotArr = placed.map((p) => p.slot);
-  const { act: actFonts, stage: stageFonts } =
+  const rowFonts =
     slotArr.length > 0
-      ? planBlockFonts(ctx, slotArr, boxes, innerPad, 10, 52)
-      : { act: [], stage: [] };
+      ? planRowLineFont(ctx, slotArr, boxes, innerPad, 14, 72)
+      : [];
 
   const prevBaseline = ctx.textBaseline;
   ctx.textBaseline = "top";
@@ -419,22 +400,14 @@ export function renderPlanWallpaperCalendarPng(
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y0, w, h);
 
-    const actPx = actFonts[i] ?? 12;
-    const stPx = stageFonts[i] ?? 8;
+    const fontPx = rowFonts[i] ?? 16;
     const tx = x + innerPad;
-    const ty = y0 + innerPad;
+    const lh = lineHeightPx(fontPx);
+    const ty = y0 + Math.max(innerPad, (h - lh) / 2);
 
     ctx.fillStyle = "#0f172a";
-    ctx.font = ACT_FONT_FAMILY.replace("{px}", String(actPx));
-    ctx.fillText(s.act, tx, ty);
-
-    ctx.fillStyle = "#475569";
-    ctx.font = STAGE_FONT_FAMILY.replace("{px}", String(stPx));
-    ctx.fillText(
-      s.stage,
-      tx,
-      ty + lineHeightPx(actPx) + gap
-    );
+    ctx.font = ROW_FONT_FAMILY.replace("{px}", String(fontPx));
+    ctx.fillText(slotRowLabel(s), tx, ty);
   });
 
   ctx.textBaseline = prevBaseline;
