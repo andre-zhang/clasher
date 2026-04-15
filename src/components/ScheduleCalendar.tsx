@@ -849,18 +849,12 @@ export function ScheduleCalendar({
                       (!buildPlanner &&
                         (onSlotOpenDetail || canOpenPanel))
                   );
-                  /** Full timetable (all stages): no ⋮ strip; whole card drags to plan strip. */
-                  const useFullCardDragNoSplit = Boolean(
-                    scheduleEditor && canDragSlotToStrip && showAllStages
-                  );
                   const splitDragHandle = Boolean(
                     scheduleEditor && canDragSlotToStrip && !showAllStages
                   );
                   const cardDraggable = canDragSlotToStrip && !splitDragHandle;
                   const outerCardActivates = Boolean(
-                    openDetailOrPanel &&
-                      !splitDragHandle &&
-                      !useFullCardDragNoSplit
+                    openDetailOrPanel && !splitDragHandle
                   );
 
                   const stopBubble = (e: SyntheticEvent) => {
@@ -949,20 +943,6 @@ export function ScheduleCalendar({
                         >
                           🚶
                         </span>
-                      ) : null}
-                      {useFullCardDragNoSplit ? (
-                        <button
-                          type="button"
-                          className="absolute bottom-0.5 right-0.5 z-[15] border border-zinc-800 bg-white px-1 py-px text-[9px] font-semibold leading-tight text-zinc-900 shadow-sm"
-                          title="Edit this act"
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCardActivate();
-                          }}
-                        >
-                          Edit
-                        </button>
                       ) : null}
                       {splitDragHandle ? (
                         <div
@@ -1091,7 +1071,7 @@ export function ScheduleCalendar({
                                 return `${who ?? "?"}: ${n.body}`;
                               })
                               .join("\n")}
-                            onClick={stopBubble}
+                            onClick={scheduleEditor ? undefined : stopBubble}
                           >
                             {notePreview
                               ? `${group?.members.find((m) => m.id === notePreview.memberId)?.displayName?.split(" ")[0] ?? "?"}: ${notePreview.body}`

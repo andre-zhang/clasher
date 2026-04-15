@@ -603,7 +603,7 @@ export function SchedulePlannerStrip({
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => void onDropStrip(e)}
     >
-      <div className="sticky top-0 z-50 flex h-8 shrink-0 items-center gap-1 border-b-2 border-zinc-900 bg-zinc-100 px-1">
+      <div className="sticky top-0 z-50 flex min-h-11 shrink-0 flex-wrap items-center gap-1 border-b-2 border-zinc-900 bg-zinc-100 px-1 py-1">
         <span className="text-[10px] font-bold leading-none text-zinc-900">
           Plan
         </span>
@@ -625,10 +625,10 @@ export function SchedulePlannerStrip({
             Pin
           </button>
         ) : null}
-        <div className="ml-auto flex gap-0.5">
+        <div className="ml-auto flex shrink-0 gap-1">
           <button
             type="button"
-            className={`touch-manipulation border px-2 py-1.5 text-[9px] font-semibold leading-none sm:px-1 sm:py-0.5 ${
+            className={`touch-manipulation min-h-10 min-w-[3.25rem] border-2 px-2.5 py-2 text-xs font-bold leading-tight sm:min-h-9 sm:px-3 ${
               stripScope === "mine"
                 ? "border-zinc-900 bg-zinc-900 text-white"
                 : "border-zinc-600 bg-white text-zinc-800"
@@ -639,7 +639,7 @@ export function SchedulePlannerStrip({
           </button>
           <button
             type="button"
-            className={`touch-manipulation border px-2 py-1.5 text-[9px] font-semibold leading-none sm:px-1 sm:py-0.5 ${
+            className={`touch-manipulation min-h-10 min-w-[4.5rem] border-2 px-2.5 py-2 text-xs font-bold leading-tight sm:min-h-9 sm:px-3 ${
               stripScope === "group"
                 ? "border-zinc-900 bg-zinc-900 text-white"
                 : "border-zinc-600 bg-white text-zinc-800"
