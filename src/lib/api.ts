@@ -401,6 +401,7 @@ export async function apiPutSlotIntents(
     slotId: string;
     wants: boolean;
     scheduleKeep?: boolean;
+    personalPlanOnly?: boolean;
     planFrom?: string | null;
     planTo?: string | null;
   }[]

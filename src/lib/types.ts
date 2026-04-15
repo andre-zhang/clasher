@@ -47,6 +47,7 @@ export interface FestivalSnapshot {
   memberSlotIntents: {
     slotId: string;
     wants: boolean;
+    personalPlanOnly: boolean;
     scheduleKeep: boolean;
     planFrom: string | null;
     planTo: string | null;
@@ -55,6 +56,7 @@ export interface FestivalSnapshot {
     memberId: string;
     slotId: string;
     wants: boolean;
+    personalPlanOnly: boolean;
     scheduleKeep: boolean;
     planFrom: string | null;
     planTo: string | null;

@@ -163,3 +163,19 @@ export function effectiveMemberWantsSlot(
 
   return base;
 }
+
+/**
+ * True if this member’s intent is merged into the “Everyone” plan strip
+ * (excludes intents with personalPlanOnly — mine-only acts).
+ */
+export function memberContributesToGroupPlan(
+  group: FestivalSnapshot,
+  memberId: string,
+  slotId: string
+): boolean {
+  if (!effectiveMemberWantsSlot(group, memberId, slotId)) return false;
+  const row = group.allMemberSlotIntents.find(
+    (i) => i.memberId === memberId && i.slotId === slotId
+  );
+  return !(row?.personalPlanOnly ?? false);
+}

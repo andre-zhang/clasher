@@ -294,6 +294,7 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
         slotId: string;
         wants: boolean;
         scheduleKeep?: boolean;
+        personalPlanOnly?: boolean;
         planFrom?: string | null;
         planTo?: string | null;
       }[]

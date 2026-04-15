@@ -34,6 +34,8 @@ type IntentPatch = {
   wants: boolean;
   planFrom: string | null;
   planTo: string | null;
+  /** When wants is true: mine strip vs everyone strip (server persists). */
+  personalPlanOnly?: boolean;
 };
 
 function wallHmFromFestM(fm: number): string {
@@ -60,6 +62,9 @@ function patchNeedsApply(
   }
   if (!slot) return true;
   if (!row?.wants) return true;
+  const patchP = patch.personalPlanOnly ?? false;
+  const rowP = row.personalPlanOnly ?? false;
+  if (patchP !== rowP) return true;
   const rf = row.planFrom ?? slot.start;
   const rt = row.planTo ?? slot.end;
   return rf !== patch.planFrom || rt !== patch.planTo;
@@ -374,6 +379,11 @@ export function SchedulePlannerStrip({
     return keys.map((k) => `${k}\t${windows[k]!.planFrom}\t${windows[k]!.planTo}`).join("\0");
   }, [windows]);
 
+  const saveDebounceWindowsRef = useRef(windows);
+  saveDebounceWindowsRef.current = windows;
+  const saveDebounceOrderedRef = useRef(mySaveOrdered);
+  saveDebounceOrderedRef.current = mySaveOrdered;
+
   const slotsById = useMemo(() => {
     const m = new Map(schedule.map((s) => [s.id, s]));
     return m;
@@ -461,7 +471,22 @@ export function SchedulePlannerStrip({
   }, [editId, windows, slotsById]);
 
   function syncWindowsForOrder(nextIds: string[]) {
-    setWindows(recomputeStripWindowsSequential(group, nextIds, schedule));
+    setWindows((prev) => {
+      const computed = recomputeStripWindowsSequential(
+        groupRef.current,
+        nextIds,
+        schedule
+      );
+      const next: Record<string, { planFrom: string; planTo: string }> = {
+        ...computed,
+      };
+      for (const id of nextIds) {
+        if (myEffectiveWantedIds.has(id) && prev[id]) {
+          next[id] = prev[id]!;
+        }
+      }
+      return next;
+    });
   }
 
   function onDropStrip(e: React.DragEvent) {
@@ -483,8 +508,9 @@ export function SchedulePlannerStrip({
 
   /* Debounced save: mySaveSig / windowsSig encode strip order + window times (stable strings). */
   useEffect(() => {
-    const saveOrdered = mySaveOrdered;
     const t = window.setTimeout(() => {
+      const saveOrdered = saveDebounceOrderedRef.current;
+      const winMap = saveDebounceWindowsRef.current;
       const g = groupRef.current;
       const winsSeq = recomputeStripWindowsSequential(
         g,
@@ -507,16 +533,39 @@ export function SchedulePlannerStrip({
       for (const id of saveOrdered) {
         const s = slotsById.get(id);
         if (!s) continue;
-        const fromUi = windows[id];
+        const fromUi = winMap[id];
         const fromSeq = winsSeq[id];
         const w =
           fromUi ?? fromSeq ?? { planFrom: s.start, planTo: s.end };
         const c = clampPlanWindowToSlot(s, w.planFrom, w.planTo);
+        const row = g.allMemberSlotIntents.find(
+          (i) => i.memberId === plannerMemberId && i.slotId === id
+        );
+        let planFrom = c.planFrom;
+        let planTo = c.planTo;
+        if (
+          stripScope === "group" &&
+          row?.personalPlanOnly &&
+          row.planFrom &&
+          row.planTo
+        ) {
+          planFrom = row.planFrom;
+          planTo = row.planTo;
+        }
+        let personalPlanOnly = false;
+        if (stripScope === "mine") {
+          if (row?.wants) {
+            personalPlanOnly = row.personalPlanOnly ?? false;
+          } else {
+            personalPlanOnly = true;
+          }
+        }
         patches.push({
           slotId: id,
           wants: true,
-          planFrom: c.planFrom,
-          planTo: c.planTo,
+          planFrom,
+          planTo,
+          personalPlanOnly,
         });
       }
       const toSend = patches.filter((p) =>
@@ -537,7 +586,14 @@ export function SchedulePlannerStrip({
       })();
     }, 500);
     return () => window.clearTimeout(t);
-  }, [mySaveSig, windowsSig, plannerMemberId, slotsById, schedule]); // eslint-disable-line react-hooks/exhaustive-deps -- mySaveSig/windowsSig
+  }, [
+    mySaveSig,
+    windowsSig,
+    plannerMemberId,
+    slotsById,
+    schedule,
+    stripScope,
+  ]);
 
   function applyDraftTimes() {
     if (!editId) return;
@@ -829,9 +885,20 @@ export function SchedulePlannerStrip({
                     }
                     setStripIds((ids) => {
                       const next = ids.filter((x) => x !== slot.id);
-                      setWindows(
-                        recomputeStripWindowsSequential(group, next, schedule)
-                      );
+                      setWindows((prev) => {
+                        const computed = recomputeStripWindowsSequential(
+                          group,
+                          next,
+                          schedule
+                        );
+                        const out = { ...computed };
+                        for (const id of next) {
+                          if (myEffectiveWantedIds.has(id) && prev[id]) {
+                            out[id] = prev[id]!;
+                          }
+                        }
+                        return out;
+                      });
                       return next;
                     });
                   }}

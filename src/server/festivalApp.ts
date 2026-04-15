@@ -194,6 +194,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
             memberId: m.id,
             slotId: r.slotId,
             wants: true,
+            personalPlanOnly: false,
             scheduleKeep: false,
             planFrom: null,
             planTo: null,
@@ -883,6 +884,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
               memberId: row.memberId,
               slotId: keep,
               wants: row.wants,
+              personalPlanOnly: false,
               scheduleKeep: row.scheduleKeep,
               planFrom: null,
               planTo: null,
@@ -1095,6 +1097,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
               memberId: friend.id,
               slotId: slot.id,
               wants,
+              personalPlanOnly: false,
               scheduleKeep: wants,
               planFrom: null,
               planTo: null,
@@ -1530,12 +1533,14 @@ export function createFestivalApp(apiBasePath: string): Hono {
             memberId: member.id,
             slotId: s.id,
             wants: w,
+            personalPlanOnly: false,
             scheduleKeep: false,
             planFrom: null,
             planTo: null,
           },
           update: {
             wants: w,
+            personalPlanOnly: false,
             planFrom: null,
             planTo: null,
           },
@@ -1556,6 +1561,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
         slotId?: string;
         wants?: boolean;
         scheduleKeep?: boolean;
+        personalPlanOnly?: boolean;
         planFrom?: string | null;
         planTo?: string | null;
       }[];
@@ -1574,6 +1580,10 @@ export function createFestivalApp(apiBasePath: string): Hono {
           row.scheduleKeep !== undefined && row.scheduleKeep !== null
             ? Boolean(row.scheduleKeep)
             : undefined;
+        const personalPlanOnlyExplicit =
+          row.personalPlanOnly !== undefined && row.personalPlanOnly !== null
+            ? Boolean(row.personalPlanOnly)
+            : undefined;
         const planFrom =
           row.planFrom != null && String(row.planFrom).trim()
             ? String(row.planFrom).trim()
@@ -1586,6 +1596,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
           slotId,
           wants,
           scheduleKeepExplicit,
+          personalPlanOnlyExplicit,
           planFrom,
           planTo,
         };
@@ -1603,6 +1614,11 @@ export function createFestivalApp(apiBasePath: string): Hono {
           row.scheduleKeepExplicit !== undefined
             ? row.scheduleKeepExplicit
             : (existing?.scheduleKeep ?? false);
+        const personalPlanOnly = row.wants
+          ? row.personalPlanOnlyExplicit !== undefined
+            ? row.personalPlanOnlyExplicit
+            : (existing?.personalPlanOnly ?? false)
+          : false;
         await tx.memberSlotIntent.upsert({
           where: {
             memberId_slotId: { memberId: member.id, slotId: row.slotId },
@@ -1612,12 +1628,14 @@ export function createFestivalApp(apiBasePath: string): Hono {
             memberId: member.id,
             slotId: row.slotId,
             wants: row.wants,
+            personalPlanOnly,
             scheduleKeep,
             planFrom: row.planFrom,
             planTo: row.planTo,
           },
           update: {
             wants: row.wants,
+            personalPlanOnly,
             scheduleKeep,
             planFrom: row.planFrom,
             planTo: row.planTo,
@@ -1656,6 +1674,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
         memberId: member.id,
         slotId,
         wants: true,
+        personalPlanOnly: false,
         scheduleKeep: keep,
         planFrom: null,
         planTo: null,

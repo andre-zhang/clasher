@@ -1,6 +1,7 @@
 import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
+  memberContributesToGroupPlan,
 } from "@/lib/effectiveIntents";
 import {
   formatFestivalTickHm,
@@ -177,7 +178,7 @@ export function buildEveryoneCalendarSlotsForDay(
   const ids = new Set<string>();
   for (const m of group.members) {
     for (const s of group.schedule) {
-      if (effectiveMemberWantsSlot(group, m.id, s.id)) ids.add(s.id);
+      if (memberContributesToGroupPlan(group, m.id, s.id)) ids.add(s.id);
     }
   }
   const d = dayLabel.trim();

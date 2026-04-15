@@ -29,11 +29,14 @@ async function upsertIntent(
       memberId,
       slotId,
       wants,
+      personalPlanOnly: false,
       planFrom,
       planTo,
       scheduleKeep: false,
     },
-    update: { wants, planFrom, planTo },
+    update: wants
+      ? { wants, planFrom, planTo }
+      : { wants, planFrom, planTo, personalPlanOnly: false },
   });
 }
 

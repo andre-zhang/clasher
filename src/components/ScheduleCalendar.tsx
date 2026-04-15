@@ -14,6 +14,7 @@ import { findMyResolution, isMyClashResolved } from "@/lib/clash";
 import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
+  memberContributesToGroupPlan,
 } from "@/lib/effectiveIntents";
 import { effectiveWindowMinutes } from "@/lib/planMemberDay";
 import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
@@ -296,10 +297,7 @@ export function ScheduleCalendar({
     const idSet = new Set<string>();
     for (const m of g.members) {
       for (const s of daySlots) {
-        const row = g.allMemberSlotIntents.find(
-          (i) => i.memberId === m.id && i.slotId === s.id
-        );
-        if (row?.wants) idSet.add(s.id);
+        if (memberContributesToGroupPlan(g, m.id, s.id)) idSet.add(s.id);
       }
     }
     const ids = daySlots

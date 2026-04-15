@@ -10,6 +10,7 @@ export function buildSlotIntentsFromHotRatings(
 ): {
   slotId: string;
   wants: boolean;
+  personalPlanOnly: boolean;
   scheduleKeep: boolean;
   planFrom: string | null;
   planTo: string | null;
@@ -31,6 +32,7 @@ export function buildSlotIntentsFromHotRatings(
     return {
       slotId: s.id,
       wants: row?.wants ?? false,
+      personalPlanOnly: row?.personalPlanOnly ?? false,
       scheduleKeep: hotSlotIds.has(s.id),
       planFrom: row?.planFrom ?? null,
       planTo: row?.planTo ?? null,
