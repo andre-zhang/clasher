@@ -596,6 +596,8 @@ export function SchedulePlannerStrip({
       className={`flex w-[min(78vw,188px)] min-w-[118px] max-w-[200px] shrink-0 flex-col border-r-2 border-zinc-900 bg-zinc-50 sm:w-[min(22vw,176px)] sm:min-w-[128px] sm:max-w-[188px] ${
         dragOver ? "ring-2 ring-zinc-900 ring-offset-1" : ""
       }`}
+      aria-label="Plan — drag acts here to build your timetable"
+      title="Plan strip"
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);
@@ -603,10 +605,7 @@ export function SchedulePlannerStrip({
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => void onDropStrip(e)}
     >
-      <div className="sticky top-0 z-50 flex h-8 shrink-0 items-center gap-1 border-b-2 border-zinc-900 bg-zinc-100 px-1">
-        <span className="text-[10px] font-bold leading-none text-zinc-900">
-          Plan
-        </span>
+      <div className="sticky top-0 z-50 flex h-8 shrink-0 items-center gap-0.5 border-b-2 border-zinc-900 bg-zinc-100 px-0.5">
         {onStripPinnedChange ? (
           <button
             type="button"
@@ -615,7 +614,7 @@ export function SchedulePlannerStrip({
                 ? "Unpin strip (scrolls away horizontally)"
                 : "Pin strip next to times while scrolling"
             }
-            className={`touch-manipulation border px-1 py-0.5 text-[8px] font-semibold leading-none ${
+            className={`touch-manipulation shrink-0 border px-1 py-0.5 text-[8px] font-semibold leading-none ${
               stripPinned
                 ? "border-zinc-900 bg-zinc-900 text-white"
                 : "border-zinc-500 bg-white text-zinc-700"
@@ -626,14 +625,14 @@ export function SchedulePlannerStrip({
           </button>
         ) : null}
         <div
-          className="ml-auto flex h-[26px] max-w-[min(100%,7.5rem)] shrink-0 overflow-hidden rounded-sm border border-zinc-900"
+          className="flex h-[24px] min-w-0 flex-1 overflow-hidden rounded-sm border border-zinc-900"
           role="group"
-          aria-label="Plan scope"
+          aria-label="Plan scope: mine or everyone"
         >
           <button
             type="button"
             title="Your plan only"
-            className={`touch-manipulation flex min-w-0 flex-1 items-center justify-center whitespace-nowrap border-r border-zinc-900 px-0.5 text-[9px] font-semibold leading-none ${
+            className={`touch-manipulation flex min-w-0 flex-1 items-center justify-center border-r border-zinc-900 px-0.5 text-[9px] font-semibold leading-none ${
               stripScope === "mine"
                 ? "bg-zinc-900 text-white"
                 : "bg-white text-zinc-700 hover:bg-zinc-50"
@@ -645,14 +644,14 @@ export function SchedulePlannerStrip({
           <button
             type="button"
             title="Everyone — combined squad acts"
-            className={`touch-manipulation flex min-w-0 flex-1 items-center justify-center whitespace-nowrap px-0.5 text-[9px] font-semibold leading-none ${
+            className={`touch-manipulation flex min-w-0 flex-1 items-center justify-center px-0.5 text-[9px] font-semibold leading-none ${
               stripScope === "group"
                 ? "bg-zinc-900 text-white"
                 : "bg-white text-zinc-700 hover:bg-zinc-50"
             }`}
             onClick={() => setStripScope("group")}
           >
-            Everyone
+            All
           </button>
         </div>
       </div>

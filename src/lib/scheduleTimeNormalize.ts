@@ -2,7 +2,8 @@ import type { ScheduleDraftSlot } from "@/lib/api";
 import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
 
 /**
- * Single day + stage: first ambiguous use of clock hour 1–12 → PM; second → AM; alternates.
+ * Single day + stage: first ambiguous use of clock hour 1–11 → PM; second → AM; alternates.
+ * Ambiguous **12** (no am/pm) is always **midnight** (00:xx), not noon — festival days run into the night.
  * Scoped per stage so two stages don’t “steal” AM/PM from each other.
  * Explicit am/pm and hour ≥ 13 (24h) are left as-is (after normalization).
  */
@@ -41,17 +42,40 @@ function normalizeOneTime(
   }
   if (hour < 1 || hour > 12) return s;
 
+  if (hour === 12) {
+    return `00:${String(minute).padStart(2, "0")}`;
+  }
+
   const key = `${scopePrefix}\0${hour}`;
   const n = (ambiguousCount.get(key) ?? 0) + 1;
   ambiguousCount.set(key, n);
   const usePm = n % 2 === 1;
-
-  if (hour === 12) {
-    const h24 = usePm ? 12 : 0;
-    return `${String(h24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  }
   const h24 = usePm ? hour + 12 : hour;
   return `${String(h24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+/**
+ * Acts from 00:00–00:59 belong to the **previous** festival day (e.g. “Sunday 12:55am” OCR → Sunday + 12:55
+ * becomes 00:55 → move to Saturday). Only start time is used; nothing is expected past 00:59.
+ */
+function adjustLateNightDayLabels(slots: ScheduleDraftSlot[]): ScheduleDraftSlot[] {
+  const orderedDays: string[] = [];
+  const seen = new Set<string>();
+  for (const s of slots) {
+    const d = s.dayLabel.trim();
+    if (!d || seen.has(d)) continue;
+    seen.add(d);
+    orderedDays.push(d);
+  }
+  return slots.map((slot) => {
+    const startM = parseHm(slot.start);
+    if (Number.isNaN(startM) || startM >= 60) return slot;
+    const d = slot.dayLabel.trim();
+    if (!d) return slot;
+    const idx = orderedDays.indexOf(d);
+    if (idx <= 0) return slot;
+    return { ...slot, dayLabel: orderedDays[idx - 1]! };
+  });
 }
 
 /**
@@ -106,9 +130,10 @@ export function normalizeScheduleTimesForImport(
       end: normalizeOneTime(slot.end, scopePrefix, ambiguousCount),
     };
   });
-  return normalized.map((slot) => {
+  const fixed = normalized.map((slot) => {
     const end = fixMisreadAfternoonEnd(slot.start, slot.end);
     const start = fixMisreadMorningStart(slot.start, end);
     return { ...slot, start, end };
   });
+  return adjustLateNightDayLabels(fixed);
 }
