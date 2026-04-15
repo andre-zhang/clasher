@@ -626,45 +626,48 @@ export function ScheduleCalendar({
       {caption ? (
         <p className="text-xs font-medium text-zinc-600">{caption}</p>
       ) : null}
-      <div className="flex flex-wrap items-center gap-2">
-        {days.length > 1 ? (
-          <div className="flex flex-wrap gap-1">
-            {days.map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setDay(d)}
-                className={`border-2 px-2 py-1 text-xs font-medium ${
-                  activeDay === d
-                    ? "border-zinc-900 bg-zinc-900 text-white"
-                    : "border-zinc-900 bg-white text-zinc-900 hover:bg-zinc-100"
-                }`}
-              >
-                {d}
-              </button>
-            ))}
-          </div>
-        ) : null}
+      <div className="flex w-full flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1">
+          {days.length > 1
+            ? days.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDay(d)}
+                  className={`border-2 px-2 py-1 text-xs font-medium ${
+                    activeDay === d
+                      ? "border-zinc-900 bg-zinc-900 text-white"
+                      : "border-zinc-900 bg-white text-zinc-900 hover:bg-zinc-100"
+                  }`}
+                >
+                  {d}
+                </button>
+              ))
+            : null}
+        </div>
         {scheduleEditor ? (
           <button
             type="button"
             onClick={() => setScheduleEditTarget("new")}
-            className="touch-manipulation border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100"
+            title="Add act"
+            aria-label="Add act"
+            className="touch-manipulation flex h-8 min-w-8 shrink-0 items-center justify-center border-2 border-zinc-900 bg-white text-base font-bold leading-none text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100"
           >
-            Add act
+            +
           </button>
         ) : null}
       </div>
 
       {!schedule.length && scheduleEditor ? (
         <p className="text-sm text-zinc-600">
-          No acts yet — use &quot;Add act&quot; above to create the first slot.
+          No acts yet — tap the + button above to add the first slot.
         </p>
       ) : !showAllStages && !filtered.length ? (
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : showAllStages && !allStagesForDay.length ? (
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : (
+        <div className="my-2 sm:my-3 mx-0.5 sm:mx-1">
         <div className="touch-scroll h-[min(88vh,calc(100dvh-4.5rem))] w-full min-w-0 overflow-x-auto overflow-y-auto border-2 border-zinc-900 bg-white">
           <div
             className={`flex min-h-0 w-full min-w-0 items-stretch ${
@@ -846,10 +849,19 @@ export function ScheduleCalendar({
                       (!buildPlanner &&
                         (onSlotOpenDetail || canOpenPanel))
                   );
+                  /** Full timetable (all stages): no ⋮ strip; whole card drags to plan strip. */
+                  const useFullCardDragNoSplit = Boolean(
+                    scheduleEditor && canDragSlotToStrip && showAllStages
+                  );
                   const splitDragHandle = Boolean(
-                    scheduleEditor && canDragSlotToStrip
+                    scheduleEditor && canDragSlotToStrip && !showAllStages
                   );
                   const cardDraggable = canDragSlotToStrip && !splitDragHandle;
+                  const outerCardActivates = Boolean(
+                    openDetailOrPanel &&
+                      !splitDragHandle &&
+                      !useFullCardDragNoSplit
+                  );
 
                   const stopBubble = (e: SyntheticEvent) => {
                     e.stopPropagation();
@@ -887,7 +899,7 @@ export function ScheduleCalendar({
                       ? "border-dashed border-zinc-500 bg-zinc-200/80 opacity-70"
                       : "border-zinc-900 bg-zinc-50"
                   } ${
-                    openDetailOrPanel && !splitDragHandle
+                    outerCardActivates
                       ? "cursor-pointer hover:bg-zinc-100"
                       : ""
                   }`;
@@ -902,21 +914,13 @@ export function ScheduleCalendar({
                       draggable={cardDraggable}
                       onDragStart={cardDraggable ? dragStartHandler : undefined}
                       title={`${slot.artistName} ${slot.start}-${slot.end}`}
-                      role={
-                        openDetailOrPanel && !splitDragHandle
-                          ? "button"
-                          : undefined
-                      }
-                      tabIndex={
-                        openDetailOrPanel && !splitDragHandle ? 0 : undefined
-                      }
+                      role={outerCardActivates ? "button" : undefined}
+                      tabIndex={outerCardActivates ? 0 : undefined}
                       onClick={
-                        openDetailOrPanel && !splitDragHandle
-                          ? handleCardActivate
-                          : undefined
+                        outerCardActivates ? handleCardActivate : undefined
                       }
                       onKeyDown={
-                        openDetailOrPanel && !splitDragHandle
+                        outerCardActivates
                           ? (e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
@@ -945,6 +949,20 @@ export function ScheduleCalendar({
                         >
                           🚶
                         </span>
+                      ) : null}
+                      {useFullCardDragNoSplit ? (
+                        <button
+                          type="button"
+                          className="absolute bottom-0.5 right-0.5 z-[15] border border-zinc-800 bg-white px-1 py-px text-[9px] font-semibold leading-tight text-zinc-900 shadow-sm"
+                          title="Edit this act"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCardActivate();
+                          }}
+                        >
+                          Edit
+                        </button>
                       ) : null}
                       {splitDragHandle ? (
                         <div
@@ -1095,6 +1113,7 @@ export function ScheduleCalendar({
             </div>
           </div>
           </div>
+        </div>
         </div>
       )}
 
