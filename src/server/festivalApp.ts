@@ -1702,7 +1702,10 @@ export function createFestivalApp(apiBasePath: string): Hono {
     const prompt =
       "Extract the timetable: each performance with day name (short), stage/venue name, start time, end time, and artist. " +
       "Use 24h HH:mm when obvious; otherwise use 12h-style times (am/pm if printed, or bare hours like 1, 7:30). " +
-      "Do not invent am/pm when missing — bare numbers are OK.";
+      "Do not invent am/pm when missing — bare numbers are OK. " +
+      "CRITICAL — stage columns: the image is usually a grid where each **vertical column** is one stage and acts in that column share that stage name (read the column header at the top of that column). " +
+      "Assign each slot’s stageName from the **column header** above that act’s cell, not from a nearby column or a guess. " +
+      "If headers are abbreviated, copy them exactly as printed; do not merge two columns into one stage or move an act to a different column’s stage.";
     const schemaHint =
       'Schema: {"slots":[{"dayLabel":"Fri","stageName":"Main","start":"18:00","end":"19:00","artistName":"Act"}]}';
 

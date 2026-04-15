@@ -51,7 +51,7 @@ export function SquadShell({
         onClose={() => setLeaveDialogOpen(false)}
         onConfirmLeave={leave}
       />
-      <header className="sticky top-0 z-10 border-b-2 border-zinc-900 bg-zinc-100">
+      <header className="sticky top-0 z-50 border-b-2 border-zinc-900 bg-zinc-100">
         <div className="mx-auto flex max-w-[min(100%,80rem)] flex-wrap items-center justify-between gap-2 px-4 py-3">
           <Link
             href="/"
@@ -103,7 +103,9 @@ export function SquadShell({
           </p>
         </div>
       ) : null}
-      <div className="mx-auto max-w-[min(100%,80rem)] px-4 py-6">{children}</div>
+      <div className="relative z-0 mx-auto max-w-[min(100%,80rem)] px-4 py-6">
+        {children}
+      </div>
     </div>
   );
 }
