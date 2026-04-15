@@ -798,6 +798,41 @@ export function createFestivalApp(apiBasePath: string): Hono {
     return c.json({ group: snap });
   });
 
+  app.delete("/squads/:squadId/schedule/slots/:slotId", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    const sid = member.squadId;
+    const slotId = c.req.param("slotId")?.trim();
+    if (!slotId) return c.json({ error: "bad_request" }, 400);
+    const slot = await prisma.scheduleSlot.findFirst({
+      where: { id: slotId, squadId: sid },
+    });
+    if (!slot) return c.json({ error: "not_found" }, 404);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.memberSlotIntent.deleteMany({
+        where: { squadId: sid, slotId },
+      });
+      await tx.conflictResolution.deleteMany({
+        where: {
+          squadId: sid,
+          OR: [{ slotAId: slotId }, { slotBId: slotId }],
+        },
+      });
+      await tx.squadClashDefault.deleteMany({
+        where: {
+          squadId: sid,
+          OR: [{ slotAId: slotId }, { slotBId: slotId }],
+        },
+      });
+      await tx.scheduleSlot.delete({ where: { id: slotId } });
+    });
+
+    const snap = await buildSnapshot(prisma, sid, member.id);
+    return c.json({ group: snap });
+  });
+
   app.post("/squads/:squadId/schedule/merge-slots", async (c) => {
     const squadId = c.req.param("squadId");
     const member = await authMember(c, squadId);

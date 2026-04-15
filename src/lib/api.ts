@@ -305,6 +305,62 @@ export async function apiReplaceSchedule(
   return j.group as FestivalSnapshot;
 }
 
+export type ScheduleSlotPatch = Partial<ScheduleDraftSlot>;
+
+export async function apiPatchScheduleSlot(
+  session: ClasherSession,
+  slotId: string,
+  patch: ScheduleSlotPatch
+): Promise<FestivalSnapshot> {
+  const r = await fetch(
+    apiUrl(`/squads/${session.squadId}/schedule/slots/${slotId}`),
+    {
+      method: "PATCH",
+      headers: {
+        ...bearer(session.memberSecret),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(patch),
+    }
+  );
+  await ensureOk(r);
+  const j = await r.json();
+  return j.group as FestivalSnapshot;
+}
+
+export async function apiAppendScheduleSlot(
+  session: ClasherSession,
+  slot: ScheduleDraftSlot
+): Promise<FestivalSnapshot> {
+  const r = await fetch(apiUrl(`/squads/${session.squadId}/schedule/append`), {
+    method: "POST",
+    headers: {
+      ...bearer(session.memberSecret),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ slot }),
+  });
+  await ensureOk(r);
+  const j = await r.json();
+  return j.group as FestivalSnapshot;
+}
+
+export async function apiDeleteScheduleSlot(
+  session: ClasherSession,
+  slotId: string
+): Promise<FestivalSnapshot> {
+  const r = await fetch(
+    apiUrl(`/squads/${session.squadId}/schedule/slots/${slotId}`),
+    {
+      method: "DELETE",
+      headers: bearer(session.memberSecret),
+    }
+  );
+  await ensureOk(r);
+  const j = await r.json();
+  return j.group as FestivalSnapshot;
+}
+
 export type ConflictPlanPayload = {
   slotAId: string;
   slotBId: string;

@@ -14,6 +14,9 @@ export default function SchedulePage() {
     session,
     group,
     replaceSchedule,
+    patchScheduleSlot,
+    appendScheduleSlot,
+    deleteScheduleSlot,
     addSlotComment,
     setRating,
     putSlotIntents,
@@ -281,6 +284,11 @@ export default function SchedulePage() {
         visibilityMode="effectivePlan"
         scheduleViewerMemberId={session.memberId}
         onSetRating={(artistId, tier) => setRating(artistId, tier)}
+        scheduleEditor={{
+          onSave: (slotId, draft) => patchScheduleSlot(slotId, draft),
+          onCreate: (draft) => appendScheduleSlot(draft),
+          onDelete: (slotId) => deleteScheduleSlot(slotId),
+        }}
         buildPlanner={{
           memberId: session.memberId,
           stripHydrateKey,

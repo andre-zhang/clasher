@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent,
   type SyntheticEvent,
 } from "react";
 
@@ -26,6 +27,7 @@ import { memberEffectivePlanWindowsInfeasibleTogether } from "@/lib/walkFeasibil
 import { myTierEmoji, squadReactionPills } from "@/lib/reactionsUi";
 import { memberKeepsSlotOnScheduleShortlist } from "@/lib/scheduleShortlist";
 import { TIER_EMOJI, TIERS_ORDER } from "@/lib/tiers";
+import type { ScheduleDraftSlot } from "@/lib/api";
 import type { FestivalSnapshot, RatingTier } from "@/lib/types";
 
 type Slot = FestivalSnapshot["schedule"][number];
@@ -95,6 +97,8 @@ export function ScheduleCalendar({
   singleColumnTimeline = false,
   /** Hide tier emoji row on slot cards (e.g. Plans). */
   hideSlotReactions = false,
+  /** Fix OCR / timetable mistakes: edit slot fields, add acts, delete slots. */
+  scheduleEditor,
 }: {
   schedule: Slot[];
   memberId?: string;
@@ -110,6 +114,11 @@ export function ScheduleCalendar({
   onSlotOpenDetail?: (slot: Slot) => void;
   singleColumnTimeline?: boolean;
   hideSlotReactions?: boolean;
+  scheduleEditor?: {
+    onSave: (slotId: string, draft: ScheduleDraftSlot) => Promise<void>;
+    onCreate: (draft: ScheduleDraftSlot) => Promise<void>;
+    onDelete: (slotId: string) => Promise<void>;
+  };
   buildPlanner?: {
     memberId: string;
     /** Bump after a successful strip apply so the strip reloads from server intents. */
@@ -158,7 +167,8 @@ export function ScheduleCalendar({
     visibilityMode,
   ]);
 
-  const pxPerSlot = 28;
+  /** Taller time rows so the grid uses vertical space more usefully. */
+  const pxPerSlot = 34;
 
   const noteDialogRef = useRef<HTMLDialogElement>(null);
   const [noteSlotId, setNoteSlotId] = useState<string | null>(null);
@@ -176,6 +186,20 @@ export function ScheduleCalendar({
   const [stripUserAddedIds, setStripUserAddedIds] = useState<Set<string>>(
     () => new Set()
   );
+
+  const scheduleEditDialogRef = useRef<HTMLDialogElement>(null);
+  const [scheduleEditTarget, setScheduleEditTarget] = useState<
+    "new" | { id: string } | null
+  >(null);
+  const [scheduleEditForm, setScheduleEditForm] = useState<ScheduleDraftSlot>({
+    dayLabel: "",
+    stageName: "",
+    start: "",
+    end: "",
+    artistName: "",
+  });
+  const [scheduleEditBusy, setScheduleEditBusy] = useState(false);
+  const [scheduleEditErr, setScheduleEditErr] = useState<string | null>(null);
 
   const groupRef = useRef(group);
   groupRef.current = group;
@@ -296,6 +320,39 @@ export function ScheduleCalendar({
     const rows = schedule.filter((s) => s.dayLabel.trim() === activeDay);
     return [...new Set(rows.map((s) => s.stageName.trim()))].sort();
   }, [schedule, activeDay]);
+
+  const allStageNames = useMemo(
+    () => [...new Set(schedule.map((s) => s.stageName.trim()))].sort(),
+    [schedule]
+  );
+
+  useEffect(() => {
+    if (!scheduleEditTarget) return;
+    if (scheduleEditTarget === "new") {
+      const day = activeDay?.trim() ?? "";
+      const stages = allStagesForDay;
+      setScheduleEditForm({
+        dayLabel: day,
+        stageName: stages[0] ?? "",
+        start: "12:00",
+        end: "13:00",
+        artistName: "",
+      });
+    } else {
+      const s = schedule.find((x) => x.id === scheduleEditTarget.id);
+      if (s) {
+        setScheduleEditForm({
+          dayLabel: s.dayLabel,
+          stageName: s.stageName,
+          start: s.start,
+          end: s.end,
+          artistName: s.artistName,
+        });
+      }
+    }
+    setScheduleEditErr(null);
+    scheduleEditDialogRef.current?.showModal();
+  }, [scheduleEditTarget, activeDay, allStagesForDay, schedule]);
 
   const showAllStages = Boolean(
     scheduleViewerMemberId && !memberId && group && visibilityMode === "effectivePlan"
@@ -508,8 +565,60 @@ export function ScheduleCalendar({
       activeDay
   );
 
-  if (!schedule.length) {
+  if (!schedule.length && !scheduleEditor) {
     return <p className="text-sm text-zinc-600">No slots.</p>;
+  }
+
+  async function commitScheduleEdit() {
+    if (!scheduleEditor || !scheduleEditTarget) return;
+    const f = scheduleEditForm;
+    if (
+      !f.dayLabel.trim() ||
+      !f.stageName.trim() ||
+      !f.start.trim() ||
+      !f.end.trim() ||
+      !f.artistName.trim()
+    ) {
+      setScheduleEditErr("Fill day, stage, start, end, and artist.");
+      return;
+    }
+    setScheduleEditBusy(true);
+    setScheduleEditErr(null);
+    try {
+      if (scheduleEditTarget === "new") {
+        await scheduleEditor.onCreate(f);
+      } else {
+        await scheduleEditor.onSave(scheduleEditTarget.id, f);
+      }
+      scheduleEditDialogRef.current?.close();
+      setScheduleEditTarget(null);
+    } catch (e) {
+      setScheduleEditErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setScheduleEditBusy(false);
+    }
+  }
+
+  async function removeScheduleSlot() {
+    if (!scheduleEditor || scheduleEditTarget === null || scheduleEditTarget === "new")
+      return;
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("Remove this act from the group schedule?")
+    ) {
+      return;
+    }
+    setScheduleEditBusy(true);
+    setScheduleEditErr(null);
+    try {
+      await scheduleEditor.onDelete(scheduleEditTarget.id);
+      scheduleEditDialogRef.current?.close();
+      setScheduleEditTarget(null);
+    } catch (e) {
+      setScheduleEditErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setScheduleEditBusy(false);
+    }
   }
 
   return (
@@ -517,34 +626,49 @@ export function ScheduleCalendar({
       {caption ? (
         <p className="text-xs font-medium text-zinc-600">{caption}</p>
       ) : null}
-      {days.length > 1 ? (
-        <div className="flex flex-wrap gap-1">
-          {days.map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setDay(d)}
-              className={`border-2 px-2 py-1 text-xs font-medium ${
-                activeDay === d
-                  ? "border-zinc-900 bg-zinc-900 text-white"
-                  : "border-zinc-900 bg-white text-zinc-900 hover:bg-zinc-100"
-              }`}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-2">
+        {days.length > 1 ? (
+          <div className="flex flex-wrap gap-1">
+            {days.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDay(d)}
+                className={`border-2 px-2 py-1 text-xs font-medium ${
+                  activeDay === d
+                    ? "border-zinc-900 bg-zinc-900 text-white"
+                    : "border-zinc-900 bg-white text-zinc-900 hover:bg-zinc-100"
+                }`}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {scheduleEditor ? (
+          <button
+            type="button"
+            onClick={() => setScheduleEditTarget("new")}
+            className="touch-manipulation border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100"
+          >
+            Add act
+          </button>
+        ) : null}
+      </div>
 
-      {!showAllStages && !filtered.length ? (
+      {!schedule.length && scheduleEditor ? (
+        <p className="text-sm text-zinc-600">
+          No acts yet — use &quot;Add act&quot; above to create the first slot.
+        </p>
+      ) : !showAllStages && !filtered.length ? (
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : showAllStages && !allStagesForDay.length ? (
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : (
-        <div className="touch-scroll max-h-[min(72vh,calc(100dvh-10rem))] overflow-x-auto overflow-y-auto border-2 border-zinc-900 bg-white">
+        <div className="touch-scroll h-[min(88vh,calc(100dvh-4.5rem))] w-full min-w-0 overflow-x-auto overflow-y-auto border-2 border-zinc-900 bg-white">
           <div
-            className={`flex min-h-0 items-stretch ${
-              singleCol ? "w-full min-w-0" : "min-w-max"
+            className={`flex min-h-0 w-full min-w-0 items-stretch ${
+              singleCol ? "min-w-0" : ""
             }`}
           >
           <div
@@ -641,7 +765,7 @@ export function ScheduleCalendar({
               className={
                 singleCol
                   ? "relative min-w-0 flex-1 border-r-2 border-zinc-900"
-                  : "relative min-w-[min(100%,140px)] flex-1 border-r-2 border-zinc-900 sm:min-w-[148px]"
+                  : "relative min-w-0 flex-1 basis-0 border-r-2 border-zinc-900"
               }
               style={{ minHeight: timelineHRender }}
             >
@@ -718,15 +842,24 @@ export function ScheduleCalendar({
                     onAddSlotComment || showQuickRate
                   );
                   const openDetailOrPanel = Boolean(
-                    !buildPlanner &&
-                      (onSlotOpenDetail || canOpenPanel)
+                    scheduleEditor ||
+                      (!buildPlanner &&
+                        (onSlotOpenDetail || canOpenPanel))
                   );
+                  const splitDragHandle = Boolean(
+                    scheduleEditor && canDragSlotToStrip
+                  );
+                  const cardDraggable = canDragSlotToStrip && !splitDragHandle;
 
                   const stopBubble = (e: SyntheticEvent) => {
                     e.stopPropagation();
                   };
 
                   const handleCardActivate = () => {
+                    if (scheduleEditor) {
+                      setScheduleEditTarget({ id: slot.id });
+                      return;
+                    }
                     if (onSlotOpenDetail) {
                       onSlotOpenDetail(slot);
                       return;
@@ -737,17 +870,24 @@ export function ScheduleCalendar({
                     }
                   };
 
+                  const dragStartHandler = (e: DragEvent) => {
+                    e.dataTransfer.setData("text/plain", slot.id);
+                    e.dataTransfer.effectAllowed = "copyMove";
+                  };
+
                   const ghostOffPlan =
                     useEffectiveSlotLayout &&
                     group &&
                     rateMemberId &&
                     !onPlan;
-                  const shellClass = `absolute left-0.5 right-0.5 border-2 px-1 py-0.5 text-left flex min-h-0 flex-col overflow-hidden ${
+                  const shellClass = `absolute left-0.5 right-0.5 border-2 px-1 py-0.5 text-left flex min-h-0 overflow-hidden ${
+                    splitDragHandle ? "flex-row gap-0.5" : "flex-col"
+                  } ${
                     ghostOffPlan
                       ? "border-dashed border-zinc-500 bg-zinc-200/80 opacity-70"
                       : "border-zinc-900 bg-zinc-50"
                   } ${
-                    openDetailOrPanel
+                    openDetailOrPanel && !splitDragHandle
                       ? "cursor-pointer hover:bg-zinc-100"
                       : ""
                   }`;
@@ -759,21 +899,24 @@ export function ScheduleCalendar({
                   return (
                     <div
                       key={slot.id}
-                      draggable={canDragSlotToStrip}
-                      onDragStart={
-                        canDragSlotToStrip
-                          ? (e) => {
-                              e.dataTransfer.setData("text/plain", slot.id);
-                              e.dataTransfer.effectAllowed = "copyMove";
-                            }
+                      draggable={cardDraggable}
+                      onDragStart={cardDraggable ? dragStartHandler : undefined}
+                      title={`${slot.artistName} ${slot.start}-${slot.end}`}
+                      role={
+                        openDetailOrPanel && !splitDragHandle
+                          ? "button"
                           : undefined
                       }
-                      title={`${slot.artistName} ${slot.start}-${slot.end}`}
-                      role={openDetailOrPanel ? "button" : undefined}
-                      tabIndex={openDetailOrPanel ? 0 : undefined}
-                      onClick={openDetailOrPanel ? handleCardActivate : undefined}
+                      tabIndex={
+                        openDetailOrPanel && !splitDragHandle ? 0 : undefined
+                      }
+                      onClick={
+                        openDetailOrPanel && !splitDragHandle
+                          ? handleCardActivate
+                          : undefined
+                      }
                       onKeyDown={
-                        openDetailOrPanel
+                        openDetailOrPanel && !splitDragHandle
                           ? (e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
@@ -803,7 +946,53 @@ export function ScheduleCalendar({
                           🚶
                         </span>
                       ) : null}
-                      <div className="relative z-[2] flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+                      {splitDragHandle ? (
+                        <div
+                          draggable
+                          onDragStart={dragStartHandler}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                          className="z-[6] flex w-4 shrink-0 cursor-grab touch-manipulation select-none flex-col items-center justify-center border-r border-zinc-400 bg-zinc-100/90 text-[8px] font-bold leading-none text-zinc-500"
+                          title="Drag onto your plan strip"
+                          aria-label="Drag onto your plan strip"
+                        >
+                          ⋮
+                          <br />
+                          ⋮
+                        </div>
+                      ) : null}
+                      <div
+                        className={`relative z-[2] flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto ${
+                          splitDragHandle ? "min-w-0" : ""
+                        } ${
+                          openDetailOrPanel && splitDragHandle
+                            ? "cursor-pointer hover:bg-zinc-100/80"
+                            : ""
+                        }`}
+                        role={
+                          openDetailOrPanel && splitDragHandle
+                            ? "button"
+                            : undefined
+                        }
+                        tabIndex={
+                          openDetailOrPanel && splitDragHandle ? 0 : undefined
+                        }
+                        onClick={
+                          openDetailOrPanel && splitDragHandle
+                            ? handleCardActivate
+                            : undefined
+                        }
+                        onKeyDown={
+                          openDetailOrPanel && splitDragHandle
+                            ? (e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  handleCardActivate();
+                                }
+                              }
+                            : undefined
+                        }
+                      >
                         <p className="shrink-0 break-words text-xs font-semibold leading-snug text-zinc-900 [overflow-wrap:anywhere]">
                           {slot.artistName}
                         </p>
@@ -1020,6 +1209,134 @@ export function ScheduleCalendar({
           </>
         ) : null}
       </dialog>
+
+      {scheduleEditor ? (
+        <dialog
+          ref={scheduleEditDialogRef}
+          className="max-w-md border-2 border-zinc-900 bg-white p-4 shadow-[4px_4px_0_0_#18181b] backdrop:bg-black/40"
+          onClose={() => {
+            setScheduleEditTarget(null);
+            setScheduleEditErr(null);
+          }}
+        >
+          {scheduleEditTarget ? (
+            <>
+              <h3 className="text-sm font-bold text-zinc-900">
+                {scheduleEditTarget === "new" ? "Add act" : "Edit act"}
+              </h3>
+              <p className="mt-1 text-[11px] text-zinc-600">
+                Times use the same format as the timetable (e.g. 14:30). Stage
+                can be a new name.
+              </p>
+              {scheduleEditErr ? (
+                <p className="mt-2 text-xs text-red-800">{scheduleEditErr}</p>
+              ) : null}
+              <datalist id="clasher-schedule-stage-options">
+                {allStageNames.map((sn) => (
+                  <option key={sn} value={sn} />
+                ))}
+              </datalist>
+              <div className="mt-3 space-y-2 text-xs">
+                <label className="block">
+                  <span className="font-medium text-zinc-700">Day</span>
+                  <input
+                    className="mt-0.5 w-full border-2 border-zinc-900 px-2 py-1"
+                    value={scheduleEditForm.dayLabel}
+                    onChange={(e) =>
+                      setScheduleEditForm((f) => ({
+                        ...f,
+                        dayLabel: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="block">
+                  <span className="font-medium text-zinc-700">Stage</span>
+                  <input
+                    className="mt-0.5 w-full border-2 border-zinc-900 px-2 py-1"
+                    list="clasher-schedule-stage-options"
+                    value={scheduleEditForm.stageName}
+                    onChange={(e) =>
+                      setScheduleEditForm((f) => ({
+                        ...f,
+                        stageName: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <div className="flex gap-2">
+                  <label className="block min-w-0 flex-1">
+                    <span className="font-medium text-zinc-700">Start</span>
+                    <input
+                      className="mt-0.5 w-full border-2 border-zinc-900 px-2 py-1 font-mono"
+                      value={scheduleEditForm.start}
+                      onChange={(e) =>
+                        setScheduleEditForm((f) => ({
+                          ...f,
+                          start: e.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="block min-w-0 flex-1">
+                    <span className="font-medium text-zinc-700">End</span>
+                    <input
+                      className="mt-0.5 w-full border-2 border-zinc-900 px-2 py-1 font-mono"
+                      value={scheduleEditForm.end}
+                      onChange={(e) =>
+                        setScheduleEditForm((f) => ({
+                          ...f,
+                          end: e.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="font-medium text-zinc-700">Artist</span>
+                  <input
+                    className="mt-0.5 w-full border-2 border-zinc-900 px-2 py-1"
+                    value={scheduleEditForm.artistName}
+                    onChange={(e) =>
+                      setScheduleEditForm((f) => ({
+                        ...f,
+                        artistName: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={scheduleEditBusy}
+                  className="border-2 border-zinc-900 bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                  onClick={() => void commitScheduleEdit()}
+                >
+                  Save
+                </button>
+                {scheduleEditTarget !== "new" ? (
+                  <button
+                    type="button"
+                    disabled={scheduleEditBusy}
+                    className="border-2 border-red-800 bg-white px-3 py-1.5 text-xs font-semibold text-red-800 disabled:opacity-40"
+                    onClick={() => void removeScheduleSlot()}
+                  >
+                    Delete
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="text-xs text-zinc-600 underline"
+                  onClick={() => scheduleEditDialogRef.current?.close()}
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : null}
+        </dialog>
+      ) : null}
     </div>
   );
 }

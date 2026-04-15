@@ -26,6 +26,10 @@ import {
   apiPutSlotIntents,
   apiSyncPlanFromGroup,
   apiReplaceSchedule,
+  apiPatchScheduleSlot,
+  apiAppendScheduleSlot,
+  apiDeleteScheduleSlot,
+  type ScheduleSlotPatch,
   apiSetConflict,
   type ConflictPlanPayload,
   apiSetRating,
@@ -87,6 +91,9 @@ type ClasherContextValue = {
   addSlotComment: (slotId: string, body: string) => Promise<void>;
   commitLineupNames: (names: string[]) => Promise<void>;
   replaceSchedule: (slots: ScheduleDraftSlot[]) => Promise<void>;
+  patchScheduleSlot: (slotId: string, patch: ScheduleSlotPatch) => Promise<void>;
+  appendScheduleSlot: (slot: ScheduleDraftSlot) => Promise<void>;
+  deleteScheduleSlot: (slotId: string) => Promise<void>;
   setConflict: (payload: ConflictPlanPayload) => Promise<void>;
   putSlotIntents: (
     intents: {
@@ -245,6 +252,33 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
     [requireSession]
   );
 
+  const patchScheduleSlot = useCallback(
+    async (slotId: string, patch: ScheduleSlotPatch) => {
+      const s = requireSession();
+      const g = await apiPatchScheduleSlot(s, slotId, patch);
+      setGroup(g);
+    },
+    [requireSession]
+  );
+
+  const appendScheduleSlot = useCallback(
+    async (slot: ScheduleDraftSlot) => {
+      const s = requireSession();
+      const g = await apiAppendScheduleSlot(s, slot);
+      setGroup(g);
+    },
+    [requireSession]
+  );
+
+  const deleteScheduleSlot = useCallback(
+    async (slotId: string) => {
+      const s = requireSession();
+      const g = await apiDeleteScheduleSlot(s, slotId);
+      setGroup(g);
+    },
+    [requireSession]
+  );
+
   const setConflict = useCallback(
     async (payload: ConflictPlanPayload) => {
       const s = requireSession();
@@ -357,6 +391,9 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       addSlotComment,
       commitLineupNames,
       replaceSchedule,
+      patchScheduleSlot,
+      appendScheduleSlot,
+      deleteScheduleSlot,
       setConflict,
       putSlotIntents,
       syncPlanFromGroup,
@@ -383,6 +420,9 @@ export function ClasherProvider({ children }: { children: React.ReactNode }) {
       addSlotComment,
       commitLineupNames,
       replaceSchedule,
+      patchScheduleSlot,
+      appendScheduleSlot,
+      deleteScheduleSlot,
       setConflict,
       putSlotIntents,
       syncPlanFromGroup,

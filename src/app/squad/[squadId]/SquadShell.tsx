@@ -52,7 +52,7 @@ export function SquadShell({
         onConfirmLeave={leave}
       />
       <header className="sticky top-0 z-10 border-b-2 border-zinc-900 bg-zinc-100">
-        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-3">
+        <div className="mx-auto flex max-w-[min(100%,80rem)] flex-wrap items-center justify-between gap-2 px-4 py-3">
           <Link
             href="/"
             className="text-sm font-bold tracking-tight text-zinc-900"
@@ -97,13 +97,13 @@ export function SquadShell({
         </div>
       </header>
       {error ? (
-        <div className="mx-auto max-w-3xl px-4 pt-4">
+        <div className="mx-auto max-w-[min(100%,80rem)] px-4 pt-4">
           <p className="border-2 border-amber-800 bg-amber-50 px-3 py-2 text-sm text-amber-950">
             {error}
           </p>
         </div>
       ) : null}
-      <div className="mx-auto max-w-3xl px-4 py-6">{children}</div>
+      <div className="mx-auto max-w-[min(100%,80rem)] px-4 py-6">{children}</div>
     </div>
   );
 }
