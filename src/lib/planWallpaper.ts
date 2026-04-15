@@ -3,6 +3,7 @@ import {
   effectiveMemberWantsSlot,
   memberContributesToGroupPlan,
 } from "@/lib/effectiveIntents";
+import { walkMinutesBetweenStages } from "@/lib/walkFeasibility";
 import {
   formatFestivalTickHm,
   parseHmRelaxed,
@@ -20,6 +21,8 @@ export type PlanCalendarSlot = {
   end: string;
   act: string;
   stage: string;
+  /** When set, depart this act by this wall time to reach the next planned act on time. */
+  leaveBy?: string;
 };
 
 /** Soft color blocks, readable, not neon. */
@@ -41,7 +44,9 @@ const REST_FONT =
 const SEP = " | ";
 
 function slotTimeSpanText(s: PlanCalendarSlot): string {
-  return `${s.start} - ${s.end}`;
+  const span = `${s.start} - ${s.end}`;
+  if (s.leaveBy) return `${span} (leave ${s.leaveBy})`;
+  return span;
 }
 
 function lineHeightPx(fontPx: number): number {
@@ -157,7 +162,8 @@ export function buildMemberPlanCalendarSlotsForDay(
   dayLabel: string
 ): PlanCalendarSlot[] {
   const d = dayLabel.trim();
-  return group.schedule
+  type Row = { slot: PlanCalendarSlot; stageForWalk: string };
+  const rows: Row[] = group.schedule
     .filter(
       (s) =>
         s.dayLabel.trim() === d &&
@@ -165,14 +171,38 @@ export function buildMemberPlanCalendarSlotsForDay(
     )
     .map((s) => {
       const w = effectiveMemberSlotPlanWindow(group, memberId, s);
-      return {
+      const slot: PlanCalendarSlot = {
         start: w.planFrom ?? s.start,
         end: w.planTo ?? s.end,
         act: s.artistName,
         stage: s.stageName.trim(),
       };
+      return { slot, stageForWalk: s.stageName.trim() };
     })
-    .sort((a, b) => festMFromSlotHm(a.start) - festMFromSlotHm(b.start));
+    .sort(
+      (a, b) => festMFromSlotHm(a.slot.start) - festMFromSlotHm(b.slot.start)
+    );
+
+  if (!group.walkTimesEnabled) {
+    return rows.map((r) => r.slot);
+  }
+
+  const out = rows.map((r) => ({ ...r.slot }));
+  for (let i = 0; i < out.length - 1; i++) {
+    const walk = walkMinutesBetweenStages(
+      group,
+      rows[i]!.stageForWalk,
+      rows[i + 1]!.stageForWalk
+    );
+    if (walk <= 0) continue;
+    const nextStartM = festMFromSlotHm(out[i + 1]!.start);
+    const endCurM = festMFromSlotHm(out[i]!.end);
+    if (Number.isNaN(nextStartM) || Number.isNaN(endCurM)) continue;
+    const leaveM = nextStartM - walk;
+    if (Number.isNaN(leaveM) || leaveM >= endCurM) continue;
+    out[i] = { ...out[i]!, leaveBy: formatFestivalTickHm(leaveM) };
+  }
+  return out;
 }
 
 export function buildEveryoneCalendarSlotsForDay(
