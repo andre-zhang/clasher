@@ -3,6 +3,7 @@ import {
   effectiveMemberWantsSlot,
   memberContributesToGroupPlan,
 } from "@/lib/effectiveIntents";
+import type { PlanWalkBand } from "@/lib/planWalkBands";
 import { walkMinutesBetweenStages } from "@/lib/walkFeasibility";
 import {
   formatFestivalTickHm,
@@ -47,6 +48,31 @@ function slotTimeSpanText(s: PlanCalendarSlot): string {
   const span = `${s.start} - ${s.end}`;
   if (s.leaveBy) return `${span} (leave ${s.leaveBy})`;
   return span;
+}
+
+/** Light diagonal hatch — reads as “travel gap”, not a third event block. */
+function strokeWalkGapStripes(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+): void {
+  if (w <= 0 || h <= 0) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.strokeStyle = "rgba(139, 92, 246, 0.22)";
+  ctx.lineWidth = 1;
+  const step = 7;
+  for (let t = -h; t < w + h; t += step) {
+    ctx.beginPath();
+    ctx.moveTo(x + t, y);
+    ctx.lineTo(x + t + h, y + h);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function lineHeightPx(fontPx: number): number {
@@ -231,7 +257,8 @@ export function buildEveryoneCalendarSlotsForDay(
 export function renderPlanWallpaperCalendarPng(
   dayLabel: string,
   title: string,
-  slots: PlanCalendarSlot[]
+  slots: PlanCalendarSlot[],
+  walkBands?: PlanWalkBand[]
 ): Promise<Blob> {
   const W = 1080;
   const H = 1920;
@@ -361,6 +388,25 @@ export function renderPlanWallpaperCalendarPng(
     ctx.fillText(label, pad, y + tickFontPx * 0.35);
   }
 
+  const planInnerX = gridLeft + 2;
+  const planInnerW = gridW - 4;
+  if (walkBands?.length) {
+    for (const band of walkBands) {
+      if (!Number.isFinite(band.fromM) || !Number.isFinite(band.toM)) continue;
+      const y0 = topY + titleBlock + (band.fromM - minM) * pxPerMin;
+      const y1 = topY + titleBlock + (band.toM - minM) * pxPerMin;
+      const gh = Math.max(y1 - y0, 2);
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.fillRect(planInnerX, y0, planInnerW, gh);
+      strokeWalkGapStripes(ctx, planInnerX, y0, planInnerW, gh);
+      ctx.strokeStyle = "rgba(139, 92, 246, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(planInnerX + 0.5, y0 + 0.5, planInnerW - 1, gh - 1);
+      ctx.setLineDash([]);
+    }
+  }
+
   const stageBg = (stage: string) => {
     let h = 0;
     const st = stage.trim();
@@ -386,8 +432,8 @@ export function renderPlanWallpaperCalendarPng(
     const y0 = topY + titleBlock + (lo - minM) * pxPerMin;
     const y1 = topY + titleBlock + (hi - minM) * pxPerMin;
     const h = Math.max(y1 - y0, 10);
-    const x = gridLeft + 2;
-    const w = gridW - 4;
+    const x = planInnerX;
+    const w = planInnerW;
     placed.push({ slot: s, y0, h, x, w });
   }
 

@@ -73,3 +73,22 @@ export function walkBandsBetweenOrderedActs(
   return walkBandsBetweenOrderedStageRows(group, rows, windows);
 }
 
+/** Same geometry as {@link walkBandsBetweenOrderedActs}, for plain start/end rows (e.g. PNG export). */
+export function walkBandsForOrderedCalendarPlans(
+  group: FestivalSnapshot,
+  ordered: { stage: string; start: string; end: string }[]
+): PlanWalkBand[] {
+  if (ordered.length < 2) return [];
+  const rows: StagePlanRow[] = ordered.map((r, i) => ({
+    id: `cal-${i}`,
+    stageName: r.stage.trim(),
+    defaultFrom: r.start,
+    defaultTo: r.end,
+  }));
+  const windows: Record<string, { planFrom: string; planTo: string }> = {};
+  ordered.forEach((r, i) => {
+    windows[`cal-${i}`] = { planFrom: r.start, planTo: r.end };
+  });
+  return walkBandsBetweenOrderedStageRows(group, rows, windows);
+}
+

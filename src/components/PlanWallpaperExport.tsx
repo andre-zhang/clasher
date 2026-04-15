@@ -8,6 +8,7 @@ import {
   buildMemberPlanCalendarSlotsForDay,
   renderPlanWallpaperCalendarPng,
 } from "@/lib/planWallpaper";
+import { walkBandsForOrderedCalendarPlans } from "@/lib/planWalkBands";
 import type { FestivalSnapshot } from "@/lib/types";
 
 export function PlanWallpaperExport({
@@ -61,10 +62,17 @@ export function PlanWallpaperExport({
                 pickMember,
                 dayLabel
               );
+        const walkBands =
+          scope === "member" &&
+          group.walkTimesEnabled &&
+          slots.length >= 2
+            ? walkBandsForOrderedCalendarPlans(group, slots)
+            : undefined;
         const blob = await renderPlanWallpaperCalendarPng(
           dayLabel,
           titleBase,
-          slots
+          slots,
+          walkBands
         );
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
