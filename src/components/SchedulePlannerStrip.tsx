@@ -603,7 +603,7 @@ export function SchedulePlannerStrip({
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => void onDropStrip(e)}
     >
-      <div className="sticky top-0 z-50 flex min-h-11 shrink-0 flex-wrap items-center gap-1 border-b-2 border-zinc-900 bg-zinc-100 px-1 py-1">
+      <div className="sticky top-0 z-50 flex h-8 shrink-0 items-center gap-1 border-b-2 border-zinc-900 bg-zinc-100 px-1">
         <span className="text-[10px] font-bold leading-none text-zinc-900">
           Plan
         </span>
@@ -625,13 +625,18 @@ export function SchedulePlannerStrip({
             Pin
           </button>
         ) : null}
-        <div className="ml-auto flex shrink-0 gap-1">
+        <div
+          className="ml-auto flex h-[26px] max-w-[min(100%,7.5rem)] shrink-0 overflow-hidden rounded-sm border border-zinc-900"
+          role="group"
+          aria-label="Plan scope"
+        >
           <button
             type="button"
-            className={`touch-manipulation min-h-10 min-w-[3.25rem] border-2 px-2.5 py-2 text-xs font-bold leading-tight sm:min-h-9 sm:px-3 ${
+            title="Your plan only"
+            className={`touch-manipulation flex min-w-0 flex-1 items-center justify-center whitespace-nowrap border-r border-zinc-900 px-0.5 text-[9px] font-semibold leading-none ${
               stripScope === "mine"
-                ? "border-zinc-900 bg-zinc-900 text-white"
-                : "border-zinc-600 bg-white text-zinc-800"
+                ? "bg-zinc-900 text-white"
+                : "bg-white text-zinc-700 hover:bg-zinc-50"
             }`}
             onClick={() => setStripScope("mine")}
           >
@@ -639,10 +644,11 @@ export function SchedulePlannerStrip({
           </button>
           <button
             type="button"
-            className={`touch-manipulation min-h-10 min-w-[4.5rem] border-2 px-2.5 py-2 text-xs font-bold leading-tight sm:min-h-9 sm:px-3 ${
+            title="Everyone — combined squad acts"
+            className={`touch-manipulation flex min-w-0 flex-1 items-center justify-center whitespace-nowrap px-0.5 text-[9px] font-semibold leading-none ${
               stripScope === "group"
-                ? "border-zinc-900 bg-zinc-900 text-white"
-                : "border-zinc-600 bg-white text-zinc-800"
+                ? "bg-zinc-900 text-white"
+                : "bg-white text-zinc-700 hover:bg-zinc-50"
             }`}
             onClick={() => setStripScope("group")}
           >
