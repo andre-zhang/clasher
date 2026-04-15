@@ -12,9 +12,9 @@ export function buildWalkMatrixFromStageOrder(
       if (i === j) continue;
       const sj = uniq[j]!;
       const d = Math.abs(i - j);
-      let mins = 15;
+      let mins = 10;
       if (d === 1) mins = 5;
-      else if (d <= half) mins = 10;
+      else if (d <= half) mins = 8;
       out[si]![sj] = mins;
     }
   }

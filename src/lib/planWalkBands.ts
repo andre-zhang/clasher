@@ -31,13 +31,21 @@ function walkBandsBetweenOrderedStageRows(
       windows[a.id] ?? { planFrom: a.defaultFrom, planTo: a.defaultTo };
     const endA = wallMinutesToFestivalTimeline(parseHm(wA.planTo));
     if (Number.isNaN(endA)) continue;
+    const wB =
+      windows[b.id] ?? { planFrom: b.defaultFrom, planTo: b.defaultTo };
+    const startB = wallMinutesToFestivalTimeline(parseHm(wB.planFrom));
+    if (Number.isNaN(startB)) continue;
     const walk = walkMinutesBetweenStages(
       group,
       a.stageName,
       b.stageName
     );
     if (walk <= 0) continue;
-    const toM = endA + walk;
+    /** If the next act already starts later than required walk, skip the band. */
+    const gap = startB - endA;
+    if (gap > walk) continue;
+    const toM = Math.min(endA + walk, startB);
+    if (toM <= endA) continue;
     out.push({
       fromM: endA,
       toM,
@@ -65,24 +73,3 @@ export function walkBandsBetweenOrderedActs(
   return walkBandsBetweenOrderedStageRows(group, rows, windows);
 }
 
-/**
- * Walk segments for wallpaper export rows (no schedule ids): same order as {@link PlanCalendarSlot} list.
- */
-export function walkBandsForOrderedPlanCalendarSlots(
-  group: FestivalSnapshot,
-  orderedSlots: { start: string; end: string; stage: string }[]
-): PlanWalkBand[] {
-  if (!orderedSlots.length) return [];
-  const rows: StagePlanRow[] = orderedSlots.map((s, i) => ({
-    id: `export-${i}`,
-    stageName: s.stage.trim(),
-    defaultFrom: s.start,
-    defaultTo: s.end,
-  }));
-  const windows: Record<string, { planFrom: string; planTo: string }> = {};
-  for (let i = 0; i < orderedSlots.length; i++) {
-    const s = orderedSlots[i]!;
-    windows[`export-${i}`] = { planFrom: s.start, planTo: s.end };
-  }
-  return walkBandsBetweenOrderedStageRows(group, rows, windows);
-}

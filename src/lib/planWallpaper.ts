@@ -8,8 +8,6 @@ import {
   parseHmRelaxed,
   wallMinutesToFestivalTimeline,
 } from "@/lib/timeHm";
-import type { PlanWalkBand } from "@/lib/planWalkBands";
-import { LUCIDE_FOOTPRINTS_PATHS } from "@/lib/planWalkIconPaths";
 import type { FestivalSnapshot } from "@/lib/types";
 
 /** Same 1 PM–origin “festival day” axis as the schedule UI (13:00 → … → 01:00, continuous). */
@@ -42,6 +40,10 @@ const REST_FONT =
   "400 {px}px system-ui, -apple-system, Segoe UI, sans-serif";
 const SEP = " | ";
 
+function slotTimeSpanText(s: PlanCalendarSlot): string {
+  return `${s.start} - ${s.end}`;
+}
+
 function lineHeightPx(fontPx: number): number {
   return fontPx * 1.22;
 }
@@ -61,7 +63,7 @@ function measureSlotRowWidth(
     ctx.measureText(SEP).width +
     ctx.measureText(s.stage).width +
     ctx.measureText(SEP).width +
-    ctx.measureText(`${s.start}-${s.end}`).width
+    ctx.measureText(slotTimeSpanText(s)).width
   );
 }
 
@@ -86,7 +88,7 @@ function drawSlotRow(
   x += ctx.measureText(s.stage).width;
   ctx.fillText(SEP, x, ty);
   x += ctx.measureText(SEP).width;
-  ctx.fillText(`${s.start}-${s.end}`, x, ty);
+  ctx.fillText(slotTimeSpanText(s), x, ty);
 }
 
 /**
@@ -195,82 +197,11 @@ export function buildEveryoneCalendarSlotsForDay(
     .sort((a, b) => festMFromSlotHm(a.start) - festMFromSlotHm(b.start));
 }
 
-function strokeFootprintWalkIcon(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  scale: number
-): void {
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(scale / 24, scale / 24);
-  ctx.translate(-12, -12);
-  ctx.strokeStyle = "#334155";
-  ctx.lineWidth = 2;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  for (const d of LUCIDE_FOOTPRINTS_PATHS) {
-    try {
-      const p = new Path2D(d);
-      ctx.stroke(p);
-    } catch {
-      /* Path2D SVG path not supported */
-    }
-  }
-  ctx.restore();
-}
-
-function drawWalkBandsOnCanvas(
-  ctx: CanvasRenderingContext2D,
-  bands: PlanWalkBand[],
-  minM: number,
-  pxPerMin: number,
-  bodyTop: number,
-  boxX: number,
-  boxW: number
-): void {
-  ctx.save();
-  const pad = 8;
-  for (const band of bands) {
-    const y0 = bodyTop + (band.fromM - minM) * pxPerMin;
-    const y1 = bodyTop + (band.toM - minM) * pxPerMin;
-    const h = Math.max(y1 - y0, 8);
-    const x = boxX;
-    const w = boxW;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(x, y0, w, h);
-    ctx.strokeStyle = "#0f172a";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, y0, w, h);
-    const midY = y0 + h / 2;
-    const iconSize = Math.min(22, Math.max(14, h - 4));
-    if (h >= 14 && w > 52) {
-      strokeFootprintWalkIcon(ctx, x + pad + iconSize / 2, midY, iconSize);
-      ctx.font = "700 13px system-ui, Segoe UI, sans-serif";
-      ctx.fillStyle = "#1e293b";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      ctx.fillText(band.label, x + pad + iconSize + 6, midY);
-    } else {
-      if (h >= 12 && w > 28) {
-        strokeFootprintWalkIcon(ctx, x + w / 2 - 10, midY, 16);
-      }
-      ctx.font = "700 11px system-ui, Segoe UI, sans-serif";
-      ctx.fillStyle = "#334155";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(band.label, x + w / 2, midY + (h >= 12 && w > 28 ? 8 : 0));
-    }
-  }
-  ctx.restore();
-}
-
 /** Portrait 9:16; top ~1/3 reserved for lock-screen clock, grid below. */
 export function renderPlanWallpaperCalendarPng(
   dayLabel: string,
   title: string,
-  slots: PlanCalendarSlot[],
-  walkBands?: PlanWalkBand[]
+  slots: PlanCalendarSlot[]
 ): Promise<Blob> {
   const W = 1080;
   const H = 1920;
@@ -320,15 +251,6 @@ export function renderPlanWallpaperCalendarPng(
       contentMax = Math.max(contentMax, a, b);
     }
   }
-  if (walkBands?.length) {
-    for (const b of walkBands) {
-      if (Number.isFinite(b.fromM) && Number.isFinite(b.toM)) {
-        contentMin = Math.min(contentMin, b.fromM, b.toM);
-        contentMax = Math.max(contentMax, b.fromM, b.toM);
-      }
-    }
-  }
-
   const headerStartY = lockReserveY + 20;
   ctx.fillStyle = "#312e81";
   ctx.font = "700 52px system-ui, -apple-system, Segoe UI, sans-serif";
@@ -453,18 +375,6 @@ export function renderPlanWallpaperCalendarPng(
 
   const prevBaseline = ctx.textBaseline;
   ctx.textBaseline = "top";
-
-  if (walkBands?.length) {
-    drawWalkBandsOnCanvas(
-      ctx,
-      walkBands,
-      minM,
-      pxPerMin,
-      topY + titleBlock,
-      gridLeft + 2,
-      gridW - 4
-    );
-  }
 
   placed.forEach((p, i) => {
     const s = p.slot;

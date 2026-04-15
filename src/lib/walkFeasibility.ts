@@ -20,6 +20,9 @@ export type MinuteWindow = {
 /** When walk times are on but the matrix has no entry for a stage pair, use this gap (minutes). */
 export const DEFAULT_INTER_STAGE_WALK_MINUTES = 5;
 
+/** Upper bound for any inter-stage walk (matrix, default, or inferred). */
+export const MAX_WALK_MINUTES_BETWEEN_STAGES = 10;
+
 export function walkMinutesBetweenStages(
   group: FestivalSnapshot,
   stageA: string,
@@ -29,14 +32,20 @@ export function walkMinutesBetweenStages(
   const b = stageB.trim();
   if (a === b) return 0;
   if (!group.walkTimesEnabled) return 0;
+  let raw = DEFAULT_INTER_STAGE_WALK_MINUTES;
   const m = group.walkMatrix;
   if (m) {
     const ab = m[a]?.[b];
-    if (typeof ab === "number" && Number.isFinite(ab)) return Math.max(0, ab);
-    const ba = m[b]?.[a];
-    if (typeof ba === "number" && Number.isFinite(ba)) return Math.max(0, ba);
+    if (typeof ab === "number" && Number.isFinite(ab)) raw = ab;
+    else {
+      const ba = m[b]?.[a];
+      if (typeof ba === "number" && Number.isFinite(ba)) raw = ba;
+    }
   }
-  return DEFAULT_INTER_STAGE_WALK_MINUTES;
+  return Math.min(
+    MAX_WALK_MINUTES_BETWEEN_STAGES,
+    Math.max(0, Math.round(raw))
+  );
 }
 
 function windowInfeasibleTogether(
