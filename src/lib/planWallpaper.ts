@@ -9,6 +9,7 @@ import {
   wallMinutesToFestivalTimeline,
 } from "@/lib/timeHm";
 import type { PlanWalkBand } from "@/lib/planWalkBands";
+import { LUCIDE_FOOTPRINTS_PATHS } from "@/lib/planWalkIconPaths";
 import type { FestivalSnapshot } from "@/lib/types";
 
 /** Same 1 PM–origin “festival day” axis as the schedule UI (13:00 → … → 01:00, continuous). */
@@ -205,21 +206,15 @@ function strokeFootprintWalkIcon(
   ctx.scale(scale / 24, scale / 24);
   ctx.translate(-12, -12);
   ctx.strokeStyle = "#334155";
-  ctx.lineWidth = 1.85;
+  ctx.lineWidth = 2;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  const paths = [
-    "M5.5 17.5v-1.9a3.2 3.2 0 0 0-1.6-2.8 1.6 1.6 0 0 0 1.6 1.6h1.2a1.6 1.6 0 0 0 1.6-1.6 3.2 3.2 0 0 0-1.6-2.9V10",
-    "M7 20.5a1.6 1.6 0 1 0 3.2 0 3.2 3.2 0 0 0-1.6-2.9V13",
-    "M12.8 17.5v-1.9a3.2 3.2 0 0 1 1.6-2.8 1.6 1.6 0 0 1-1.6 1.6h-1.2a1.6 1.6 0 0 1-1.6-1.6 3.2 3.2 0 0 1 1.6-2.9V10",
-    "M14.3 20.5a1.6 1.6 0 1 1-3.2 0 3.2 3.2 0 0 1 1.6-2.9V13",
-  ];
-  for (const d of paths) {
+  for (const d of LUCIDE_FOOTPRINTS_PATHS) {
     try {
       const p = new Path2D(d);
       ctx.stroke(p);
     } catch {
-      /* Path2D SVG not supported */
+      /* Path2D SVG path not supported */
     }
   }
   ctx.restore();

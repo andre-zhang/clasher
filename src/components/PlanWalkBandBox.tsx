@@ -1,10 +1,9 @@
 "use client";
 
 import type { PlanWalkBand } from "@/lib/planWalkBands";
+import { LUCIDE_FOOTPRINTS_PATHS } from "@/lib/planWalkIconPaths";
 
-/**
- * Footprints-style glyph (Lucide “footprints”-style paths), tuned for ~12–16px display.
- */
+/** Lucide “footprints” (lucide-static, ISC) — reads well at small sizes. */
 export function PlanWalkIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -14,34 +13,16 @@ export function PlanWalkIcon({ className }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden
     >
-      <path
-        d="M5.5 17.5v-1.9a3.2 3.2 0 0 0-1.6-2.8 1.6 1.6 0 0 0 1.6 1.6h1.2a1.6 1.6 0 0 0 1.6-1.6 3.2 3.2 0 0 0-1.6-2.9V10"
-        stroke="currentColor"
-        strokeWidth="1.85"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M7 20.5a1.6 1.6 0 1 0 3.2 0 3.2 3.2 0 0 0-1.6-2.9V13"
-        stroke="currentColor"
-        strokeWidth="1.85"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12.8 17.5v-1.9a3.2 3.2 0 0 1 1.6-2.8 1.6 1.6 0 0 1-1.6 1.6h-1.2a1.6 1.6 0 0 1-1.6-1.6 3.2 3.2 0 0 1 1.6-2.9V10"
-        stroke="currentColor"
-        strokeWidth="1.85"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M14.3 20.5a1.6 1.6 0 1 1-3.2 0 3.2 3.2 0 0 1 1.6-2.9V13"
-        stroke="currentColor"
-        strokeWidth="1.85"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {LUCIDE_FOOTPRINTS_PATHS.map((d, i) => (
+        <path
+          key={i}
+          d={d}
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
     </svg>
   );
 }
@@ -68,14 +49,14 @@ export function PlanWalkBandBox({
   const insetCls = inset === "full" ? "left-0 right-0" : "left-0.5 right-0.5";
   return (
     <div
-      className={`pointer-events-none absolute z-[3] flex items-center justify-center gap-1 border-2 border-zinc-900 bg-white shadow-[1px_1px_0_0_rgba(24,24,27,0.1)] ${insetCls} ${
+      className={`pointer-events-none absolute z-[3] flex items-center justify-center gap-1.5 border-2 border-zinc-900 bg-zinc-50 shadow-[1px_1px_0_0_rgba(24,24,27,0.1)] ${insetCls} ${
         className ?? ""
       }`}
       style={{ top: topPx, height: h }}
       aria-hidden
       title={`Walk ${band.label}`}
     >
-      <PlanWalkIcon className="h-3.5 w-3.5 shrink-0 text-zinc-700 sm:h-4 sm:w-4" />
+      <PlanWalkIcon className="h-[15px] w-[15px] shrink-0 text-zinc-700 sm:h-[17px] sm:w-[17px]" />
       {showLabel ? (
         <span className="shrink-0 text-[8px] font-bold tabular-nums leading-none tracking-tight text-zinc-800 sm:text-[9px]">
           {band.label}
