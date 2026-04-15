@@ -146,28 +146,42 @@ export function ScheduleCalendar({
   const [day, setDay] = useState<string | null>(null);
   const activeDay = day ?? days[0] ?? null;
 
+  /** Declared before plan filtering so Mine vs Everyone matches the strip. */
+  const [stripScope, setStripScope] = useState<"mine" | "group">("mine");
+
   const filtered = useMemo(() => {
     let rows = schedule.filter((s) => s.dayLabel.trim() === activeDay);
-    if (memberId && group && visibilityMode === "scheduleShortlist") {
+    const who = rateMemberId;
+    if (who && group && visibilityMode === "scheduleShortlist") {
       rows = rows.filter((s) =>
-        memberKeepsSlotOnScheduleShortlist(group, memberId, s.id)
+        memberKeepsSlotOnScheduleShortlist(group, who, s.id)
       );
-    } else if (memberId && group && visibilityMode === "effectivePlan") {
-      rows = rows.filter((s) =>
-        effectiveMemberWantsSlot(group, memberId, s.id)
-      );
-    } else if (memberId) {
+    } else if (who && group && visibilityMode === "effectivePlan") {
+      if (buildPlanner && stripScope === "group") {
+        rows = rows.filter((s) =>
+          group.members.some((m) =>
+            memberContributesToGroupPlan(group, m.id, s.id)
+          )
+        );
+      } else {
+        rows = rows.filter((s) =>
+          effectiveMemberWantsSlot(group, who, s.id)
+        );
+      }
+    } else if (who) {
       const all = allMemberSlotIntents ?? [];
-      rows = rows.filter((s) => memberWantsSlotRaw(all, memberId, s.id));
+      rows = rows.filter((s) => memberWantsSlotRaw(all, who, s.id));
     }
     return rows;
   }, [
     schedule,
     activeDay,
-    memberId,
+    rateMemberId,
     allMemberSlotIntents,
     group,
     visibilityMode,
+    buildPlanner,
+    stripScope,
   ]);
 
   /** Taller time rows so the grid uses vertical space more usefully. */
@@ -182,7 +196,6 @@ export function ScheduleCalendar({
   const [stripWindows, setStripWindows] = useState<
     Record<string, { planFrom: string; planTo: string }>
   >({});
-  const [stripScope, setStripScope] = useState<"mine" | "group">("mine");
   /** Pin plan strip beside the time rail while scrolling (like sticky time column). */
   const [stripPinned, setStripPinned] = useState(false);
   /** “Everyone” strip: slots you added from the grid before first save (not from others’ plans). */
@@ -401,6 +414,14 @@ export function ScheduleCalendar({
       ? allStagesForDay
       : stagesFromFiltered;
 
+  const planGridUsesFiltered =
+    Boolean(
+      buildPlanner &&
+        group &&
+        rateMemberId &&
+        visibilityMode === "effectivePlan"
+    );
+
   const slotsForStage = (stage: string) => {
     if (singleCol) {
       return [...filtered].sort(
@@ -412,6 +433,10 @@ export function ScheduleCalendar({
         s.dayLabel.trim() === activeDay && s.stageName.trim() === stage
     );
     if (!showAllStages) {
+      return base.filter((s) => filtered.some((f) => f.id === s.id));
+    }
+    /** Full multi-stage grid (ratings viewer) still respects plan strip Mine vs Everyone. */
+    if (planGridUsesFiltered) {
       return base.filter((s) => filtered.some((f) => f.id === s.id));
     }
     return base;
@@ -689,6 +714,8 @@ export function ScheduleCalendar({
         </p>
       ) : !showAllStages && !filtered.length ? (
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
+      ) : planGridUsesFiltered && !filtered.length ? (
+        <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : showAllStages && !allStagesForDay.length ? (
         <p className="text-sm text-zinc-600">Nothing for this day.</p>
       ) : (
@@ -822,7 +849,15 @@ export function ScheduleCalendar({
                   const onPlan =
                     !group ||
                     !rateMemberId ||
-                    effectiveMemberWantsSlot(group, rateMemberId, slot.id);
+                    (buildPlanner && stripScope === "group"
+                      ? group.members.some((m) =>
+                          memberContributesToGroupPlan(group, m.id, slot.id)
+                        )
+                      : effectiveMemberWantsSlot(
+                          group,
+                          rateMemberId,
+                          slot.id
+                        ));
                   let topPx: number;
                   let heightPx: number;
                   if (useEffectiveSlotLayout && group && rateMemberId) {
