@@ -11,7 +11,7 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 
 /** Default must be a model your Anthropic key can access (3.5 Sonnet 20241022 was retired). */
 const CLAUDE_MODEL =
-  process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-20250514";
+  process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-6";
 
 type VisionProvider = "auto" | "openai" | "claude";
 
@@ -197,7 +197,7 @@ export async function runVisionJson(
     ) {
       return {
         ok: false,
-        message: `Claude model is unavailable or not allowed for this API key (configured: ${CLAUDE_MODEL}). Set ANTHROPIC_MODEL in Vercel to a current vision-capable id (e.g. claude-sonnet-4-20250514) and redeploy. Details: ${raw.slice(0, 400)}`,
+        message: `Claude model is unavailable or not allowed for this API key (configured: ${CLAUDE_MODEL}). Set ANTHROPIC_MODEL in Vercel to a current vision-capable id (e.g. claude-sonnet-4-6) and redeploy. Details: ${raw.slice(0, 400)}`,
       };
     }
     return { ok: false, message: raw };
