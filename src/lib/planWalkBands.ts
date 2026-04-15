@@ -1,4 +1,4 @@
-import { parseHm } from "@/lib/timeHm";
+import { parseHm, wallMinutesToFestivalTimeline } from "@/lib/timeHm";
 import { walkMinutesBetweenStages } from "@/lib/walkFeasibility";
 import type { FestivalSnapshot } from "@/lib/types";
 
@@ -25,7 +25,7 @@ export function walkBandsBetweenOrderedActs(
     const a = orderedSlots[i]!;
     const b = orderedSlots[i + 1]!;
     const wA = windows[a.id] ?? { planFrom: a.start, planTo: a.end };
-    const endA = parseHm(wA.planTo);
+    const endA = wallMinutesToFestivalTimeline(parseHm(wA.planTo));
     if (Number.isNaN(endA)) continue;
     const walk = walkMinutesBetweenStages(group, a.stageName, b.stageName);
     if (walk <= 0) continue;

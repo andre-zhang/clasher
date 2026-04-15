@@ -2,8 +2,17 @@ import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
 } from "@/lib/effectiveIntents";
-import { parseHmRelaxed } from "@/lib/timeHm";
+import {
+  formatFestivalTickHm,
+  parseHmRelaxed,
+  wallMinutesToFestivalTimeline,
+} from "@/lib/timeHm";
 import type { FestivalSnapshot } from "@/lib/types";
+
+/** Same 1 PM–origin “festival day” axis as the schedule UI (13:00 → … → 01:00, continuous). */
+function festMFromSlotHm(hm: string): number {
+  return wallMinutesToFestivalTimeline(parseHmRelaxed(hm));
+}
 
 export type PlanCalendarSlot = {
   start: string;
@@ -158,7 +167,7 @@ export function buildMemberPlanCalendarSlotsForDay(
         stage: s.stageName.trim(),
       };
     })
-    .sort((a, b) => parseHmRelaxed(a.start) - parseHmRelaxed(b.start));
+    .sort((a, b) => festMFromSlotHm(a.start) - festMFromSlotHm(b.start));
 }
 
 export function buildEveryoneCalendarSlotsForDay(
@@ -180,7 +189,7 @@ export function buildEveryoneCalendarSlotsForDay(
       act: s.artistName,
       stage: s.stageName.trim(),
     }))
-    .sort((a, b) => parseHmRelaxed(a.start) - parseHmRelaxed(b.start));
+    .sort((a, b) => festMFromSlotHm(a.start) - festMFromSlotHm(b.start));
 }
 
 /** Portrait 9:16; top ~1/3 reserved for lock-screen clock, grid below. */
@@ -230,11 +239,11 @@ export function renderPlanWallpaperCalendarPng(
   let contentMin = Infinity;
   let contentMax = -Infinity;
   for (const s of slots) {
-    const a = parseHmRelaxed(s.start);
-    const b = parseHmRelaxed(s.end);
+    const a = festMFromSlotHm(s.start);
+    const b = festMFromSlotHm(s.end);
     if (!Number.isNaN(a) && !Number.isNaN(b)) {
-      contentMin = Math.min(contentMin, a);
-      contentMax = Math.max(contentMax, b);
+      contentMin = Math.min(contentMin, a, b);
+      contentMax = Math.max(contentMax, a, b);
     }
   }
 
@@ -276,7 +285,8 @@ export function renderPlanWallpaperCalendarPng(
     maxM = mid + minSpan / 2;
   }
   minM = Math.max(0, minM);
-  maxM = Math.min(24 * 60 + 120, maxM);
+  /** Full festival day is 0…1439 (13:00 → 12:59 next segment); allow one step past for tick alignment. */
+  maxM = Math.min(1440, maxM);
 
   const stepM = maxM - minM > 240 ? 60 : maxM - minM > 90 ? 30 : 15;
   minM = Math.floor(minM / stepM) * stepM;
@@ -313,9 +323,7 @@ export function renderPlanWallpaperCalendarPng(
     ctx.stroke();
     ctx.fillStyle = "#1e293b";
     ctx.font = `600 ${tickFontPx}px ui-monospace, monospace`;
-    const hh = Math.floor(m / 60);
-    const mm = m % 60;
-    const label = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    const label = formatFestivalTickHm(m);
     ctx.fillText(label, pad, y + tickFontPx * 0.35);
   }
 
@@ -336,11 +344,13 @@ export function renderPlanWallpaperCalendarPng(
   };
   const placed: Placed[] = [];
   for (const s of slots) {
-    const ss = parseHmRelaxed(s.start);
-    const ee = parseHmRelaxed(s.end);
+    const ss = festMFromSlotHm(s.start);
+    const ee = festMFromSlotHm(s.end);
     if (Number.isNaN(ss) || Number.isNaN(ee)) continue;
-    const y0 = topY + titleBlock + (ss - minM) * pxPerMin;
-    const y1 = topY + titleBlock + (ee - minM) * pxPerMin;
+    const lo = Math.min(ss, ee);
+    const hi = Math.max(ss, ee);
+    const y0 = topY + titleBlock + (lo - minM) * pxPerMin;
+    const y1 = topY + titleBlock + (hi - minM) * pxPerMin;
     const h = Math.max(y1 - y0, 10);
     const x = gridLeft + 2;
     const w = gridW - 4;

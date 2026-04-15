@@ -2,17 +2,21 @@ import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
 } from "@/lib/effectiveIntents";
-import { parseHm } from "@/lib/timeHm";
+import { parseHm, wallMinutesToFestivalTimeline } from "@/lib/timeHm";
 import { walkMinutesBetweenStages } from "@/lib/walkFeasibility";
 import type { FestivalSnapshot } from "@/lib/types";
 
+/** Start/end on the festival timeline (1 PM → … → 12:59 AM). */
 export function effectiveWindowMinutes(
   group: FestivalSnapshot,
   memberId: string,
   slot: FestivalSnapshot["schedule"][0]
 ): { start: number; end: number } {
-  const s0 = parseHm(slot.start);
-  const e0 = parseHm(slot.end);
+  const s0w = parseHm(slot.start);
+  const e0w = parseHm(slot.end);
+  if (Number.isNaN(s0w) || Number.isNaN(e0w)) return { start: 0, end: 0 };
+  const s0 = wallMinutesToFestivalTimeline(s0w);
+  const e0 = wallMinutesToFestivalTimeline(e0w);
   if (Number.isNaN(s0) || Number.isNaN(e0)) return { start: 0, end: 0 };
   if (!effectiveMemberWantsSlot(group, memberId, slot.id)) {
     return { start: s0, end: s0 };
@@ -26,8 +30,10 @@ export function effectiveWindowMinutes(
   if (!fromS && !toS && (!row || !row.wants)) {
     return { start: s0, end: e0 };
   }
-  const fs = fromS ? parseHm(fromS) : s0;
-  const fe = toS ? parseHm(toS) : e0;
+  const fsw = fromS ? parseHm(fromS) : NaN;
+  const few = toS ? parseHm(toS) : NaN;
+  const fs = Number.isNaN(fsw) ? NaN : wallMinutesToFestivalTimeline(fsw);
+  const fe = Number.isNaN(few) ? NaN : wallMinutesToFestivalTimeline(few);
   const ss = Number.isNaN(fs) ? s0 : Math.max(s0, fs);
   const ee = Number.isNaN(fe) ? e0 : Math.min(e0, fe);
   return { start: ss, end: Math.max(ss, ee) };

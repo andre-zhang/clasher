@@ -1,5 +1,10 @@
 import type { FestivalSnapshot } from "@/lib/types";
-import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
+import {
+  festivalTimelineToWallMinutes,
+  hhmmFromMinutes,
+  parseHm,
+  wallMinutesToFestivalTimeline,
+} from "@/lib/timeHm";
 import { walkMinutesBetweenStages } from "@/lib/walkFeasibility";
 
 /**
@@ -15,17 +20,23 @@ export function defaultPlanWindowAfterPrevious(
     planTo: string;
   } | null
 ): { planFrom: string; planTo: string } {
-  const lo = parseHm(slot.start);
-  const hi = parseHm(slot.end);
+  const lo = wallMinutesToFestivalTimeline(parseHm(slot.start));
+  const hi = wallMinutesToFestivalTimeline(parseHm(slot.end));
   if (Number.isNaN(lo) || Number.isNaN(hi)) {
     return { planFrom: slot.start, planTo: slot.end };
   }
   if (!previous) {
-    return { planFrom: hhmmFromMinutes(lo), planTo: hhmmFromMinutes(hi) };
+    return {
+      planFrom: hhmmFromMinutes(festivalTimelineToWallMinutes(lo)),
+      planTo: hhmmFromMinutes(festivalTimelineToWallMinutes(hi)),
+    };
   }
-  const prevEnd = parseHm(previous.planTo);
+  const prevEnd = wallMinutesToFestivalTimeline(parseHm(previous.planTo));
   if (Number.isNaN(prevEnd)) {
-    return { planFrom: hhmmFromMinutes(lo), planTo: hhmmFromMinutes(hi) };
+    return {
+      planFrom: hhmmFromMinutes(festivalTimelineToWallMinutes(lo)),
+      planTo: hhmmFromMinutes(festivalTimelineToWallMinutes(hi)),
+    };
   }
   const walk = group.walkTimesEnabled
     ? walkMinutesBetweenStages(
@@ -40,8 +51,8 @@ export function defaultPlanWindowAfterPrevious(
     fromM = lo;
   }
   return {
-    planFrom: hhmmFromMinutes(fromM),
-    planTo: hhmmFromMinutes(hi),
+    planFrom: hhmmFromMinutes(festivalTimelineToWallMinutes(fromM)),
+    planTo: hhmmFromMinutes(festivalTimelineToWallMinutes(hi)),
   };
 }
 

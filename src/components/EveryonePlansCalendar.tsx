@@ -6,8 +6,8 @@ import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
 import { effectiveWindowMinutes } from "@/lib/planMemberDay";
 import {
   CALENDAR_TIME_STEP_MINUTES,
-  hhmmFromMinutes,
-  parseHm,
+  formatFestivalTickHm,
+  parseHmToFestivalM,
 } from "@/lib/timeHm";
 import type { FestivalSnapshot } from "@/lib/types";
 
@@ -78,8 +78,8 @@ export function EveryonePlansCalendar({
       }
       const mins: number[] = [];
       for (const s of rows) {
-        const a = parseHm(s.start);
-        const b = parseHm(s.end);
+        const a = parseHmToFestivalM(s.start);
+        const b = parseHmToFestivalM(s.end);
         if (!Number.isNaN(a)) mins.push(a);
         if (!Number.isNaN(b)) mins.push(b);
       }
@@ -135,7 +135,7 @@ export function EveryonePlansCalendar({
               className="flex shrink-0 items-start border-b border-zinc-200 px-1 pt-0.5 font-mono text-[10px] text-zinc-600"
               style={{ height: pxPerSlot }}
             >
-              {hhmmFromMinutes(m)}
+              {formatFestivalTickHm(m)}
             </div>
           ))}
         </div>
@@ -149,7 +149,8 @@ export function EveryonePlansCalendar({
                       s.dayLabel.trim() === dayKey && unionIds.has(s.id)
                   )
                   .sort(
-                    (a, b) => parseHm(a.start) - parseHm(b.start)
+                    (a, b) =>
+                      parseHmToFestivalM(a.start) - parseHmToFestivalM(b.start)
                   )
               : group.schedule
                   .filter(
@@ -202,8 +203,8 @@ export function EveryonePlansCalendar({
                   let sm: number;
                   let em: number;
                   if (col.mode === "groupUnion") {
-                    sm = parseHm(slot.start);
-                    em = parseHm(slot.end);
+                    sm = parseHmToFestivalM(slot.start);
+                    em = parseHmToFestivalM(slot.end);
                   } else {
                     const w = effectiveWindowMinutes(group, col.memberId, slot);
                     sm = w.start;

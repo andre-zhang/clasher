@@ -1,6 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
 
-import { parseHm, splitPriorityWindows } from "@/lib/timeHm";
+import {
+  parseHm,
+  splitPriorityWindows,
+  wallMinutesToFestivalTimeline,
+} from "@/lib/timeHm";
 
 import { wantsDeltaFromChoice } from "./memberSlotIntentPatch";
 
@@ -131,10 +135,10 @@ export async function patchIntentsForConflict(
         end: second.end,
       }
     );
-    const f0 = parseHm(wins.first.from);
-    const f1 = parseHm(wins.first.to);
-    const s0 = parseHm(wins.second.from);
-    const s1 = parseHm(wins.second.to);
+    const f0 = wallMinutesToFestivalTimeline(parseHm(wins.first.from));
+    const f1 = wallMinutesToFestivalTimeline(parseHm(wins.first.to));
+    const s0 = wallMinutesToFestivalTimeline(parseHm(wins.second.from));
+    const s1 = wallMinutesToFestivalTimeline(parseHm(wins.second.to));
     const firstOk = !Number.isNaN(f0) && !Number.isNaN(f1) && f0 < f1;
     const secondOk = !Number.isNaN(s0) && !Number.isNaN(s1) && s0 < s1;
     await upsertIntent(

@@ -3,7 +3,12 @@ import {
   effectiveMemberWantsSlot,
 } from "@/lib/effectiveIntents";
 import type { FestivalSnapshot } from "@/lib/types";
-import { hhmmFromMinutes, parseHm } from "@/lib/timeHm";
+import {
+  festivalTimelineToWallMinutes,
+  hhmmFromMinutes,
+  parseHm,
+  wallMinutesToFestivalTimeline,
+} from "@/lib/timeHm";
 
 export type MinuteWindow = {
   dayKey: string;
@@ -69,14 +74,14 @@ export function slotsInfeasibleTogether(
     {
       dayKey: dk(a),
       stageName: a.stageName,
-      startM: parseHm(a.start),
-      endM: parseHm(a.end),
+      startM: wallMinutesToFestivalTimeline(parseHm(a.start)),
+      endM: wallMinutesToFestivalTimeline(parseHm(a.end)),
     },
     {
       dayKey: dk(b),
       stageName: b.stageName,
-      startM: parseHm(b.start),
-      endM: parseHm(b.end),
+      startM: wallMinutesToFestivalTimeline(parseHm(b.start)),
+      endM: wallMinutesToFestivalTimeline(parseHm(b.end)),
     }
   );
 }
@@ -93,10 +98,10 @@ export function stripWindowsInfeasiblePair(
     const w = windows[s.id];
     const rawS = w?.planFrom ?? s.start;
     const rawE = w?.planTo ?? s.end;
-    let sm = parseHm(rawS);
-    let em = parseHm(rawE);
-    const lo = parseHm(s.start);
-    const hi = parseHm(s.end);
+    let sm = wallMinutesToFestivalTimeline(parseHm(rawS));
+    let em = wallMinutesToFestivalTimeline(parseHm(rawE));
+    const lo = wallMinutesToFestivalTimeline(parseHm(s.start));
+    const hi = wallMinutesToFestivalTimeline(parseHm(s.end));
     if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
       if (!Number.isNaN(sm)) sm = Math.max(lo, Math.min(hi, sm));
       if (!Number.isNaN(em)) em = Math.max(lo, Math.min(hi, em));
@@ -128,10 +133,10 @@ export function clampPlanWindowToSlot(
   planFrom: string,
   planTo: string
 ): { planFrom: string; planTo: string } {
-  const lo = parseHm(slot.start);
-  const hi = parseHm(slot.end);
-  let sm = parseHm(planFrom);
-  let em = parseHm(planTo);
+  const lo = wallMinutesToFestivalTimeline(parseHm(slot.start));
+  const hi = wallMinutesToFestivalTimeline(parseHm(slot.end));
+  let sm = wallMinutesToFestivalTimeline(parseHm(planFrom));
+  let em = wallMinutesToFestivalTimeline(parseHm(planTo));
   if (Number.isNaN(sm) || Number.isNaN(em)) {
     return { planFrom: slot.start, planTo: slot.end };
   }
@@ -140,7 +145,10 @@ export function clampPlanWindowToSlot(
     em = Math.max(lo, Math.min(hi, em));
   }
   if (em < sm) em = sm;
-  return { planFrom: hhmmFromMinutes(sm), planTo: hhmmFromMinutes(em) };
+  return {
+    planFrom: hhmmFromMinutes(festivalTimelineToWallMinutes(sm)),
+    planTo: hhmmFromMinutes(festivalTimelineToWallMinutes(em)),
+  };
 }
 
 function minuteWindowFromMemberEffectivePlan(
@@ -152,10 +160,10 @@ function minuteWindowFromMemberEffectivePlan(
   const w = effectiveMemberSlotPlanWindow(group, memberId, s);
   const rawS = w.planFrom ?? s.start;
   const rawE = w.planTo ?? s.end;
-  let sm = parseHm(rawS);
-  let em = parseHm(rawE);
-  const lo = parseHm(s.start);
-  const hi = parseHm(s.end);
+  let sm = wallMinutesToFestivalTimeline(parseHm(rawS));
+  let em = wallMinutesToFestivalTimeline(parseHm(rawE));
+  const lo = wallMinutesToFestivalTimeline(parseHm(s.start));
+  const hi = wallMinutesToFestivalTimeline(parseHm(s.end));
   if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
     if (!Number.isNaN(sm)) sm = Math.max(lo, Math.min(hi, sm));
     if (!Number.isNaN(em)) em = Math.max(lo, Math.min(hi, em));

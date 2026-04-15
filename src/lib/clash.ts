@@ -1,11 +1,6 @@
 import type { FestivalSnapshot } from "@/lib/types";
+import { parseHm, wallMinutesToFestivalTimeline } from "@/lib/timeHm";
 import { slotsInfeasibleTogether } from "@/lib/walkFeasibility";
-
-function parseHm(s: string): number {
-  const m = s.trim().match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return NaN;
-  return parseInt(m[1]!, 10) * 60 + parseInt(m[2]!, 10);
-}
 
 /**
  * Listing times don't overlap in clock sense, but you still can't do both
@@ -26,10 +21,10 @@ export function slotsTimeOverlap(
 ): boolean {
   if (a.dayLabel.trim().toLowerCase() !== b.dayLabel.trim().toLowerCase())
     return false;
-  const as = parseHm(a.start);
-  const ae = parseHm(a.end);
-  const bs = parseHm(b.start);
-  const be = parseHm(b.end);
+  const as = wallMinutesToFestivalTimeline(parseHm(a.start));
+  const ae = wallMinutesToFestivalTimeline(parseHm(a.end));
+  const bs = wallMinutesToFestivalTimeline(parseHm(b.start));
+  const be = wallMinutesToFestivalTimeline(parseHm(b.end));
   if ([as, ae, bs, be].some(Number.isNaN)) return false;
   return as < be && bs < ae;
 }

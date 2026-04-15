@@ -20,8 +20,8 @@ import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import {
   CALENDAR_TIME_STEP_MINUTES,
-  hhmmFromMinutes,
-  parseHm,
+  formatFestivalTickHm,
+  parseHmToFestivalM,
 } from "@/lib/timeHm";
 import { memberEffectivePlanWindowsInfeasibleTogether } from "@/lib/walkFeasibility";
 import { myTierEmoji, squadReactionPills } from "@/lib/reactionsUi";
@@ -60,11 +60,11 @@ function slotPixelLayout(
   timelineBodyPx: number
 ): { topPx: number; heightPx: number } | null {
   const slot = sorted[index];
-  const ss = parseHm(slot.start);
-  const ee = parseHm(slot.end);
+  const ss = parseHmToFestivalM(slot.start);
+  const ee = parseHmToFestivalM(slot.end);
   if (Number.isNaN(ss) || Number.isNaN(ee)) return null;
   const next = sorted[index + 1];
-  const nextStart = next ? parseHm(next.start) : maxMR;
+  const nextStart = next ? parseHmToFestivalM(next.start) : maxMR;
   const range = maxMR - minMR;
   if (range <= 0) return { topPx: 0, heightPx: 40 };
   const topPx = ((ss - minMR) / range) * timelineBodyPx;
@@ -274,10 +274,10 @@ export function ScheduleCalendar({
       wanted.sort((a, b) => {
         const wa = effectiveMemberSlotPlanWindow(g, plannerMemberId, a);
         const wb = effectiveMemberSlotPlanWindow(g, plannerMemberId, b);
-        const ta = parseHm(wa.planFrom ?? a.start);
-        const tb = parseHm(wb.planFrom ?? b.start);
-        const fa = Number.isNaN(ta) ? parseHm(a.start) : ta;
-        const fb = Number.isNaN(tb) ? parseHm(b.start) : tb;
+        const ta = parseHmToFestivalM(wa.planFrom ?? a.start);
+        const tb = parseHmToFestivalM(wb.planFrom ?? b.start);
+        const fa = Number.isNaN(ta) ? parseHmToFestivalM(a.start) : ta;
+        const fb = Number.isNaN(tb) ? parseHmToFestivalM(b.start) : tb;
         return fa - fb;
       });
       const ids = wanted.map((s) => s.id);
@@ -304,7 +304,7 @@ export function ScheduleCalendar({
     }
     const ids = daySlots
       .filter((s) => idSet.has(s.id))
-      .sort((a, b) => parseHm(a.start) - parseHm(b.start))
+      .sort((a, b) => parseHmToFestivalM(a.start) - parseHmToFestivalM(b.start))
       .map((s) => s.id);
     setStripIds(ids);
     setStripWindows(recomputeStripWindowsSequential(g, ids, sched));
@@ -416,8 +416,8 @@ export function ScheduleCalendar({
     }
     const mins: number[] = [];
     for (const s of unionRows) {
-      const a = parseHm(s.start);
-      const b = parseHm(s.end);
+      const a = parseHmToFestivalM(s.start);
+      const b = parseHmToFestivalM(s.end);
       if (!Number.isNaN(a)) mins.push(a);
       if (!Number.isNaN(b)) mins.push(b);
     }
@@ -556,7 +556,7 @@ export function ScheduleCalendar({
     if (useEffectiveSlotLayout && group && rateMemberId) {
       return effectiveWindowMinutes(group, rateMemberId, slot).start;
     }
-    return parseHm(slot.start);
+    return parseHmToFestivalM(slot.start);
   }
 
   const canDragSlotToStrip = Boolean(
@@ -689,7 +689,7 @@ export function ScheduleCalendar({
                   className="pointer-events-none absolute left-0 right-0 flex items-center border-b border-zinc-200 px-1 text-[11px] font-mono leading-none text-zinc-600"
                   style={{ top: i * pxPerSlot, height: pxPerSlot }}
                 >
-                  {hhmmFromMinutes(m)}
+                  {formatFestivalTickHm(m)}
                 </div>
               ))}
             </div>
@@ -799,8 +799,8 @@ export function ScheduleCalendar({
                     const ew = effectiveWindowMinutes(group, rateMemberId, slot);
                     let sm = ew.start;
                     let em = ew.end;
-                    const lo = parseHm(slot.start);
-                    const hi = parseHm(slot.end);
+                    const lo = parseHmToFestivalM(slot.start);
+                    const hi = parseHmToFestivalM(slot.end);
                     if (!onPlan && !Number.isNaN(lo) && !Number.isNaN(hi)) {
                       sm = lo;
                       em = hi;

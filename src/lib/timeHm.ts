@@ -1,3 +1,38 @@
+/** Wall clock: festival “day” for UI and same-day logic starts at 1 PM. */
+export const FESTIVAL_DAY_START_WALL_MINUTES = 13 * 60;
+
+/**
+ * Linear position on the festival day: 13:00 → 0, 23:59 → 659, 00:00 → 660, 12:59 → 1439.
+ * Use for sorting, overlap, and calendar Y positions (same calendar `dayLabel`).
+ */
+export function wallMinutesToFestivalTimeline(m: number): number {
+  if (!Number.isFinite(m) || Number.isNaN(m)) return NaN;
+  let x = Math.round(m) % 1440;
+  if (x < 0) x += 1440;
+  if (x >= FESTIVAL_DAY_START_WALL_MINUTES) {
+    return x - FESTIVAL_DAY_START_WALL_MINUTES;
+  }
+  return x + (1440 - FESTIVAL_DAY_START_WALL_MINUTES);
+}
+
+/** Inverse of {@link wallMinutesToFestivalTimeline} for tick labels and stored HH:mm. */
+export function festivalTimelineToWallMinutes(fm: number): number {
+  if (!Number.isFinite(fm) || Number.isNaN(fm)) return NaN;
+  let x = Math.round(fm);
+  if (x < 0) x = 0;
+  if (x > 1439) x = 1439;
+  const afternoonSpan = 1440 - FESTIVAL_DAY_START_WALL_MINUTES;
+  if (x < afternoonSpan) {
+    return x + FESTIVAL_DAY_START_WALL_MINUTES;
+  }
+  return x - afternoonSpan;
+}
+
+/** Parse "HH:mm" then map to festival timeline minutes (1 PM origin). */
+export function parseHmToFestivalM(s: string): number {
+  return wallMinutesToFestivalTimeline(parseHm(s));
+}
+
 /** Parse "HH:mm" or "H:mm" to minutes from midnight. */
 export function parseHm(s: string): number {
   const m = s.trim().match(/^(\d{1,2}):(\d{2})$/);
@@ -26,6 +61,13 @@ export function hhmmFromMinutes(total: number): string {
   return `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
 }
 
+/** Tick label: festival coordinate → wall clock string. */
+export function formatFestivalTickHm(festM: number): string {
+  const w = festivalTimelineToWallMinutes(festM);
+  if (Number.isNaN(w)) return "—";
+  return hhmmFromMinutes(w);
+}
+
 /** Timeline row spacing in the schedule grid (minutes). */
 export const CALENDAR_TIME_STEP_MINUTES = 15;
 
@@ -46,17 +88,17 @@ export function splitSwitchMinutes(
   b: { dayLabel: string; start: string; end: string }
 ): number {
   if (a.dayLabel.trim().toLowerCase() !== b.dayLabel.trim().toLowerCase()) {
-    const as = parseHm(a.start);
-    const be = parseHm(b.end);
+    const as = wallMinutesToFestivalTimeline(parseHm(a.start));
+    const be = wallMinutesToFestivalTimeline(parseHm(b.end));
     if (!Number.isNaN(as) && !Number.isNaN(be)) {
       return Math.floor((as + be) / 2);
     }
     return 0;
   }
-  const as = parseHm(a.start);
-  const ae = parseHm(a.end);
-  const bs = parseHm(b.start);
-  const be = parseHm(b.end);
+  const as = wallMinutesToFestivalTimeline(parseHm(a.start));
+  const ae = wallMinutesToFestivalTimeline(parseHm(a.end));
+  const bs = wallMinutesToFestivalTimeline(parseHm(b.start));
+  const be = wallMinutesToFestivalTimeline(parseHm(b.end));
   if ([as, ae, bs, be].some(Number.isNaN)) return 0;
   const oStart = Math.max(as, bs);
   const oEnd = Math.min(ae, be);
@@ -79,10 +121,10 @@ export function splitPriorityWindows(
       second: { from: second.start, to: second.end },
     };
   }
-  const fs = parseHm(first.start);
-  const fe = parseHm(first.end);
-  const ss = parseHm(second.start);
-  const se = parseHm(second.end);
+  const fs = wallMinutesToFestivalTimeline(parseHm(first.start));
+  const fe = wallMinutesToFestivalTimeline(parseHm(first.end));
+  const ss = wallMinutesToFestivalTimeline(parseHm(second.start));
+  const se = wallMinutesToFestivalTimeline(parseHm(second.end));
   if ([fs, fe, ss, se].some(Number.isNaN)) {
     return {
       first: { from: first.start, to: first.end },
@@ -113,6 +155,9 @@ export function splitPriorityWindows(
   }
   return {
     first: firstWin,
-    second: { from: hhmmFromMinutes(s0), to: hhmmFromMinutes(s1) },
+    second: {
+      from: hhmmFromMinutes(festivalTimelineToWallMinutes(s0)),
+      to: hhmmFromMinutes(festivalTimelineToWallMinutes(s1)),
+    },
   };
 }

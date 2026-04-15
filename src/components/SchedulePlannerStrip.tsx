@@ -13,11 +13,13 @@ import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
 import {
+  festivalTimelineToWallMinutes,
   hhmmFromMinutes,
   parseHm,
   PLAN_WINDOW_MIN_DURATION_MINUTES,
   PLAN_WINDOW_SNAP_MINUTES,
   snapPlanWindowMinutes,
+  wallMinutesToFestivalTimeline,
 } from "@/lib/timeHm";
 import { clampPlanWindowToSlot } from "@/lib/walkFeasibility";
 import type { FestivalSnapshot } from "@/lib/types";
@@ -33,6 +35,16 @@ type IntentPatch = {
   planFrom: string | null;
   planTo: string | null;
 };
+
+function wallHmFromFestM(fm: number): string {
+  return hhmmFromMinutes(festivalTimelineToWallMinutes(fm));
+}
+
+function wallHmFromFestSnapped(fm: number): string {
+  return hhmmFromMinutes(
+    festivalTimelineToWallMinutes(snapPlanWindowMinutes(Math.round(fm)))
+  );
+}
 
 function patchNeedsApply(
   group: FestivalSnapshot,
@@ -62,8 +74,8 @@ function stripBoxLayout(
 ): { topPx: number; heightPx: number } {
   const range = timelineMaxM - timelineMinM;
   const w = wins[slot.id] ?? { planFrom: slot.start, planTo: slot.end };
-  const sm = parseHm(w.planFrom);
-  const em = parseHm(w.planTo);
+  const sm = wallMinutesToFestivalTimeline(parseHm(w.planFrom));
+  const em = wallMinutesToFestivalTimeline(parseHm(w.planTo));
   if (Number.isNaN(sm) || Number.isNaN(em) || range <= 0) {
     return { topPx: 0, heightPx: 28 };
   }
@@ -193,10 +205,10 @@ export function SchedulePlannerStrip({
           planFrom: slot.start,
           planTo: slot.end,
         };
-        let sm = parseHm(w.planFrom);
-        let em = parseHm(w.planTo);
-        const slotLo = parseHm(slot.start);
-        const slotHi = parseHm(slot.end);
+        let sm = wallMinutesToFestivalTimeline(parseHm(w.planFrom));
+        let em = wallMinutesToFestivalTimeline(parseHm(w.planTo));
+        const slotLo = wallMinutesToFestivalTimeline(parseHm(slot.start));
+        const slotHi = wallMinutesToFestivalTimeline(parseHm(slot.end));
         if (Number.isNaN(sm)) sm = slotLo;
         if (Number.isNaN(em)) em = slotHi;
         const span =
@@ -215,7 +227,7 @@ export function SchedulePlannerStrip({
             return {
               ...prev,
               [slotId]: {
-                planFrom: hhmmFromMinutes(minutesAtPointer),
+                planFrom: wallHmFromFestSnapped(minutesAtPointer),
                 planTo: w.planTo,
               },
             };
@@ -226,7 +238,10 @@ export function SchedulePlannerStrip({
           newSm = Math.max(newSm, slotLo);
           return {
             ...prev,
-            [slotId]: { planFrom: hhmmFromMinutes(newSm), planTo: w.planTo },
+            [slotId]: {
+              planFrom: wallHmFromFestSnapped(newSm),
+              planTo: w.planTo,
+            },
           };
         }
 
@@ -235,7 +250,7 @@ export function SchedulePlannerStrip({
             ...prev,
             [slotId]: {
               planFrom: w.planFrom,
-              planTo: hhmmFromMinutes(minutesAtPointer),
+              planTo: wallHmFromFestSnapped(minutesAtPointer),
             },
           };
         }
@@ -245,7 +260,10 @@ export function SchedulePlannerStrip({
         newEm = Math.min(newEm, slotHi);
         return {
           ...prev,
-          [slotId]: { planFrom: w.planFrom, planTo: hhmmFromMinutes(newEm) },
+          [slotId]: {
+            planFrom: w.planFrom,
+            planTo: wallHmFromFestSnapped(newEm),
+          },
         };
       });
     };
@@ -266,16 +284,16 @@ export function SchedulePlannerStrip({
         const cur = prev[slotId];
         if (!cur) return prev;
         const c = clampPlanWindowToSlot(slot, cur.planFrom, cur.planTo);
-        let sm = parseHm(c.planFrom);
-        let em = parseHm(c.planTo);
+        let sm = wallMinutesToFestivalTimeline(parseHm(c.planFrom));
+        let em = wallMinutesToFestivalTimeline(parseHm(c.planTo));
         if (Number.isNaN(sm) || Number.isNaN(em)) {
           return { ...prev, [slotId]: c };
         }
         sm = snapPlanWindowMinutes(Math.round(sm));
         em = snapPlanWindowMinutes(Math.round(em));
         if (em < sm) em = sm;
-        const slotLo = parseHm(slot.start);
-        const slotHi = parseHm(slot.end);
+        const slotLo = wallMinutesToFestivalTimeline(parseHm(slot.start));
+        const slotHi = wallMinutesToFestivalTimeline(parseHm(slot.end));
         const span =
           !Number.isNaN(slotLo) &&
           !Number.isNaN(slotHi) &&
@@ -303,8 +321,8 @@ export function SchedulePlannerStrip({
         }
         const fin = clampPlanWindowToSlot(
           slot,
-          hhmmFromMinutes(sm),
-          hhmmFromMinutes(em)
+          wallHmFromFestM(sm),
+          wallHmFromFestM(em)
         );
         return { ...prev, [slotId]: fin };
       });
@@ -526,10 +544,10 @@ export function SchedulePlannerStrip({
     const slot = slotsById.get(editId);
     if (!slot) return;
     const c = clampPlanWindowToSlot(slot, draftFrom.trim(), draftTo.trim());
-    let sm = parseHm(c.planFrom);
-    let em = parseHm(c.planTo);
-    const slotLo = parseHm(slot.start);
-    const slotHi = parseHm(slot.end);
+    let sm = wallMinutesToFestivalTimeline(parseHm(c.planFrom));
+    let em = wallMinutesToFestivalTimeline(parseHm(c.planTo));
+    const slotLo = wallMinutesToFestivalTimeline(parseHm(slot.start));
+    const slotHi = wallMinutesToFestivalTimeline(parseHm(slot.end));
     const span =
       !Number.isNaN(slotLo) &&
       !Number.isNaN(slotHi) &&
@@ -551,8 +569,8 @@ export function SchedulePlannerStrip({
     }
     const fin = clampPlanWindowToSlot(
       slot,
-      Number.isNaN(sm) ? c.planFrom : hhmmFromMinutes(sm),
-      Number.isNaN(em) ? c.planTo : hhmmFromMinutes(em)
+      Number.isNaN(sm) ? c.planFrom : wallHmFromFestM(sm),
+      Number.isNaN(em) ? c.planTo : wallHmFromFestM(em)
     );
     setWindows((prev) => ({
       ...prev,
