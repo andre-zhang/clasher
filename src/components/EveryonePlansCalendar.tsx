@@ -2,8 +2,16 @@
 
 import { useMemo } from "react";
 
-import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
+import { PlanWalkBandBox } from "@/components/PlanWalkBandBox";
+import {
+  effectiveMemberSlotPlanWindow,
+  effectiveMemberWantsSlot,
+} from "@/lib/effectiveIntents";
 import { effectiveWindowMinutes } from "@/lib/planMemberDay";
+import {
+  walkBandsBetweenOrderedActs,
+  type PlanWalkBand,
+} from "@/lib/planWalkBands";
 import {
   CALENDAR_TIME_STEP_MINUTES,
   formatFestivalTickHm,
@@ -115,6 +123,52 @@ export function EveryonePlansCalendar({
     [group, dayKey]
   );
 
+  const walkBandsByColumnKey = useMemo(() => {
+    const map = new Map<string, PlanWalkBand[]>();
+    if (!group.walkTimesEnabled) return map;
+    for (const col of columnPlan) {
+      const slotsForWalk =
+        col.mode === "groupUnion"
+          ? group.schedule
+              .filter(
+                (s) =>
+                  s.dayLabel.trim() === dayKey && unionIds.has(s.id)
+              )
+              .sort(
+                (a, b) =>
+                  parseHmToFestivalM(a.start) - parseHmToFestivalM(b.start)
+              )
+          : group.schedule
+              .filter(
+                (s) =>
+                  s.dayLabel.trim() === dayKey &&
+                  effectiveMemberWantsSlot(group, col.memberId, s.id)
+              )
+              .sort(
+                (a, b) =>
+                  effectiveWindowMinutes(group, col.memberId, a).start -
+                  effectiveWindowMinutes(group, col.memberId, b).start
+              );
+      const wins: Record<string, { planFrom: string; planTo: string }> = {};
+      for (const s of slotsForWalk) {
+        if (col.mode === "groupUnion") {
+          wins[s.id] = { planFrom: s.start, planTo: s.end };
+        } else {
+          const w = effectiveMemberSlotPlanWindow(group, col.memberId, s);
+          wins[s.id] = {
+            planFrom: w.planFrom ?? s.start,
+            planTo: w.planTo ?? s.end,
+          };
+        }
+      }
+      map.set(
+        col.key,
+        walkBandsBetweenOrderedActs(group, slotsForWalk, wins)
+      );
+    }
+    return map;
+  }, [group, dayKey, columnPlan, unionIds]);
+
   if (!ticksRender.length) {
     return <p className="text-sm text-zinc-600">No schedule for this day.</p>;
   }
@@ -199,6 +253,21 @@ export function EveryonePlansCalendar({
                     style={{ top: i * pxPerSlot, height: pxPerSlot }}
                   />
                 ))}
+                {(walkBandsByColumnKey.get(col.key) ?? []).map((band, bi) => {
+                  if (range <= 0) return null;
+                  const topPx = ((band.fromM - minMR) / range) * timelineBodyPx;
+                  const durPx =
+                    ((band.toM - band.fromM) / range) * timelineBodyPx;
+                  const heightPx = Math.max(durPx, 4);
+                  return (
+                    <PlanWalkBandBox
+                      key={`walk-${col.key}-${bi}`}
+                      band={band}
+                      topPx={topPx}
+                      heightPx={heightPx}
+                    />
+                  );
+                })}
                 {slots.map((slot, slotIndex) => {
                   let sm: number;
                   let em: number;

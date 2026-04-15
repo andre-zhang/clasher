@@ -9,6 +9,7 @@ import {
   type SyntheticEvent,
 } from "react";
 
+import { PlanWalkBandBox } from "@/components/PlanWalkBandBox";
 import { SchedulePlannerStrip } from "@/components/SchedulePlannerStrip";
 import { findMyResolution, isMyClashResolved } from "@/lib/clash";
 import {
@@ -742,14 +743,11 @@ export function ScheduleCalendar({
                     ((band.toM - band.fromM) / range) * timelineBodyPx;
                   const heightPx = Math.max(durPx, 4);
                   return (
-                    <div
+                    <PlanWalkBandBox
                       key={`walk-span-${bi}`}
-                      className="pointer-events-none absolute left-0 right-0 z-[3] bg-zinc-900/20"
-                      style={{
-                        top: TIMELINE_HEADER_PX + topPx,
-                        height: heightPx,
-                      }}
-                      aria-hidden
+                      band={band}
+                      topPx={TIMELINE_HEADER_PX + topPx}
+                      heightPx={heightPx}
                     />
                   );
                 })}

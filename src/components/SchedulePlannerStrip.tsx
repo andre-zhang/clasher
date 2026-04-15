@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
+import { PlanWalkBandBox } from "@/components/PlanWalkBandBox";
 import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
 import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
 import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
@@ -743,11 +744,12 @@ export function SchedulePlannerStrip({
             ((band.toM - band.fromM) / range) * timelineBodyPx;
           const heightPx = Math.max(durPx, 3);
           return (
-            <div
+            <PlanWalkBandBox
               key={`w-${i}`}
-              className="pointer-events-none absolute left-0 right-0 z-[1] bg-zinc-900/25"
-              style={{ top: topPx, height: heightPx }}
-              aria-hidden
+              band={band}
+              topPx={topPx}
+              heightPx={heightPx}
+              inset="full"
             />
           );
         })}
