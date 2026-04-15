@@ -11,7 +11,10 @@ import {
 
 import { PlanWalkBandBox } from "@/components/PlanWalkBandBox";
 import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
-import { recomputeStripWindowsSequential } from "@/lib/planStripWalk";
+import {
+  cascadePlanStripAfterIndex,
+  recomputeStripWindowsSequential,
+} from "@/lib/planStripWalk";
 import { walkBandsBetweenOrderedActs } from "@/lib/planWalkBands";
 import {
   festivalTimelineToWallMinutes,
@@ -22,7 +25,7 @@ import {
   snapPlanWindowMinutes,
   wallMinutesToFestivalTimeline,
 } from "@/lib/timeHm";
-import { clampPlanWindowToSlot } from "@/lib/walkFeasibility";
+import { clampPlanWindowToSlot, walkMinutesBetweenStages } from "@/lib/walkFeasibility";
 import type { FestivalSnapshot } from "@/lib/types";
 
 type Slot = FestivalSnapshot["schedule"][number];
@@ -238,10 +241,34 @@ export function SchedulePlannerStrip({
               },
             };
           }
+          let earliestStart = slotLo;
+          const idx = stripIds.indexOf(slotId);
+          if (idx > 0) {
+            const prevId = stripIds[idx - 1]!;
+            const prevSlot = slotsById.get(prevId);
+            if (prevSlot) {
+              const pw =
+                prev[prevId] ?? {
+                  planFrom: prevSlot.start,
+                  planTo: prevSlot.end,
+                };
+              const prevEnd = wallMinutesToFestivalTimeline(
+                parseHm(pw.planTo)
+              );
+              if (!Number.isNaN(prevEnd)) {
+                const walkM = walkMinutesBetweenStages(
+                  groupRef.current,
+                  prevSlot.stageName,
+                  slot.stageName
+                );
+                earliestStart = Math.max(slotLo, prevEnd + walkM);
+              }
+            }
+          }
           let newSm = minutesAtPointer;
-          newSm = Math.max(slotLo, Math.min(slotHi, newSm));
+          newSm = Math.max(earliestStart, Math.min(slotHi, newSm));
           newSm = Math.min(newSm, em - minDur);
-          newSm = Math.max(newSm, slotLo);
+          newSm = Math.max(newSm, earliestStart);
           return {
             ...prev,
             [slotId]: {
@@ -330,7 +357,16 @@ export function SchedulePlannerStrip({
           wallHmFromFestM(sm),
           wallHmFromFestM(em)
         );
-        return { ...prev, [slotId]: fin };
+        const idx = stripIds.indexOf(slotId);
+        if (idx < 0) return { ...prev, [slotId]: fin };
+        const merged = { ...prev, [slotId]: fin };
+        return cascadePlanStripAfterIndex(
+          groupRef.current,
+          stripIds,
+          schedule,
+          merged,
+          idx
+        );
       });
     };
 
@@ -629,10 +665,21 @@ export function SchedulePlannerStrip({
       Number.isNaN(sm) ? c.planFrom : wallHmFromFestM(sm),
       Number.isNaN(em) ? c.planTo : wallHmFromFestM(em)
     );
-    setWindows((prev) => ({
-      ...prev,
-      [slot.id]: { planFrom: fin.planFrom, planTo: fin.planTo },
-    }));
+    setWindows((prev) => {
+      const merged = {
+        ...prev,
+        [slot.id]: { planFrom: fin.planFrom, planTo: fin.planTo },
+      };
+      const idx = stripIds.indexOf(slot.id);
+      if (idx < 0) return merged;
+      return cascadePlanStripAfterIndex(
+        groupRef.current,
+        stripIds,
+        schedule,
+        merged,
+        idx
+      );
+    });
     setEditId(null);
   }
 

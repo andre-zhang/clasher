@@ -38,13 +38,11 @@ export function defaultPlanWindowAfterPrevious(
       planTo: hhmmFromMinutes(festivalTimelineToWallMinutes(hi)),
     };
   }
-  const walk = group.walkTimesEnabled
-    ? walkMinutesBetweenStages(
-        group,
-        previous.slot.stageName,
-        slot.stageName
-      )
-    : 0;
+  const walk = walkMinutesBetweenStages(
+    group,
+    previous.slot.stageName,
+    slot.stageName
+  );
   const earliest = prevEnd + walk;
   let fromM = Math.max(lo, earliest);
   if (fromM >= hi) {
@@ -69,6 +67,45 @@ export function recomputeStripWindowsSequential(
     planTo: string;
   } | null = null;
   for (const id of stripIds) {
+    const slot = byId.get(id);
+    if (!slot) continue;
+    out[id] = defaultPlanWindowAfterPrevious(group, slot, prev);
+    prev = { slot, planFrom: out[id]!.planFrom, planTo: out[id]!.planTo };
+  }
+  return out;
+}
+
+/**
+ * Recompute plan windows for every strip slot **after** `fixedThroughIndex`, chaining walk gaps
+ * from the slot at that index (whose window must already be in `windows`).
+ */
+export function cascadePlanStripAfterIndex(
+  group: FestivalSnapshot,
+  stripIds: string[],
+  schedule: FestivalSnapshot["schedule"],
+  windows: Record<string, { planFrom: string; planTo: string }>,
+  fixedThroughIndex: number
+): Record<string, { planFrom: string; planTo: string }> {
+  const out = { ...windows };
+  const byId = new Map(schedule.map((s) => [s.id, s]));
+  if (fixedThroughIndex < 0 || fixedThroughIndex >= stripIds.length - 1) {
+    return out;
+  }
+  const anchorId = stripIds[fixedThroughIndex]!;
+  const anchorSlot = byId.get(anchorId);
+  const anchorWin = out[anchorId];
+  if (!anchorSlot || !anchorWin) return out;
+  let prev: {
+    slot: FestivalSnapshot["schedule"][0];
+    planFrom: string;
+    planTo: string;
+  } = {
+    slot: anchorSlot,
+    planFrom: anchorWin.planFrom,
+    planTo: anchorWin.planTo,
+  };
+  for (let i = fixedThroughIndex + 1; i < stripIds.length; i++) {
+    const id = stripIds[i]!;
     const slot = byId.get(id);
     if (!slot) continue;
     out[id] = defaultPlanWindowAfterPrevious(group, slot, prev);

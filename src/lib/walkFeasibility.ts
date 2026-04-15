@@ -17,6 +17,9 @@ export type MinuteWindow = {
   endM: number;
 };
 
+/** When walk times are on but the matrix has no entry for a stage pair, use this gap (minutes). */
+export const DEFAULT_INTER_STAGE_WALK_MINUTES = 5;
+
 export function walkMinutesBetweenStages(
   group: FestivalSnapshot,
   stageA: string,
@@ -25,13 +28,15 @@ export function walkMinutesBetweenStages(
   const a = stageA.trim();
   const b = stageB.trim();
   if (a === b) return 0;
+  if (!group.walkTimesEnabled) return 0;
   const m = group.walkMatrix;
-  if (!m) return 0;
-  const ab = m[a]?.[b];
-  if (typeof ab === "number" && Number.isFinite(ab)) return ab;
-  const ba = m[b]?.[a];
-  if (typeof ba === "number" && Number.isFinite(ba)) return ba;
-  return 0;
+  if (m) {
+    const ab = m[a]?.[b];
+    if (typeof ab === "number" && Number.isFinite(ab)) return Math.max(0, ab);
+    const ba = m[b]?.[a];
+    if (typeof ba === "number" && Number.isFinite(ba)) return Math.max(0, ba);
+  }
+  return DEFAULT_INTER_STAGE_WALK_MINUTES;
 }
 
 function windowInfeasibleTogether(
@@ -47,15 +52,11 @@ function windowInfeasibleTogether(
   if ([as, ae, bs, be].some(Number.isNaN)) return false;
   if (as < be && bs < ae) return true;
   if (ae <= bs) {
-    const w = group.walkTimesEnabled
-      ? walkMinutesBetweenStages(group, a.stageName, b.stageName)
-      : 0;
+    const w = walkMinutesBetweenStages(group, a.stageName, b.stageName);
     return ae + w > bs;
   }
   if (be <= as) {
-    const w = group.walkTimesEnabled
-      ? walkMinutesBetweenStages(group, b.stageName, a.stageName)
-      : 0;
+    const w = walkMinutesBetweenStages(group, b.stageName, a.stageName);
     return be + w > as;
   }
   return true;

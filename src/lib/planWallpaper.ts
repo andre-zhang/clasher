@@ -194,6 +194,37 @@ export function buildEveryoneCalendarSlotsForDay(
     .sort((a, b) => festMFromSlotHm(a.start) - festMFromSlotHm(b.start));
 }
 
+function strokeFootprintWalkIcon(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  scale: number
+): void {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(scale / 24, scale / 24);
+  ctx.translate(-12, -12);
+  ctx.strokeStyle = "#334155";
+  ctx.lineWidth = 1.85;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const paths = [
+    "M5.5 17.5v-1.9a3.2 3.2 0 0 0-1.6-2.8 1.6 1.6 0 0 0 1.6 1.6h1.2a1.6 1.6 0 0 0 1.6-1.6 3.2 3.2 0 0 0-1.6-2.9V10",
+    "M7 20.5a1.6 1.6 0 1 0 3.2 0 3.2 3.2 0 0 0-1.6-2.9V13",
+    "M12.8 17.5v-1.9a3.2 3.2 0 0 1 1.6-2.8 1.6 1.6 0 0 1-1.6 1.6h-1.2a1.6 1.6 0 0 1-1.6-1.6 3.2 3.2 0 0 1 1.6-2.9V10",
+    "M14.3 20.5a1.6 1.6 0 1 1-3.2 0 3.2 3.2 0 0 1 1.6-2.9V13",
+  ];
+  for (const d of paths) {
+    try {
+      const p = new Path2D(d);
+      ctx.stroke(p);
+    } catch {
+      /* Path2D SVG not supported */
+    }
+  }
+  ctx.restore();
+}
+
 function drawWalkBandsOnCanvas(
   ctx: CanvasRenderingContext2D,
   bands: PlanWalkBand[],
@@ -211,47 +242,29 @@ function drawWalkBandsOnCanvas(
     const h = Math.max(y1 - y0, 8);
     const x = boxX;
     const w = boxW;
-    ctx.fillStyle = "rgba(255,255,255,0.97)";
+    ctx.fillStyle = "#ffffff";
     ctx.fillRect(x, y0, w, h);
     ctx.strokeStyle = "#0f172a";
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y0, w, h);
     const midY = y0 + h / 2;
+    const iconSize = Math.min(22, Math.max(14, h - 4));
     if (h >= 14 && w > 52) {
-      ctx.save();
-      ctx.translate(x + pad, midY);
-      ctx.strokeStyle = "#334155";
-      ctx.lineWidth = 1.5;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.scale(0.62, 0.62);
-      ctx.beginPath();
-      ctx.arc(10, 5.5, 2.25, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(10, 8.5);
-      ctx.lineTo(10, 12.7);
-      ctx.moveTo(10, 8.5);
-      ctx.lineTo(13.2, 10.5);
-      ctx.moveTo(10, 8.5);
-      ctx.lineTo(7, 10.7);
-      ctx.moveTo(10, 12.7);
-      ctx.lineTo(7.8, 17.7);
-      ctx.moveTo(10, 12.7);
-      ctx.lineTo(12.4, 17.5);
-      ctx.stroke();
-      ctx.restore();
+      strokeFootprintWalkIcon(ctx, x + pad + iconSize / 2, midY, iconSize);
       ctx.font = "700 13px system-ui, Segoe UI, sans-serif";
       ctx.fillStyle = "#1e293b";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(band.label, x + pad + 16, midY);
+      ctx.fillText(band.label, x + pad + iconSize + 6, midY);
     } else {
+      if (h >= 12 && w > 28) {
+        strokeFootprintWalkIcon(ctx, x + w / 2 - 10, midY, 16);
+      }
       ctx.font = "700 11px system-ui, Segoe UI, sans-serif";
       ctx.fillStyle = "#334155";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(band.label, x + w / 2, midY);
+      ctx.fillText(band.label, x + w / 2, midY + (h >= 12 && w > 28 ? 8 : 0));
     }
   }
   ctx.restore();

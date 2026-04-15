@@ -58,9 +58,7 @@ export function planDayTravelLines(
   for (let i = 0; i < slots.length - 1; i++) {
     const cur = slots[i]!;
     const nxt = slots[i + 1]!;
-    const w = group.walkTimesEnabled
-      ? walkMinutesBetweenStages(group, cur.stageName, nxt.stageName)
-      : 0;
+    const w = walkMinutesBetweenStages(group, cur.stageName, nxt.stageName);
     if (w <= 0) continue;
     out.push(
       `${cur.artistName} → ${nxt.artistName}: ~${w}m (${cur.stageName} → ${nxt.stageName})`
