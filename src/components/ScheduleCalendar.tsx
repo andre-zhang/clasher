@@ -27,6 +27,7 @@ import {
 } from "@/lib/timeHm";
 import { memberEffectivePlanWindowsInfeasibleTogether } from "@/lib/walkFeasibility";
 import { myTierEmoji, squadReactionPills } from "@/lib/reactionsUi";
+import { clampTimelineSlotLayout } from "@/lib/clampTimelineSlotLayout";
 import { memberKeepsSlotOnScheduleShortlist } from "@/lib/scheduleShortlist";
 import { TIER_EMOJI, TIERS_ORDER } from "@/lib/tiers";
 import type { ScheduleDraftSlot } from "@/lib/api";
@@ -76,7 +77,7 @@ function slotPixelLayout(
   const targetH = Math.max(naturalH, 40);
   const rawH = Math.min(targetH, Math.max(0, maxBottomPx - topPx));
   const heightPx = Math.max(rawH, 20);
-  return { topPx, heightPx };
+  return clampTimelineSlotLayout(topPx, heightPx, timelineBodyPx, 20);
 }
 
 export function ScheduleCalendar({
@@ -320,19 +321,38 @@ export function ScheduleCalendar({
     return [...new Set(rows.map((s) => s.stageName.trim()))].sort();
   }, [schedule, activeDay]);
 
-  const allStageNames = useMemo(
-    () => [...new Set(schedule.map((s) => s.stageName.trim()))].sort(),
-    [schedule]
-  );
+  const scheduleEditDayOptions = useMemo(() => {
+    const set = new Set(
+      schedule.map((s) => s.dayLabel.trim()).filter(Boolean)
+    );
+    const cur = scheduleEditForm.dayLabel.trim();
+    if (cur) set.add(cur);
+    const arr = [...set].sort();
+    return arr.length > 0 ? arr : ["Fri", "Sat", "Sun"];
+  }, [schedule, scheduleEditForm.dayLabel]);
+
+  const scheduleEditStageOptions = useMemo(() => {
+    const set = new Set(
+      schedule.map((s) => s.stageName.trim()).filter(Boolean)
+    );
+    const cur = scheduleEditForm.stageName.trim();
+    if (cur) set.add(cur);
+    const arr = [...set].sort();
+    return arr.length > 0 ? arr : ["North", "South"];
+  }, [schedule, scheduleEditForm.stageName]);
 
   useEffect(() => {
     if (!scheduleEditTarget) return;
     if (scheduleEditTarget === "new") {
       const day = activeDay?.trim() ?? "";
       const stages = allStagesForDay;
+      const stageDefault =
+        stages[0] ??
+        [...new Set(schedule.map((s) => s.stageName.trim()))].sort()[0] ??
+        "North";
       setScheduleEditForm({
-        dayLabel: day,
-        stageName: stages[0] ?? "",
+        dayLabel: day || scheduleEditDayOptions[0] || "Fri",
+        stageName: stageDefault,
         start: "12:00",
         end: "13:00",
         artistName: "",
@@ -351,7 +371,13 @@ export function ScheduleCalendar({
     }
     setScheduleEditErr(null);
     scheduleEditDialogRef.current?.showModal();
-  }, [scheduleEditTarget, activeDay, allStagesForDay, schedule]);
+  }, [
+    scheduleEditTarget,
+    activeDay,
+    allStagesForDay,
+    schedule,
+    scheduleEditDayOptions,
+  ]);
 
   const showAllStages = Boolean(
     scheduleViewerMemberId && !memberId && group && visibilityMode === "effectivePlan"
@@ -732,22 +758,28 @@ export function ScheduleCalendar({
               />
             </div>
           ) : null}
-          <div className="relative flex min-h-0 min-w-0 flex-1 w-full">
-            <div className="relative flex min-w-0 flex-1 w-full">
+          <div className="relative flex min-h-0 min-w-0 flex-1 w-full overflow-hidden">
+            <div className="relative flex min-w-0 flex-1 w-full overflow-hidden">
               {showEffectivePlanLayer &&
                 planWalkBands.map((band, bi) => {
                   const range = maxMR - minMR;
                   if (range <= 0) return null;
-                  const topPx = ((band.fromM - minMR) / range) * timelineBodyPx;
+                  const rawTop =
+                    ((band.fromM - minMR) / range) * timelineBodyPx;
                   const durPx =
                     ((band.toM - band.fromM) / range) * timelineBodyPx;
-                  const heightPx = Math.max(durPx, 4);
+                  const c = clampTimelineSlotLayout(
+                    rawTop,
+                    Math.max(durPx, 4),
+                    timelineBodyPx,
+                    4
+                  );
                   return (
                     <PlanWalkBandBox
                       key={`walk-span-${bi}`}
                       band={band}
-                      topPx={TIMELINE_HEADER_PX + topPx}
-                      heightPx={heightPx}
+                      topPx={TIMELINE_HEADER_PX + c.topPx}
+                      heightPx={c.heightPx}
                     />
                   );
                 })}
@@ -772,7 +804,7 @@ export function ScheduleCalendar({
                 {singleCol ? "Plan" : stage}
               </div>
               <div
-                className="relative"
+                className="relative overflow-hidden"
                 style={{ height: ticksRender.length * pxPerSlot }}
               >
                 {ticksRender.map((m, i) => (
@@ -812,6 +844,14 @@ export function ScheduleCalendar({
                         14
                       );
                     }
+                    const c = clampTimelineSlotLayout(
+                      topPx,
+                      heightPx,
+                      timelineBodyPx,
+                      14
+                    );
+                    topPx = c.topPx;
+                    heightPx = c.heightPx;
                   } else {
                     const layout = slotPixelLayout(
                       sortedSlots,
@@ -1220,22 +1260,16 @@ export function ScheduleCalendar({
                 {scheduleEditTarget === "new" ? "Add act" : "Edit act"}
               </h3>
               <p className="mt-1 text-[11px] text-zinc-600">
-                Times use the same format as the timetable (e.g. 14:30). Stage
-                can be a new name.
+                Times use the same format as the timetable (e.g. 14:30).
               </p>
               {scheduleEditErr ? (
                 <p className="mt-2 text-xs text-red-800">{scheduleEditErr}</p>
               ) : null}
-              <datalist id="clasher-schedule-stage-options">
-                {allStageNames.map((sn) => (
-                  <option key={sn} value={sn} />
-                ))}
-              </datalist>
               <div className="mt-3 space-y-2 text-xs">
                 <label className="block">
                   <span className="font-medium text-zinc-700">Day</span>
-                  <input
-                    className="mt-0.5 w-full border-2 border-zinc-900 px-2 py-1"
+                  <select
+                    className="mt-0.5 w-full border-2 border-zinc-900 bg-white px-2 py-1"
                     value={scheduleEditForm.dayLabel}
                     onChange={(e) =>
                       setScheduleEditForm((f) => ({
@@ -1243,13 +1277,18 @@ export function ScheduleCalendar({
                         dayLabel: e.target.value,
                       }))
                     }
-                  />
+                  >
+                    {scheduleEditDayOptions.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="block">
                   <span className="font-medium text-zinc-700">Stage</span>
-                  <input
-                    className="mt-0.5 w-full border-2 border-zinc-900 px-2 py-1"
-                    list="clasher-schedule-stage-options"
+                  <select
+                    className="mt-0.5 w-full border-2 border-zinc-900 bg-white px-2 py-1"
                     value={scheduleEditForm.stageName}
                     onChange={(e) =>
                       setScheduleEditForm((f) => ({
@@ -1257,7 +1296,13 @@ export function ScheduleCalendar({
                         stageName: e.target.value,
                       }))
                     }
-                  />
+                  >
+                    {scheduleEditStageOptions.map((sn) => (
+                      <option key={sn} value={sn}>
+                        {sn}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <div className="flex gap-2">
                   <label className="block min-w-0 flex-1">

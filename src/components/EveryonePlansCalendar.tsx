@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 
 import { PlanWalkBandBox } from "@/components/PlanWalkBandBox";
+import { clampTimelineSlotLayout } from "@/lib/clampTimelineSlotLayout";
 import {
   effectiveMemberSlotPlanWindow,
   effectiveMemberWantsSlot,
@@ -243,7 +244,7 @@ export function EveryonePlansCalendar({
                 <span className="line-clamp-2">{col.label}</span>
               </div>
               <div
-                className="relative"
+                className="relative overflow-hidden"
                 style={{ height: ticksRender.length * pxPerSlot }}
               >
                 {ticksRender.map((m, i) => (
@@ -255,16 +256,22 @@ export function EveryonePlansCalendar({
                 ))}
                 {(walkBandsByColumnKey.get(col.key) ?? []).map((band, bi) => {
                   if (range <= 0) return null;
-                  const topPx = ((band.fromM - minMR) / range) * timelineBodyPx;
+                  const rawTop =
+                    ((band.fromM - minMR) / range) * timelineBodyPx;
                   const durPx =
                     ((band.toM - band.fromM) / range) * timelineBodyPx;
-                  const heightPx = Math.max(durPx, 4);
+                  const c = clampTimelineSlotLayout(
+                    rawTop,
+                    Math.max(durPx, 4),
+                    timelineBodyPx,
+                    4
+                  );
                   return (
                     <PlanWalkBandBox
                       key={`walk-${col.key}-${bi}`}
                       band={band}
-                      topPx={topPx}
-                      heightPx={heightPx}
+                      topPx={c.topPx}
+                      heightPx={c.heightPx}
                     />
                   );
                 })}
@@ -282,11 +289,19 @@ export function EveryonePlansCalendar({
                   if (range <= 0 || Number.isNaN(sm) || Number.isNaN(em)) {
                     return null;
                   }
-                  const topPx = ((sm - minMR) / range) * timelineBodyPx;
-                  const heightPx = Math.max(
+                  let topPx = ((sm - minMR) / range) * timelineBodyPx;
+                  let heightPx = Math.max(
                     ((em - sm) / range) * timelineBodyPx,
                     22
                   );
+                  const c = clampTimelineSlotLayout(
+                    topPx,
+                    heightPx,
+                    timelineBodyPx,
+                    22
+                  );
+                  topPx = c.topPx;
+                  heightPx = c.heightPx;
                   const open = Boolean(onSlotOpenDetail);
                   return (
                     <div

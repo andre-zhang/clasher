@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { PlanWalkBandBox } from "@/components/PlanWalkBandBox";
+import { clampTimelineSlotLayout } from "@/lib/clampTimelineSlotLayout";
 import { effectiveMemberWantsSlot } from "@/lib/effectiveIntents";
 import {
   cascadePlanStripAfterIndex,
@@ -93,7 +94,7 @@ function stripBoxLayout(
   // Tiny floor so slivers stay visible; avoid a large constant (e.g. 40px) that made
   // every sub-hour plan look the same height on long festival timelines.
   const heightPx = em <= sm ? 4 : Math.max(rawH, 5);
-  return { topPx, heightPx };
+  return clampTimelineSlotLayout(topPx, heightPx, timelineBodyPx, 5);
 }
 
 export function SchedulePlannerStrip({
@@ -786,16 +787,22 @@ export function SchedulePlannerStrip({
         {walkBands.map((band, i) => {
           const range = timelineMaxM - timelineMinM;
           if (range <= 0) return null;
-          const topPx = ((band.fromM - timelineMinM) / range) * timelineBodyPx;
+          const rawTop =
+            ((band.fromM - timelineMinM) / range) * timelineBodyPx;
           const durPx =
             ((band.toM - band.fromM) / range) * timelineBodyPx;
-          const heightPx = Math.max(durPx, 3);
+          const c = clampTimelineSlotLayout(
+            rawTop,
+            Math.max(durPx, 3),
+            timelineBodyPx,
+            3
+          );
           return (
             <PlanWalkBandBox
               key={`w-${i}`}
               band={band}
-              topPx={topPx}
-              heightPx={heightPx}
+              topPx={c.topPx}
+              heightPx={c.heightPx}
               inset="full"
             />
           );
