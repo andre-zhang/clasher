@@ -758,8 +758,10 @@ export function ScheduleCalendar({
               />
             </div>
           ) : null}
-          <div className="relative flex min-h-0 min-w-0 flex-1 w-full overflow-hidden">
-            <div className="relative flex min-w-0 flex-1 w-full overflow-hidden">
+          {/* No overflow-hidden here: it would break sticky top-0 on stage / strip headers
+              relative to the calendar scroll container (frozen header row). */}
+          <div className="relative flex min-h-0 min-w-0 flex-1">
+            <div className="relative flex min-h-0 min-w-0 flex-1">
               {showEffectivePlanLayer &&
                 planWalkBands.map((band, bi) => {
                   const range = maxMR - minMR;
@@ -800,8 +802,8 @@ export function ScheduleCalendar({
               }
               style={{ minHeight: timelineHRender }}
             >
-              <div className="sticky top-0 z-20 h-8 border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-8 text-zinc-900 shadow-[0_6px_10px_-4px_rgba(0,0,0,0.1)]">
-                {singleCol ? "Plan" : stage}
+              <div className="sticky top-0 z-[25] flex h-8 shrink-0 items-center justify-center border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-tight text-zinc-900 shadow-[0_4px_8px_-2px_rgba(0,0,0,0.18)] [overflow-wrap:anywhere]">
+                <span className="line-clamp-2">{singleCol ? "Plan" : stage}</span>
               </div>
               <div
                 className="relative overflow-hidden"
