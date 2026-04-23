@@ -12,6 +12,7 @@ const tabs = [
   { href: "schedule", label: "Schedule" },
   { href: "clashes", label: "Clashes" },
   { href: "plans", label: "Plans" },
+  { href: "setlist", label: "Setlist" },
   { href: "options", label: "Options" },
 ] as const;
 

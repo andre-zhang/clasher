@@ -1,3 +1,4 @@
+import type { SetlistPreviewResult } from "@/lib/setlistPreviewTypes";
 import type { ClasherSession, FestivalSnapshot, RatingTier } from "@/lib/types";
 
 function apiUrl(resourcePath: string): string {
@@ -511,6 +512,26 @@ export async function apiParseLineupImage(file: File): Promise<string[]> {
   }
   const j = (await r.json()) as { artists?: string[] };
   return Array.isArray(j.artists) ? j.artists : [];
+}
+
+export async function apiSetlistPreview(
+  session: ClasherSession,
+  body?: {
+    artistIds?: string[];
+    maxSetlistsPerArtist?: number;
+    maxSpotifyLookups?: number;
+  }
+): Promise<SetlistPreviewResult> {
+  const r = await fetch(apiUrl(`/squads/${session.squadId}/setlist/preview`), {
+    method: "POST",
+    headers: {
+      ...bearer(session.memberSecret),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+  await ensureOk(r);
+  return (await r.json()) as SetlistPreviewResult;
 }
 
 export async function apiParseScheduleImages(

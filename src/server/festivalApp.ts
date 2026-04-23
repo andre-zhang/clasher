@@ -26,6 +26,7 @@ import {
   parseMatchesFromVision,
   parseStageLabelsFromVision,
 } from "./mapStages";
+import { buildSetlistPreviewForArtists } from "@/lib/setlistPreview";
 import { buildSnapshot } from "./snapshot";
 import { runClaudeTextJson, runVisionJson } from "./vision";
 
@@ -1770,6 +1771,92 @@ export function createFestivalApp(apiBasePath: string): Hono {
 
     const slots = normalizeScheduleTimesForImport(deduped);
     return c.json({ slots });
+  });
+
+  /**
+   * Build a “festival setlist” from setlist.fm for artists this member ❤️/🔥 on lineup
+   * or has on their plan. Optional Spotify track links (client-credentials search).
+   */
+  app.post("/squads/:squadId/setlist/preview", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    let body: {
+      artistIds?: string[];
+      maxSetlistsPerArtist?: number;
+      maxSpotifyLookups?: number;
+    };
+    try {
+      body = await c.req.json();
+    } catch {
+      body = {};
+    }
+    const maxSetlists = Math.min(
+      8,
+      Math.max(1, Math.floor(body.maxSetlistsPerArtist ?? 4))
+    );
+    const maxSpotify = Math.min(
+      100,
+      Math.max(0, Math.floor(body.maxSpotifyLookups ?? 50))
+    );
+
+    let artistIds: string[] = [];
+    if (Array.isArray(body.artistIds) && body.artistIds.length) {
+      const allowed = await prisma.artist.findMany({
+        where: { squadId: member.squadId, id: { in: body.artistIds } },
+        select: { id: true },
+      });
+      artistIds = allowed.map((a) => a.id);
+    } else {
+      const fromRatings = await prisma.rating.findMany({
+        where: {
+          memberId: member.id,
+          tier: { in: ["must", "want"] },
+          artist: { squadId: member.squadId },
+        },
+        select: { artistId: true },
+      });
+      const fromPlan = await prisma.memberSlotIntent.findMany({
+        where: {
+          memberId: member.id,
+          wants: true,
+          squadId: member.squadId,
+        },
+        select: { slotId: true },
+      });
+      const planSlots = await prisma.scheduleSlot.findMany({
+        where: {
+          squadId: member.squadId,
+          id: { in: fromPlan.map((p) => p.slotId) },
+        },
+        select: { artistId: true },
+      });
+      const s = new Set<string>();
+      for (const r of fromRatings) s.add(r.artistId);
+      for (const p of planSlots) s.add(p.artistId);
+      artistIds = [...s];
+    }
+
+    if (artistIds.length > 30) {
+      return c.json(
+        {
+          error: "too_many_artists",
+          message: "Select at most 30 artists (lineup + plan) for one preview.",
+        },
+        400
+      );
+    }
+
+    const artists = await prisma.artist.findMany({
+      where: { id: { in: artistIds }, squadId: member.squadId },
+      select: { id: true, name: true },
+    });
+
+    const preview = await buildSetlistPreviewForArtists(artists, {
+      maxSetlistsPerArtist: maxSetlists,
+      maxSpotifyLookups: maxSpotify,
+    });
+    return c.json(preview);
   });
 
   return app;

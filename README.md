@@ -8,12 +8,15 @@ I love music festivals. The lineup drop, the colour-coded timetable PDF, the gro
 
 ## What It Does
 
-- **Lineup**: artists on the bill, tier ratings (must / want / meh / skip), quick reactions, and a path to sync “hot” picks into what you care about on the schedule
-- **Schedule**: multi-day, multi-stage timetable in a proper calendar grid: frozen stage headers, sticky time rail, edit/add/delete acts, optional **vision import** (poster or screenshot → draft slots) when you wire up OpenAI or Anthropic on the server
-- **Clashes**: see where intents collide: same time, or “you could make both if you run” vs “you genuinely can’t” once **walk times** between stages are in play
-- **Plans**: your ordered plan strip, per-slot plan windows, optional **walk matrix** between stages (defaults from stage order on a map, editable in Options), and a combined view of everyone’s day
-- **Wallpaper export**: tall **9×16 PNG** lock-screen style day plans for you or the whole group (with optional “leave by …” hints when walk forces an early exit)
-- **Next.js** app, **PostgreSQL** (e.g. Neon) as source of truth, **Prisma** schema for squads, members, artists, ratings, schedule slots, intents, resolutions, comments
+- **Squads without passwords** — join with `https://…/join/{token}`; your browser keeps a member secret so you stay signed in on that device
+- **Lineup** — artists on the bill, tier ratings (must / want / meh / skip), quick reactions, and a path to sync “hot” picks into what you care about on the schedule
+- **Schedule** — multi-day, multi-stage timetable: frozen stage headers, sticky time rail, edit/add/delete acts, optional **vision import** (poster or screenshot → draft slots) when you wire up OpenAI or Anthropic on the server
+- **Clashes** — where intents collide: same time, or “you could make both if you run” vs “you genuinely can’t” once **walk times** between stages are in play
+- **Plans** — ordered plan strip, per-slot plan windows, optional **walk matrix** (defaults from stage order on a map, editable in Options), and a combined view of everyone’s day
+- **Walk-aware UI** — light travel bands when the gap between acts is tight; feasibility checks on the server
+- **Wallpaper export** — tall **9×16 PNG** day plans (optional “leave by …” when walk forces an early exit)
+- **Festival setlist (v1)** — for artists you ❤️/🔥 on **Lineup** or on your **Plan**, pull recent **setlist.fm** shows, score songs by frequency, copy as text/TSV; optional **Spotify** search links and **YouTube** search per row — *a hint from past shows*, not the real festival set
+- **Stack** — **Next.js**, **PostgreSQL** (e.g. Neon), **Prisma** for squads, members, artists, ratings, schedule, intents, resolutions, comments
 
 ---
 
@@ -37,4 +40,56 @@ Many stages, many slots, drag-to-strip, sticky headers, scroll containers that m
 
 ### Everyone’s truth in one snapshot
 
-Each member has intents, plan windows, clash resolutions, and optional “personal plan only” strip slots. The server builds a **snapshot** the user can trust. Keeping that coherent as people join, rate, and re-order plans, without turning the app into a second spreadsheet engine, is ongoing.
+Each member has intents, plan windows, clash resolutions, and optional “personal plan only” strip slots. The server builds a **snapshot** the client can trust. Keeping that coherent as people join, rate, and re-order plans — without turning the app into a second spreadsheet engine — is ongoing work.
+
+---
+
+## Running it
+
+**Stack:** Node 20+, Postgres `DATABASE_URL`, optional `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` for lineup/schedule image parsing, optional `SETLISTFM_API_KEY` (and `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` for track search links) for the **Setlist** tab.
+
+```bash
+cp .env.example .env
+# Set DATABASE_URL (and optional vision keys)
+
+npx prisma db push
+# or: npx prisma migrate dev
+
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). Create a squad, then hit **`GET /api/health`** — you should see `{"ok":true}`.
+
+### Production checks
+
+1. **HTTPS same-origin** — In DevTools → Network, confirm API calls go to `https://<your-domain>/api/...`.
+2. **`GET /api/health`** returns `{ "ok": true }`.
+3. **`POST /api/squads`** and **`POST /api/parse/lineup`** (or `/parse/schedule`) return JSON or explicit errors like `vision_unconfigured` — not an HTML 404 mistaken for a scan failure.
+
+### Deploy (e.g. Vercel)
+
+**Example production:** [https://clasher-three.vercel.app](https://clasher-three.vercel.app).
+
+1. New Vercel project from this repo; set `DATABASE_URL`, optionally `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `VISION_PROVIDER`, `ANTHROPIC_MODEL`, `SETLISTFM_API_KEY`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`.
+2. Build: `npm run build` (runs `prisma generate` then `next build`).
+3. After first deploy, run `npx prisma db push` (or migrations) against the production DB, or automate that in CI.
+
+**Auto-deploy on push:** Vercel → Git → connect the repo (production branch `main`). Optionally use [`.github/workflows/vercel-production.yml`](.github/workflows/vercel-production.yml) with a `VERCEL_TOKEN` secret.
+
+### Project layout (short)
+
+| Path | Role |
+|------|------|
+| `prisma/schema.prisma` | Squads, members, artists, ratings, schedule, intents, resolutions, comments |
+| `src/server/festivalApp.ts` | Hono app mounted at `/api` |
+| `src/app/api/[[...route]]/route.ts` | Catch-all to Hono |
+| `src/context/ClasherContext.tsx` | Client session + group snapshot |
+| `src/lib/api.ts` | Typed fetch helpers |
+
+### Scripts
+
+- `npm run dev` — Next dev (Turbopack)
+- `npm run build` — Prisma generate + production build
+- `npm run db:generate` / `db:push` / `db:migrate` — Prisma
+
+**Leaving a squad** clears the browser session only; server data is unchanged (no squad delete in v1).
