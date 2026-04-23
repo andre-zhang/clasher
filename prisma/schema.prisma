@@ -37,6 +37,8 @@ model Member {
   squad                Squad               @relation(fields: [squadId], references: [id], onDelete: Cascade)
   displayName          String
   secret               String              @unique @default(uuid())
+  /** Spotify user OAuth — used only to create playlists for this user. */
+  spotifyRefreshToken  String?             @db.Text
   createdAt            DateTime            @default(now())
   ratings              Rating[]
   conflicts            ConflictResolution[]

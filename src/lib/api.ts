@@ -519,7 +519,6 @@ export async function apiSetlistPreview(
   body?: {
     artistIds?: string[];
     maxSetlistsPerArtist?: number;
-    maxSpotifyLookups?: number;
   }
 ): Promise<SetlistPreviewResult> {
   const r = await fetch(apiUrl(`/squads/${session.squadId}/setlist/preview`), {
@@ -532,6 +531,59 @@ export async function apiSetlistPreview(
   });
   await ensureOk(r);
   return (await r.json()) as SetlistPreviewResult;
+}
+
+export async function apiSpotifyStatus(
+  session: ClasherSession
+): Promise<{
+  clientConfigured: boolean;
+  redirectUriConfigured: boolean;
+  canSignIn: boolean;
+  spotifyConnected: boolean;
+}> {
+  const r = await fetch(apiUrl(`/squads/${session.squadId}/spotify/status`), {
+    headers: { ...bearer(session.memberSecret) },
+  });
+  await ensureOk(r);
+  return (await r.json()) as {
+    clientConfigured: boolean;
+    redirectUriConfigured: boolean;
+    canSignIn: boolean;
+    spotifyConnected: boolean;
+  };
+}
+
+export async function apiSpotifyAuthorizeUrl(
+  session: ClasherSession,
+  returnTo: string
+): Promise<string> {
+  const q = new URLSearchParams({ returnTo });
+  const r = await fetch(
+    `${apiUrl(`/squads/${session.squadId}/spotify/authorize`)}?${q.toString()}`,
+    { headers: { ...bearer(session.memberSecret) } }
+  );
+  await ensureOk(r);
+  return ((await r.json()) as { url: string }).url;
+}
+
+export async function apiSetlistSpotifyPlaylist(
+  session: ClasherSession,
+  body?: { artistIds?: string[]; maxSetlistsPerArtist?: number; maxSpotifyUris?: number }
+): Promise<{ playlistUrl: string; trackCount: number; notFound: number }> {
+  const r = await fetch(apiUrl(`/squads/${session.squadId}/setlist/spotify-playlist`), {
+    method: "POST",
+    headers: {
+      ...bearer(session.memberSecret),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+  await ensureOk(r);
+  return (await r.json()) as {
+    playlistUrl: string;
+    trackCount: number;
+    notFound: number;
+  };
 }
 
 export async function apiParseScheduleImages(

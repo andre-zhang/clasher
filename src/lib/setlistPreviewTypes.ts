@@ -19,13 +19,13 @@ export type SetlistPreviewRow = {
   artistName: string;
   title: string;
   count: number;
-  spotifyUrl: string | null;
   youtubeSearchUrl: string;
 };
 
 export type SetlistPreviewResult = {
   setlistfmConfigured: boolean;
-  spotifySearchConfigured: boolean;
+  /** Server has Spotify app credentials (search + playlist). */
+  spotifyClientConfigured: boolean;
   artists: SetlistPreviewArtist[];
   combined: SetlistPreviewRow[];
 };

@@ -26,7 +26,23 @@ import {
   parseMatchesFromVision,
   parseStageLabelsFromVision,
 } from "./mapStages";
+import { getArtistsForMemberSetlist } from "@/lib/setlistMemberArtists";
 import { buildSetlistPreviewForArtists } from "@/lib/setlistPreview";
+import { spotifyUrisForSetlistRows } from "@/lib/spotifyResolveUris";
+import { isSpotifySearchConfigured } from "@/lib/spotifySearch";
+import {
+  isSafeSpotifyReturnPath,
+  isSpotifyStateSignable,
+  signSpotifyState,
+  verifySpotifyState,
+} from "@/lib/spotifyState";
+import {
+  spotifyAddTracks,
+  spotifyBackendRedirectUri,
+  spotifyCreatePlaylist,
+  spotifyExchangeCodeForToken,
+  spotifyRefreshUserAccess,
+} from "@/lib/spotifyUserPlaylist";
 import { buildSnapshot } from "./snapshot";
 import { runClaudeTextJson, runVisionJson } from "./vision";
 
@@ -1775,17 +1791,13 @@ export function createFestivalApp(apiBasePath: string): Hono {
 
   /**
    * Build a “festival setlist” from setlist.fm for artists this member ❤️/🔥 on lineup
-   * or has on their plan. Optional Spotify track links (client-credentials search).
+   * or has on their plan.
    */
   app.post("/squads/:squadId/setlist/preview", async (c) => {
     const squadId = c.req.param("squadId");
     const member = await authMember(c, squadId);
     if (!member) return c.json({ error: "unauthorized" }, 401);
-    let body: {
-      artistIds?: string[];
-      maxSetlistsPerArtist?: number;
-      maxSpotifyLookups?: number;
-    };
+    let body: { artistIds?: string[]; maxSetlistsPerArtist?: number };
     try {
       body = await c.req.json();
     } catch {
@@ -1795,49 +1807,9 @@ export function createFestivalApp(apiBasePath: string): Hono {
       8,
       Math.max(1, Math.floor(body.maxSetlistsPerArtist ?? 4))
     );
-    const maxSpotify = Math.min(
-      100,
-      Math.max(0, Math.floor(body.maxSpotifyLookups ?? 50))
-    );
 
-    let artistIds: string[] = [];
-    if (Array.isArray(body.artistIds) && body.artistIds.length) {
-      const allowed = await prisma.artist.findMany({
-        where: { squadId: member.squadId, id: { in: body.artistIds } },
-        select: { id: true },
-      });
-      artistIds = allowed.map((a) => a.id);
-    } else {
-      const fromRatings = await prisma.rating.findMany({
-        where: {
-          memberId: member.id,
-          tier: { in: ["must", "want"] },
-          artist: { squadId: member.squadId },
-        },
-        select: { artistId: true },
-      });
-      const fromPlan = await prisma.memberSlotIntent.findMany({
-        where: {
-          memberId: member.id,
-          wants: true,
-          squadId: member.squadId,
-        },
-        select: { slotId: true },
-      });
-      const planSlots = await prisma.scheduleSlot.findMany({
-        where: {
-          squadId: member.squadId,
-          id: { in: fromPlan.map((p) => p.slotId) },
-        },
-        select: { artistId: true },
-      });
-      const s = new Set<string>();
-      for (const r of fromRatings) s.add(r.artistId);
-      for (const p of planSlots) s.add(p.artistId);
-      artistIds = [...s];
-    }
-
-    if (artistIds.length > 30) {
+    const res = await getArtistsForMemberSetlist(member, { artistIds: body.artistIds });
+    if (!res.ok) {
       return c.json(
         {
           error: "too_many_artists",
@@ -1847,16 +1819,193 @@ export function createFestivalApp(apiBasePath: string): Hono {
       );
     }
 
-    const artists = await prisma.artist.findMany({
-      where: { id: { in: artistIds }, squadId: member.squadId },
-      select: { id: true, name: true },
-    });
-
-    const preview = await buildSetlistPreviewForArtists(artists, {
+    const preview = await buildSetlistPreviewForArtists(res.artists, {
       maxSetlistsPerArtist: maxSetlists,
-      maxSpotifyLookups: maxSpotify,
     });
     return c.json(preview);
+  });
+
+  app.get("/squads/:squadId/spotify/status", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    return c.json({
+      clientConfigured: isSpotifySearchConfigured(),
+      redirectUriConfigured: Boolean(spotifyBackendRedirectUri()),
+      canSignIn:
+        isSpotifySearchConfigured() &&
+        isSpotifyStateSignable() &&
+        Boolean(spotifyBackendRedirectUri()),
+      spotifyConnected: Boolean(member.spotifyRefreshToken),
+    });
+  });
+
+  /** Returns Spotify authorize URL (browser navigates to start OAuth). */
+  app.get("/squads/:squadId/spotify/authorize", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    const returnTo = (c.req.query("returnTo") as string) ?? "";
+    if (!isSafeSpotifyReturnPath(returnTo)) {
+      return c.json(
+        { error: "invalid_return", message: "returnTo must be a path like /squad/.../lineup" },
+        400
+      );
+    }
+    if (!isSpotifySearchConfigured() || !spotifyBackendRedirectUri() || !isSpotifyStateSignable()) {
+      return c.json(
+        {
+          error: "spotify_not_configured",
+          message:
+            "Set SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI (e.g. https://yoursite.com/api/spotify/callback) and a state secret (SPOTIFY_STATE_SECRET or reuse client secret).",
+        },
+        503
+      );
+    }
+    const clientId = process.env.SPOTIFY_CLIENT_ID?.trim();
+    const redirectUri = spotifyBackendRedirectUri()!;
+    if (!clientId) {
+      return c.json({ error: "spotify_not_configured" }, 503);
+    }
+    const state = signSpotifyState(member.id, member.squadId, returnTo);
+    const scope = "playlist-modify-private user-read-private offline_access";
+    const u = new URL("https://accounts.spotify.com/authorize");
+    u.searchParams.set("client_id", clientId);
+    u.searchParams.set("response_type", "code");
+    u.searchParams.set("redirect_uri", redirectUri);
+    u.searchParams.set("scope", scope);
+    u.searchParams.set("state", state);
+    return c.json({ url: u.toString() });
+  });
+
+  app.get("/spotify/callback", async (c) => {
+    const err = c.req.query("error") as string | undefined;
+    const stateQ = c.req.query("state") as string | undefined;
+    const code = c.req.query("code") as string | undefined;
+    const base = new URL(c.req.url).origin;
+
+    const afterDeny = (path: string) =>
+      c.redirect(`${base}${path.startsWith("/") ? path : "/"}?spotify=denied`, 302);
+
+    if (err) {
+      const p = stateQ ? verifySpotifyState(stateQ) : null;
+      return afterDeny(p?.returnPath ?? "/");
+    }
+    if (!code || !stateQ) {
+      return c.text("Bad request", 400);
+    }
+    const p = verifySpotifyState(stateQ);
+    if (!p) {
+      return c.text("Invalid or expired state", 400);
+    }
+    const redirectUri = spotifyBackendRedirectUri();
+    if (!redirectUri) {
+      return c.text("SPOTIFY_REDIRECT_URI is not set", 500);
+    }
+    const tok = await spotifyExchangeCodeForToken(code, redirectUri);
+    if (!tok?.access_token) {
+      return c.text("Spotify token exchange failed", 502);
+    }
+    if (!tok.refresh_token) {
+      return c.text("No refresh token — ensure the authorize URL includes the offline_access scope", 500);
+    }
+    const m = await prisma.member.findFirst({
+      where: { id: p.memberId, squadId: p.squadId },
+    });
+    if (!m) {
+      return c.text("Member not found", 400);
+    }
+    await prisma.member.update({
+      where: { id: p.memberId },
+      data: { spotifyRefreshToken: tok.refresh_token! },
+    });
+    return c.redirect(`${base}${p.returnPath}?spotify=connected`, 302);
+  });
+
+  app.post("/squads/:squadId/setlist/spotify-playlist", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    if (!isSpotifySearchConfigured()) {
+      return c.json(
+        { error: "spotify_not_configured", message: "Spotify is not configured on the server." },
+        503
+      );
+    }
+    if (!member.spotifyRefreshToken) {
+      return c.json(
+        { error: "need_spotify", message: "Connect Spotify (green button) before creating a playlist." },
+        400
+      );
+    }
+    let body: { artistIds?: string[]; maxSetlistsPerArtist?: number; maxSpotifyUris?: number };
+    try {
+      body = await c.req.json();
+    } catch {
+      body = {};
+    }
+    const maxSetlists = Math.min(8, Math.max(1, Math.floor(body.maxSetlistsPerArtist ?? 4)));
+    const maxUris = Math.min(200, Math.max(1, Math.floor(body.maxSpotifyUris ?? 150)));
+
+    const res = await getArtistsForMemberSetlist(member, { artistIds: body.artistIds });
+    if (!res.ok) {
+      return c.json(
+        { error: "too_many_artists", message: "Select at most 30 artists (lineup + plan)." },
+        400
+      );
+    }
+    const preview = await buildSetlistPreviewForArtists(res.artists, {
+      maxSetlistsPerArtist: maxSetlists,
+    });
+    if (!preview.combined.length) {
+      return c.json(
+        { error: "empty_setlist", message: "No songs to add — run Build on the setlist first or pick different artists." },
+        400
+      );
+    }
+    const { uris, notFound } = await spotifyUrisForSetlistRows(preview.combined, maxUris);
+    if (uris.length === 0) {
+      return c.json(
+        { error: "no_spotify_tracks", message: "Could not find matching tracks on Spotify for these song titles." },
+        400
+      );
+    }
+
+    const userTok = await spotifyRefreshUserAccess(member.spotifyRefreshToken);
+    if (!userTok?.access_token) {
+      return c.json(
+        { error: "need_spotify", message: "Spotify session expired — connect again from Lineup." },
+        401
+      );
+    }
+    if (userTok.refresh_token) {
+      await prisma.member.update({
+        where: { id: member.id },
+        data: { spotifyRefreshToken: userTok.refresh_token },
+      });
+    }
+    const squad = await prisma.squad.findUnique({
+      where: { id: member.squadId },
+      select: { festivalName: true },
+    });
+    const festival = squad?.festivalName?.trim() || "Festival";
+    const pl = await spotifyCreatePlaylist(
+      userTok.access_token,
+      `${festival} (Clasher)`,
+      "From your Clasher festival setlist. github.com/andre-zhang/clasher"
+    );
+    if (!pl?.id) {
+      return c.json({ error: "create_playlist", message: "Spotify refused to create the playlist." }, 502);
+    }
+    const added = await spotifyAddTracks(pl.id, userTok.access_token, uris);
+    if (!added) {
+      return c.json(
+        { error: "add_tracks", message: "Playlist was created but adding tracks failed." },
+        502
+      );
+    }
+    const playlistUrl = pl.external_urls?.spotify ?? `https://open.spotify.com/playlist/${pl.id}`;
+    return c.json({ playlistUrl, trackCount: uris.length, notFound });
   });
 
   return app;

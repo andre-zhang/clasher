@@ -38,11 +38,7 @@ async function getAccessToken(): Promise<string | null> {
   return j.access_token;
 }
 
-/** First track result open.spotify.com link, or null. */
-export async function spotifyTrackUrlFor(
-  artistName: string,
-  trackTitle: string
-): Promise<string | null> {
+async function firstSearchTrack(artistName: string, trackTitle: string) {
   const token = await getAccessToken();
   if (!token) return null;
   const q = `track:"${trackTitle.replace(/"/g, "")}" artist:"${artistName.replace(/"/g, "")}"`;
@@ -54,10 +50,22 @@ export async function spotifyTrackUrlFor(
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!r.ok) return null;
-  const j = (await r.json()) as {
-    tracks?: { items?: { external_urls?: { spotify?: string } }[] };
+  return (await r.json()) as {
+    tracks?: {
+      items?: {
+        uri?: string;
+        external_urls?: { spotify?: string };
+      }[];
+    };
   };
-  const first = j.tracks?.items?.[0];
-  const url = first?.external_urls?.spotify;
-  return url ?? null;
+}
+
+/** `spotify:track:…` for first search hit, or null. */
+export async function spotifyTrackUriFor(
+  artistName: string,
+  trackTitle: string
+): Promise<string | null> {
+  const j = await firstSearchTrack(artistName, trackTitle);
+  const uri = j?.tracks?.items?.[0]?.uri;
+  return typeof uri === "string" && uri.startsWith("spotify:track:") ? uri : null;
 }

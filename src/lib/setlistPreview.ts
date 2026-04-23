@@ -11,7 +11,7 @@ import type {
   SetlistPreviewResult,
   SetlistPreviewRow,
 } from "@/lib/setlistPreviewTypes";
-import { isSpotifySearchConfigured, spotifyTrackUrlFor } from "@/lib/spotifySearch";
+import { isSpotifySearchConfigured } from "@/lib/spotifySearch";
 
 export type {
   SetlistPreviewArtist,
@@ -34,19 +34,16 @@ const REQ_GAP_MS = 1_000;
 
 export async function buildSetlistPreviewForArtists(
   artists: { id: string; name: string }[],
-  opts: {
-    maxSetlistsPerArtist: number;
-    maxSpotifyLookups: number;
-  }
+  opts: { maxSetlistsPerArtist: number }
 ): Promise<SetlistPreviewResult> {
-  const { maxSetlistsPerArtist, maxSpotifyLookups } = opts;
+  const { maxSetlistsPerArtist } = opts;
   const sfm = isSetlistFmConfigured();
-  const spot = isSpotifySearchConfigured();
+  const spotifyClient = isSpotifySearchConfigured();
 
   if (!sfm) {
     return {
       setlistfmConfigured: false,
-      spotifySearchConfigured: spot,
+      spotifyClientConfigured: spotifyClient,
       artists: artists.map((a) => ({
         artistId: a.id,
         name: a.name,
@@ -141,7 +138,6 @@ export async function buildSetlistPreviewForArtists(
       artistName: v.artistName,
       title: v.title,
       count: v.n,
-      spotifyUrl: null,
       youtubeSearchUrl: youtubeSearch(v.artistName, v.title),
     });
   }
@@ -150,20 +146,9 @@ export async function buildSetlistPreviewForArtists(
       b.count - a.count || a.artistName.localeCompare(b.artistName) || a.title.localeCompare(b.title)
   );
 
-  let spotifyLeft = maxSpotifyLookups;
-  if (spot) {
-    for (const row of combined) {
-      if (spotifyLeft <= 0) break;
-      const url = await spotifyTrackUrlFor(row.artistName, row.title);
-      await sleepMs(80);
-      row.spotifyUrl = url;
-      if (url) spotifyLeft -= 1;
-    }
-  }
-
   return {
     setlistfmConfigured: true,
-    spotifySearchConfigured: spot,
+    spotifyClientConfigured: spotifyClient,
     artists: outArtists,
     combined,
   };
