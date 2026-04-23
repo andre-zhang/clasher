@@ -171,7 +171,6 @@ export function LineupSetlistPanel() {
               disabled={playlistBusy || !canPlaylist}
               onClick={() => void createPlaylist()}
               className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-900 disabled:opacity-40"
-              title="Creates one private playlist in your account from the list below"
             >
               {playlistBusy ? "…" : "Add playlist in Spotify"}
             </button>
