@@ -62,7 +62,11 @@ export async function spotifyExchangeCodeForToken(
       client_id: id,
     }),
   });
-  if (!r.ok) return null;
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    console.error("[clasher] Spotify token exchange failed:", r.status, t.slice(0, 500));
+    return null;
+  }
   const j = (await r.json()) as {
     access_token?: string;
     refresh_token?: string;

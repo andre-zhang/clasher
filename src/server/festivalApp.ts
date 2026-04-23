@@ -7,6 +7,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 import { dbErrorHttpResponse } from "./dbErrors";
+import { getPublicRequestOrigin } from "./publicOrigin";
 import {
   DEMO_ARTIST_NAMES,
   DEMO_FRIEND_DISPLAY_NAMES,
@@ -1882,10 +1883,16 @@ export function createFestivalApp(apiBasePath: string): Hono {
     const err = c.req.query("error") as string | undefined;
     const stateQ = c.req.query("state") as string | undefined;
     const code = c.req.query("code") as string | undefined;
-    const base = new URL(c.req.url).origin;
+    const base = getPublicRequestOrigin(c);
+
+    const withSpotifyQ = (path: string, q: Record<string, string>) => {
+      const p = path.startsWith("/") ? path : `/${path}`;
+      const sp = new URLSearchParams(q);
+      return `${base}${p}?${sp.toString()}`;
+    };
 
     const afterDeny = (path: string) =>
-      c.redirect(`${base}${path.startsWith("/") ? path : "/"}?spotify=denied`, 302);
+      c.redirect(withSpotifyQ(path, { spotify: "denied" }), 302);
 
     if (err) {
       const p = stateQ ? verifySpotifyState(stateQ) : null;
@@ -1896,29 +1903,49 @@ export function createFestivalApp(apiBasePath: string): Hono {
     }
     const p = verifySpotifyState(stateQ);
     if (!p) {
-      return c.text("Invalid or expired state", 400);
+      return c.text("Invalid or expired state — try Connect Spotify again.", 400);
     }
     const redirectUri = spotifyBackendRedirectUri();
     if (!redirectUri) {
-      return c.text("SPOTIFY_REDIRECT_URI is not set", 500);
+      return c.redirect(
+        withSpotifyQ(p.returnPath, { spotify: "error", reason: "no_redirect_uri" }),
+        302
+      );
     }
     const tok = await spotifyExchangeCodeForToken(code, redirectUri);
     if (!tok?.access_token) {
-      return c.text("Spotify token exchange failed", 502);
+      return c.redirect(
+        withSpotifyQ(p.returnPath, { spotify: "error", reason: "token_exchange" }),
+        302
+      );
     }
     if (!tok.refresh_token) {
-      return c.text("No refresh token — ensure the authorize URL includes the offline_access scope", 500);
+      return c.redirect(
+        withSpotifyQ(p.returnPath, { spotify: "error", reason: "no_refresh" }),
+        302
+      );
     }
     const m = await prisma.member.findFirst({
       where: { id: p.memberId, squadId: p.squadId },
     });
     if (!m) {
-      return c.text("Member not found", 400);
+      return c.redirect(
+        withSpotifyQ(p.returnPath, { spotify: "error", reason: "member" }),
+        302
+      );
     }
-    await prisma.member.update({
-      where: { id: p.memberId },
-      data: { spotifyRefreshToken: tok.refresh_token! },
-    });
+    try {
+      await prisma.member.update({
+        where: { id: p.memberId },
+        data: { spotifyRefreshToken: tok.refresh_token! },
+      });
+    } catch (e) {
+      console.error("[clasher] spotify save token", e);
+      return c.redirect(
+        withSpotifyQ(p.returnPath, { spotify: "error", reason: "db" }),
+        302
+      );
+    }
     return c.redirect(`${base}${p.returnPath}?spotify=connected`, 302);
   });
 

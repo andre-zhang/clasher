@@ -61,9 +61,37 @@ export function LineupSetlistPanel() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const q = new URLSearchParams(window.location.search).get("spotify");
-    if (q === "connected" || q === "denied") {
-      void loadSpotify();
+    const sp = new URLSearchParams(window.location.search);
+    const s = sp.get("spotify");
+    const reason = sp.get("reason");
+    if (s === "connected" || s === "denied" || s === "error") {
+      void loadSpotify().then(() => {
+        if (s === "denied") {
+          setErr("Spotify sign-in was cancelled or did not finish.");
+        } else if (s === "error") {
+          if (reason === "token_exchange") {
+            setErr(
+              "Spotify could not complete login (token exchange). Check that SPOTIFY_REDIRECT_URI in the server exactly matches a Redirect URI in the Spotify app, and redeploy if you just changed env."
+            );
+          } else if (reason === "no_refresh") {
+            setErr("Spotify did not return a refresh token — re-authorize with Connect Spotify.");
+          } else if (reason === "db" || reason === "member") {
+            setErr("Spotify worked but saving your session failed. Try again or run database migrations (spotify refresh token on Member).");
+          } else if (reason === "no_redirect_uri") {
+            setErr("Server is missing SPOTIFY_REDIRECT_URI in environment.");
+          } else {
+            setErr("Spotify sign-in failed. Check server logs and your Spotify + env settings.");
+          }
+        }
+        sp.delete("spotify");
+        sp.delete("reason");
+        const nextQ = sp.toString();
+        const next =
+          nextQ.length > 0
+            ? `${window.location.pathname}?${nextQ}`
+            : window.location.pathname;
+        window.history.replaceState(null, "", next);
+      });
     }
   }, [loadSpotify]);
 
@@ -87,10 +115,11 @@ export function LineupSetlistPanel() {
     if (!session) return;
     setErr(null);
     try {
-      const u = await apiSpotifyAuthorizeUrl(
-        session,
-        pathname && pathname.length > 0 ? pathname : "/"
-      );
+      const returnTo =
+        pathname && pathname.length > 0
+          ? pathname
+          : `/squad/${session.squadId}/lineup`;
+      const u = await apiSpotifyAuthorizeUrl(session, returnTo);
       window.location.assign(u);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
