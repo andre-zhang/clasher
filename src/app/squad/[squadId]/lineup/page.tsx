@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { LineupSetlistPanel } from "@/components/LineupSetlistPanel";
 import { useClasher } from "@/context/ClasherContext";
 import { normalizeImportedArtistNames } from "@/lib/importNormalize";
 import { PENDING_LINEUP_NAMES_KEY } from "@/lib/pendingImport";
@@ -76,6 +77,8 @@ export default function LineupPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-zinc-900">Lineup</h1>
+
+      <LineupSetlistPanel />
 
       {parseErr ? (
         <p className="border-2 border-red-800 bg-red-50 px-3 py-2 text-sm text-red-900">

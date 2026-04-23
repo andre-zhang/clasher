@@ -15,7 +15,7 @@ I love music festivals. The lineup drop, the colour-coded timetable PDF, the gro
 - **Plans** — ordered plan strip, per-slot plan windows, optional **walk matrix** (defaults from stage order on a map, editable in Options), and a combined view of everyone’s day
 - **Walk-aware UI** — light travel bands when the gap between acts is tight; feasibility checks on the server
 - **Wallpaper export** — tall **9×16 PNG** day plans (optional “leave by …” when walk forces an early exit)
-- **Festival setlist (v1)** — for artists you ❤️/🔥 on **Lineup** or on your **Plan**, pull recent **setlist.fm** shows, score songs by frequency, copy as text/TSV; optional **Spotify** search links and **YouTube** search per row — *a hint from past shows*, not the real festival set
+- **Festival setlist** — on Lineup (setlist.fm; optional Spotify links)
 - **Stack** — **Next.js**, **PostgreSQL** (e.g. Neon), **Prisma** for squads, members, artists, ratings, schedule, intents, resolutions, comments
 
 ---
@@ -46,7 +46,7 @@ Each member has intents, plan windows, clash resolutions, and optional “person
 
 ## Running it
 
-**Stack:** Node 20+, Postgres `DATABASE_URL`, optional `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` for lineup/schedule image parsing, optional `SETLISTFM_API_KEY` (and `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` for track search links) for the **Setlist** tab.
+**Stack:** Node 20+, Postgres `DATABASE_URL`, optional `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` for lineup/schedule image parsing, optional `SETLISTFM_API_KEY` and (for Spotify column links) `SPOTIFY_CLIENT_ID` + `SPOTIFY_CLIENT_SECRET`.
 
 ```bash
 cp .env.example .env
