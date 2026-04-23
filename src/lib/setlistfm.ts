@@ -1,5 +1,9 @@
 const BASE = "https://api.setlist.fm/rest/1.0";
 
+/** setlist.fm enforces strict limits; ~1 req/s is a safe default (forum reports 429 even at 1/s). */
+const RATE_429_MAX_RETRIES = 8;
+const RATE_429_BASE_MS = 1_200;
+
 function apiKey(): string | null {
   const k = process.env.SETLISTFM_API_KEY?.trim();
   return k || null;
@@ -11,6 +15,36 @@ function headers(): HeadersInit {
     "x-api-key": apiKey()!,
     "User-Agent": "Clasher/1.0 (https://github.com/andre-zhang/clasher)",
   };
+}
+
+function parseRetryAfterMs(r: Response): number | null {
+  const h = r.headers.get("Retry-After");
+  if (!h) return null;
+  const sec = parseInt(h.trim(), 10);
+  if (Number.isFinite(sec) && sec > 0) return sec * 1000;
+  const t = Date.parse(h);
+  if (!Number.isNaN(t)) {
+    const ms = t - Date.now();
+    if (ms > 0) return ms;
+  }
+  return null;
+}
+
+/** GET to setlist.fm with retries on HTTP 429 (exponential backoff + optional Retry-After). */
+async function fetchSetlistFm(url: string): Promise<Response> {
+  for (let attempt = 0; ; attempt += 1) {
+    const r = await fetch(url, { headers: headers() });
+    if (r.status !== 429) return r;
+    if (attempt >= RATE_429_MAX_RETRIES) return r;
+    const fromHeader = parseRetryAfterMs(r);
+    const backoff = RATE_429_BASE_MS * Math.pow(2, attempt);
+    const cap = 60_000;
+    const wait = Math.min(
+      cap,
+      fromHeader != null && fromHeader > 0 ? Math.max(fromHeader, backoff) : backoff
+    );
+    await sleepMs(wait);
+  }
 }
 
 export function isSetlistFmConfigured(): boolean {
@@ -29,7 +63,7 @@ export async function searchArtistByName(
 ): Promise<SetlistfmArtistHit | null> {
   if (!apiKey()) return null;
   const q = new URLSearchParams({ artistName: name.trim(), p: "1" });
-  const r = await fetch(`${BASE}/search/artists?${q}`, { headers: headers() });
+  const r = await fetchSetlistFm(`${BASE}/search/artists?${q}`);
   if (!r.ok) {
     if (r.status === 404) return null;
     const t = await r.text().catch(() => "");
@@ -60,9 +94,8 @@ export async function listSetlistPage(
   if (!apiKey()) {
     return { setlists: [], total: 0 };
   }
-  const r = await fetch(
-    `${BASE}/artist/${encodeURIComponent(artistMbid)}/setlists?p=${page}`,
-    { headers: headers() }
+  const r = await fetchSetlistFm(
+    `${BASE}/artist/${encodeURIComponent(artistMbid)}/setlists?p=${page}`
   );
   if (!r.ok) {
     if (r.status === 404) return { setlists: [], total: 0 };
@@ -129,9 +162,8 @@ export function extractSongTitlesFromSetlistDetail(json: Json): string[] {
 /** Full setlist with `sets` array. */
 export async function getSetlistById(setlistId: string): Promise<Json | null> {
   if (!apiKey()) return null;
-  const r = await fetch(
-    `${BASE}/setlist/${encodeURIComponent(setlistId)}`,
-    { headers: headers() }
+  const r = await fetchSetlistFm(
+    `${BASE}/setlist/${encodeURIComponent(setlistId)}`
   );
   if (!r.ok) {
     if (r.status === 404) return null;
@@ -143,6 +175,8 @@ export async function getSetlistById(setlistId: string): Promise<Json | null> {
   return (await r.json()) as Json;
 }
 
-export function sleepMs(ms: number): Promise<void> {
+function sleepMs(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
+
+export { sleepMs };

@@ -29,7 +29,8 @@ function youtubeSearch(artist: string, title: string): string {
   )}`;
 }
 
-const REQ_GAP_MS = 220;
+/** Space requests so we stay under setlist.fm’s rate cap (retries still handle 429). */
+const REQ_GAP_MS = 1_000;
 
 export async function buildSetlistPreviewForArtists(
   artists: { id: string; name: string }[],
@@ -122,7 +123,13 @@ export async function buildSetlistPreviewForArtists(
           });
       }
     } catch (e) {
-      entry.error = e instanceof Error ? e.message : String(e);
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("429") || /too many requests/i.test(msg)) {
+        entry.error =
+          "setlist.fm rate limit (wait a minute and try again, or contact setlist.fm for a higher API quota).";
+      } else {
+        entry.error = msg;
+      }
     }
     outArtists.push(entry);
   }
