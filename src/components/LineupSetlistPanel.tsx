@@ -67,7 +67,23 @@ export function LineupSetlistPanel() {
     if (s === "connected" || s === "denied" || s === "error") {
       void loadSpotify().then(() => {
         if (s === "denied") {
-          setErr("Spotify sign-in was cancelled or did not finish.");
+          const se = (sp.get("se") ?? "").toLowerCase();
+          const sd = (sp.get("sd") ?? "").trim();
+          if (se === "access_denied") {
+            setErr("Spotify login was cancelled. Tap Connect again when you want to continue.");
+          } else if (se === "redirect_uri_mismatch") {
+            setErr(
+              "redirect_uri_mismatch: the callback URL does not match. In the Spotify app settings, add exactly the same URL as SPOTIFY_REDIRECT_URI (including https and path /api/spotify/callback), save, redeploy, and try again."
+            );
+          } else if (se === "invalid_client" || se === "invalid_client_id") {
+            setErr("invalid_client: check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET on the server match the Spotify app.");
+          } else if (se) {
+            setErr(
+              `Spotify returned: ${se}${sd ? ` — ${sd}` : ""}`.trim()
+            );
+          } else {
+            setErr("Spotify sign-in did not complete. Try Connect again.");
+          }
         } else if (s === "error") {
           if (reason === "token_exchange") {
             setErr(
@@ -85,6 +101,8 @@ export function LineupSetlistPanel() {
         }
         sp.delete("spotify");
         sp.delete("reason");
+        sp.delete("se");
+        sp.delete("sd");
         const nextQ = sp.toString();
         const next =
           nextQ.length > 0

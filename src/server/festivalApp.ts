@@ -1891,12 +1891,18 @@ export function createFestivalApp(apiBasePath: string): Hono {
       return `${base}${p}?${sp.toString()}`;
     };
 
-    const afterDeny = (path: string) =>
-      c.redirect(withSpotifyQ(path, { spotify: "denied" }), 302);
-
     if (err) {
       const p = stateQ ? verifySpotifyState(stateQ) : null;
-      return afterDeny(p?.returnPath ?? "/");
+      const path = p?.returnPath ?? "/";
+      const desc = (c.req.query("error_description") as string | undefined)?.trim() ?? "";
+      const q: Record<string, string> = {
+        spotify: "denied",
+        se: err,
+      };
+      if (desc) {
+        q.sd = desc.length > 400 ? `${desc.slice(0, 400)}…` : desc;
+      }
+      return c.redirect(withSpotifyQ(path, q), 302);
     }
     if (!code || !stateQ) {
       return c.text("Bad request", 400);
