@@ -1869,7 +1869,8 @@ export function createFestivalApp(apiBasePath: string): Hono {
       return c.json({ error: "spotify_not_configured" }, 503);
     }
     const state = signSpotifyState(member.id, member.squadId, returnTo);
-    const scope = "playlist-modify-private user-read-private offline_access";
+    // Minimize scopes: extra scopes (e.g. user-read-private) can cause invalid_scope on new/unapproved apps.
+    const scope = "playlist-modify-private offline_access";
     const u = new URL("https://accounts.spotify.com/authorize");
     u.searchParams.set("client_id", clientId);
     u.searchParams.set("response_type", "code");

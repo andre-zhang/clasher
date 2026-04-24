@@ -71,6 +71,10 @@ export function LineupSetlistPanel() {
           const sd = (sp.get("sd") ?? "").trim();
           if (se === "access_denied") {
             setErr("Spotify login was cancelled. Tap Connect again when you want to continue.");
+          } else if (se === "invalid_scope") {
+            setErr(
+              "invalid_scope: this app no longer requests extra user scopes. Pull the latest Clasher, redeploy, and try Connect again. If it persists, check the Spotify app type (Web API) and that your app is not restricted in the developer dashboard."
+            );
           } else if (se === "redirect_uri_mismatch") {
             setErr(
               "redirect_uri_mismatch: the callback URL does not match. In the Spotify app settings, add exactly the same URL as SPOTIFY_REDIRECT_URI (including https and path /api/spotify/callback), save, redeploy, and try again."
