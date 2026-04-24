@@ -16,7 +16,9 @@ import type { SetlistPreviewResult } from "@/lib/setlistPreviewTypes";
 function hasEligibleArtists(group: FestivalSnapshot, memberId: string): boolean {
   for (const r of group.ratings ?? []) {
     if (r.memberId !== memberId) continue;
-    if (r.tier === "must" || r.tier === "want") return true;
+    if (r.tier === "must" || r.tier === "want" || r.tier === "maybe") {
+      return true;
+    }
   }
   for (const s of group.schedule) {
     const i = group.memberSlotIntents.find((x) => x.slotId === s.id);

@@ -21,7 +21,8 @@ export async function getArtistsForMemberSetlist(
     const fromRatings = await prisma.rating.findMany({
       where: {
         memberId: member.id,
-        tier: { in: ["must", "want"] },
+        /** Everyone you didn’t skip: must, want, maybe. “Skip” means not in the personal set. */
+        tier: { in: ["must", "want", "maybe"] },
         artist: { squadId: member.squadId },
       },
       select: { artistId: true },

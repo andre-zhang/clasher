@@ -2033,9 +2033,12 @@ export function createFestivalApp(apiBasePath: string): Hono {
       return c.json({ error: "create_playlist", message: "Spotify refused to create the playlist." }, 502);
     }
     const added = await spotifyAddTracks(pl.id, userTok.access_token, uris);
-    if (!added) {
+    if (!added.ok) {
       return c.json(
-        { error: "add_tracks", message: "Playlist was created but adding tracks failed." },
+        {
+          error: "add_tracks",
+          message: `Spotify would not add tracks (HTTP ${added.status}). Reconnect Spotify or check the app is not restricted. ${added.detail}`.trim(),
+        },
         502
       );
     }

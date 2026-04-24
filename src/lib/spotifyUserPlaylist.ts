@@ -107,7 +107,9 @@ export async function spotifyAddTracks(
   playlistId: string,
   accessToken: string,
   trackUris: string[]
-): Promise<boolean> {
+): Promise<
+  { ok: true } | { ok: false; status: number; detail: string }
+> {
   for (let i = 0; i < trackUris.length; i += ADD_CHUNK) {
     const chunk = trackUris.slice(i, i + ADD_CHUNK);
     const r = await fetch(
@@ -121,7 +123,11 @@ export async function spotifyAddTracks(
         body: JSON.stringify({ uris: chunk }),
       }
     );
-    if (!r.ok) return false;
+    if (!r.ok) {
+      const text = (await r.text().catch(() => "")).trim().slice(0, 500);
+      console.error("[clasher] spotify add tracks", r.status, text);
+      return { ok: false, status: r.status, detail: text || r.statusText };
+    }
   }
-  return true;
+  return { ok: true };
 }

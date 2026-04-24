@@ -1,5 +1,5 @@
 /**
- * Server-side track search (client credentials). No user playlist write — only URLs.
+ * Server-side track search (client credentials). No user playlist write — only URIs.
  */
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
@@ -12,6 +12,10 @@ function spotifyCredentials(): { id: string; secret: string } | null {
 
 export function isSpotifySearchConfigured(): boolean {
   return spotifyCredentials() !== null;
+}
+
+function marketParam(): string {
+  return process.env.SPOTIFY_MARKET?.trim() || "US";
 }
 
 async function getAccessToken(): Promise<string | null> {
@@ -38,34 +42,67 @@ async function getAccessToken(): Promise<string | null> {
   return j.access_token;
 }
 
-async function firstSearchTrack(artistName: string, trackTitle: string) {
+type SearchJson = {
+  tracks?: {
+    items?: { uri?: string }[];
+  };
+};
+
+async function searchTracksByQuery(
+  q: string,
+  limit: number
+): Promise<SearchJson | null> {
   const token = await getAccessToken();
   if (!token) return null;
-  const q = `track:"${trackTitle.replace(/"/g, "")}" artist:"${artistName.replace(/"/g, "")}"`;
   const u = new URL("https://api.spotify.com/v1/search");
   u.searchParams.set("q", q);
   u.searchParams.set("type", "track");
-  u.searchParams.set("limit", "1");
+  u.searchParams.set("limit", String(limit));
+  u.searchParams.set("market", marketParam());
   const r = await fetch(u.toString(), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!r.ok) return null;
-  return (await r.json()) as {
-    tracks?: {
-      items?: {
-        uri?: string;
-        external_urls?: { spotify?: string };
-      }[];
-    };
-  };
+  return (await r.json()) as SearchJson;
 }
 
-/** `spotify:track:…` for first search hit, or null. */
+function firstTrackUriFromSearch(j: SearchJson | null): string | null {
+  for (const it of j?.tracks?.items ?? []) {
+    const u = it?.uri;
+    if (typeof u === "string" && u.startsWith("spotify:track:")) {
+      return u;
+    }
+  }
+  return null;
+}
+
+function stripCommonLiveSuffix(title: string): string {
+  return title.replace(/\s*[\(\[](live|acoustic|remix|acoustic version)[\)\]]\s*$/i, "").trim();
+}
+
+/**
+ * `spotify:track:…` for best search hit. Tries stricter then looser Setlist → Spotify matching.
+ */
 export async function spotifyTrackUriFor(
   artistName: string,
   trackTitle: string
 ): Promise<string | null> {
-  const j = await firstSearchTrack(artistName, trackTitle);
-  const uri = j?.tracks?.items?.[0]?.uri;
-  return typeof uri === "string" && uri.startsWith("spotify:track:") ? uri : null;
+  const artist = artistName.replace(/"/g, "").trim();
+  const titleRaw = trackTitle.replace(/"/g, "").trim();
+  if (!artist || !titleRaw) return null;
+  const title = stripCommonLiveSuffix(titleRaw) || titleRaw;
+
+  const strict = `track:"${titleRaw}" artist:"${artist}"`;
+  let u = firstTrackUriFromSearch(await searchTracksByQuery(strict, 1));
+  if (u) return u;
+  u = firstTrackUriFromSearch(await searchTracksByQuery(
+    `track:"${title}" artist:"${artist}"`,
+    3
+  ));
+  if (u) return u;
+  u = firstTrackUriFromSearch(
+    await searchTracksByQuery(`${artist} ${title}`.trim(), 5)
+  );
+  if (u) return u;
+  return null;
 }
