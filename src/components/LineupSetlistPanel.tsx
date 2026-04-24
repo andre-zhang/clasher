@@ -73,7 +73,7 @@ export function LineupSetlistPanel() {
             setErr("Spotify login was cancelled. Tap Connect again when you want to continue.");
           } else if (se === "invalid_scope") {
             setErr(
-              "invalid_scope: this app no longer requests extra user scopes. Pull the latest Clasher, redeploy, and try Connect again. If it persists, check the Spotify app type (Web API) and that your app is not restricted in the developer dashboard."
+              "invalid_scope: deploy the latest Clasher (Spotify does not use the OIDC `offline_access` scope). If this still appears, paste your Spotify `error_description` for support."
             );
           } else if (se === "redirect_uri_mismatch") {
             setErr(
