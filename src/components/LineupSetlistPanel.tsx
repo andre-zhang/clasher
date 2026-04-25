@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useClasher } from "@/context/ClasherContext";
 import {
@@ -10,26 +10,19 @@ import {
   apiSpotifyAuthorizeUrl,
   apiSpotifyStatus,
 } from "@/lib/api";
-import type { FestivalSnapshot } from "@/lib/types";
+import {
+  SETLIST_ARTIST_CAP,
+  setlistStorageKey,
+  suggestedSetlistArtistIds,
+} from "@/lib/setlistArtistSelection";
+import { myTierEmoji } from "@/lib/reactionsUi";
 import type { SetlistPreviewResult } from "@/lib/setlistPreviewTypes";
-
-function hasEligibleArtists(group: FestivalSnapshot, memberId: string): boolean {
-  for (const r of group.ratings ?? []) {
-    if (r.memberId !== memberId) continue;
-    if (r.tier === "must" || r.tier === "want" || r.tier === "maybe") {
-      return true;
-    }
-  }
-  for (const s of group.schedule) {
-    const i = group.memberSlotIntents.find((x) => x.slotId === s.id);
-    if (i?.wants) return true;
-  }
-  return false;
-}
 
 export function LineupSetlistPanel() {
   const pathname = usePathname();
   const { session, group } = useClasher();
+  const setlistInitKeyRef = useRef<string | null>(null);
+  const [setlistArtistIds, setSetlistArtistIds] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [playlistBusy, setPlaylistBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -42,10 +35,64 @@ export function LineupSetlistPanel() {
   } | null>(null);
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(null);
 
+  const artistsForPickUi = useMemo(
+    () =>
+      !group?.artists?.length
+        ? []
+        : [...group.artists].sort((a, b) =>
+            a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+          ),
+    [group?.artists]
+  );
+
+  /** One-time init per squad+member: sessionStorage, else “My picks”. Refetching snapshot won’t wipe. */
+  useEffect(() => {
+    if (!group || !session) return;
+    const k = `${group.id}:${session.memberId}`;
+    if (setlistInitKeyRef.current === k) return;
+    setlistInitKeyRef.current = k;
+    const stKey = setlistStorageKey(group.id, session.memberId);
+    const sug = suggestedSetlistArtistIds(group, session.memberId);
+    try {
+      const raw = sessionStorage.getItem(stKey);
+      if (raw) {
+        const p = JSON.parse(raw) as unknown;
+        if (Array.isArray(p) && p.length) {
+          const v = new Set(group.artists.map((a) => a.id));
+          const filtered = p.filter(
+            (id): id is string => typeof id === "string" && v.has(id)
+          );
+          if (filtered.length) {
+            setSetlistArtistIds(filtered.slice(0, SETLIST_ARTIST_CAP));
+            return;
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    setSetlistArtistIds(sug.slice(0, SETLIST_ARTIST_CAP));
+  }, [group, session]);
+
+  useEffect(() => {
+    if (!group || !session || setlistArtistIds == null) return;
+    try {
+      sessionStorage.setItem(
+        setlistStorageKey(group.id, session.memberId),
+        JSON.stringify(setlistArtistIds)
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [group, session, setlistArtistIds]);
+
   const canRun = useMemo(() => {
     if (!group || !session) return false;
-    return hasEligibleArtists(group, session.memberId);
-  }, [group, session]);
+    if (!setlistArtistIds?.length) return false;
+    if (setlistArtistIds.length > SETLIST_ARTIST_CAP) return false;
+    if (!artistsForPickUi.length) return false;
+    return true;
+  }, [group, session, setlistArtistIds, artistsForPickUi.length]);
 
   const loadSpotify = useCallback(async () => {
     if (!session) return;
@@ -120,12 +167,16 @@ export function LineupSetlistPanel() {
   }, [loadSpotify]);
 
   const run = useCallback(async () => {
-    if (!session) return;
+    if (!session || !setlistArtistIds?.length) return;
+    if (setlistArtistIds.length > SETLIST_ARTIST_CAP) {
+      setErr(`Select at most ${SETLIST_ARTIST_CAP} artists.`);
+      return;
+    }
     setBusy(true);
     setErr(null);
     setPlaylistUrl(null);
     try {
-      const p = await apiSetlistPreview(session, {});
+      const p = await apiSetlistPreview(session, { artistIds: setlistArtistIds });
       setPreview(p);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -133,7 +184,7 @@ export function LineupSetlistPanel() {
     } finally {
       setBusy(false);
     }
-  }, [session]);
+  }, [session, setlistArtistIds]);
 
   const connectSpotify = useCallback(async () => {
     if (!session) return;
@@ -151,19 +202,25 @@ export function LineupSetlistPanel() {
   }, [session, pathname]);
 
   const createPlaylist = useCallback(async () => {
-    if (!session) return;
+    if (!session || !setlistArtistIds?.length) return;
+    if (setlistArtistIds.length > SETLIST_ARTIST_CAP) {
+      setErr(`Select at most ${SETLIST_ARTIST_CAP} artists.`);
+      return;
+    }
     setPlaylistBusy(true);
     setErr(null);
     setPlaylistUrl(null);
     try {
-      const o = await apiSetlistSpotifyPlaylist(session, {});
+      const o = await apiSetlistSpotifyPlaylist(session, {
+        artistIds: setlistArtistIds,
+      });
       setPlaylistUrl(o.playlistUrl);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setPlaylistBusy(false);
     }
-  }, [session]);
+  }, [session, setlistArtistIds]);
 
   const copyPlain = () => {
     if (!preview?.combined.length) return;
@@ -186,6 +243,35 @@ export function LineupSetlistPanel() {
 
   if (!group || !session) return null;
 
+  const selectedSet = new Set(setlistArtistIds ?? []);
+  const toggleArtist = (id: string) => {
+    setSetlistArtistIds((prev) => {
+      if (prev == null) return prev;
+      const s = new Set(prev);
+      if (s.has(id)) {
+        s.delete(id);
+        return [...s];
+      }
+      if (s.size >= SETLIST_ARTIST_CAP) return prev;
+      s.add(id);
+      return [...s];
+    });
+  };
+  const pickAllOnBill = () => {
+    setSetlistArtistIds(
+      group.artists.map((a) => a.id).slice(0, SETLIST_ARTIST_CAP)
+    );
+  };
+  const pickMyPicks = () => {
+    if (!group || !session) return;
+    setSetlistArtistIds(
+      suggestedSetlistArtistIds(group, session.memberId).slice(0, SETLIST_ARTIST_CAP)
+    );
+  };
+  const pickNone = () => {
+    setSetlistArtistIds([]);
+  };
+
   const canPlaylist =
     Boolean(preview?.combined.length) &&
     spotify?.clientConfigured &&
@@ -198,6 +284,74 @@ export function LineupSetlistPanel() {
         Festival setlist
       </summary>
       <div className="space-y-3 border-t-2 border-zinc-900 px-3 pb-3 pt-2">
+        {artistsForPickUi.length > 0 && setlistArtistIds != null ? (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-zinc-800">Artists in this setlist</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={pickMyPicks}
+                className="border-2 border-zinc-400 bg-white px-2 py-0.5 text-xs font-medium text-zinc-800"
+              >
+                My picks
+              </button>
+              <button
+                type="button"
+                onClick={pickAllOnBill}
+                className="border-2 border-zinc-400 bg-white px-2 py-0.5 text-xs font-medium text-zinc-800"
+              >
+                All on bill
+              </button>
+              <button
+                type="button"
+                onClick={pickNone}
+                className="border-2 border-zinc-400 bg-white px-2 py-0.5 text-xs font-medium text-zinc-800"
+              >
+                None
+              </button>
+            </div>
+            <p className="text-[11px] text-zinc-500">
+              Up to {SETLIST_ARTIST_CAP} · My picks = your must/want/maybe + plan. Tick anyone else.
+            </p>
+            <div className="max-h-40 space-y-1.5 overflow-y-auto border-2 border-zinc-200 bg-white px-2 py-1.5">
+              {artistsForPickUi.map((a) => {
+                const on = selectedSet.has(a.id);
+                const onPlan = group.schedule.some(
+                  (s) => s.artistId === a.id
+                    && group.memberSlotIntents.find((i) => i.slotId === s.id)?.wants
+                );
+                return (
+                  <label
+                    key={a.id}
+                    className="flex cursor-pointer items-center gap-2 text-xs"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => void toggleArtist(a.id)}
+                      className="h-3.5 w-3.5 border-2 border-zinc-800"
+                    />
+                    <span className="w-4 shrink-0 text-center" aria-hidden>
+                      {myTierEmoji(group, a.id, session.memberId)}
+                    </span>
+                    <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                      {a.name}
+                    </span>
+                    {onPlan ? (
+                      <span className="shrink-0 text-[10px] font-medium text-zinc-500">
+                        plan
+                      </span>
+                    ) : null}
+                  </label>
+                );
+              })}
+            </div>
+            {setlistArtistIds.length > SETLIST_ARTIST_CAP ? (
+              <p className="text-xs text-amber-900">Too many selected; max {SETLIST_ARTIST_CAP}.</p>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
