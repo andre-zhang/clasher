@@ -2034,13 +2034,11 @@ export function createFestivalApp(apiBasePath: string): Hono {
     }
     const added = await spotifyAddTracks(pl.id, userTok.access_token, uris);
     if (!added.ok) {
-      return c.json(
-        {
-          error: "add_tracks",
-          message: `Spotify would not add tracks (HTTP ${added.status}). Reconnect Spotify or check the app is not restricted. ${added.detail}`.trim(),
-        },
-        502
-      );
+      const baseMsg =
+        added.status === 403
+          ? `Spotify blocked adding songs (HTTP 403). If the app is in Development mode, add your Spotify account under the app’s User management in the developer dashboard, then use Connect Spotify again. Otherwise try again after redeploy. ${added.detail}`
+          : `Spotify would not add tracks (HTTP ${added.status}). Reconnect Spotify. ${added.detail}`;
+      return c.json({ error: "add_tracks", message: baseMsg.trim() }, 502);
     }
     const playlistUrl = pl.external_urls?.spotify ?? `https://open.spotify.com/playlist/${pl.id}`;
     return c.json({ playlistUrl, trackCount: uris.length, notFound });

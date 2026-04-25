@@ -112,8 +112,9 @@ export async function spotifyAddTracks(
 > {
   for (let i = 0; i < trackUris.length; i += ADD_CHUNK) {
     const chunk = trackUris.slice(i, i + ADD_CHUNK);
+    // Use /items — /tracks is deprecated and can return 403 on some tenants.
     const r = await fetch(
-      `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks`,
+      `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/items`,
       {
         method: "POST",
         headers: {
