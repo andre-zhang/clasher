@@ -29,6 +29,7 @@ import {
 } from "./mapStages";
 import { getArtistsForMemberSetlist } from "@/lib/setlistMemberArtists";
 import { buildSetlistPreviewForArtists } from "@/lib/setlistPreview";
+import { interleaveSetlistRowsByArtist } from "@/lib/setlistRowFairOrder";
 import { spotifyUrisForSetlistRows } from "@/lib/spotifyResolveUris";
 import { isSpotifySearchConfigured } from "@/lib/spotifySearch";
 import {
@@ -1980,7 +1981,7 @@ export function createFestivalApp(apiBasePath: string): Hono {
       body = {};
     }
     const maxSetlists = Math.min(8, Math.max(1, Math.floor(body.maxSetlistsPerArtist ?? 4)));
-    const maxUris = Math.min(200, Math.max(1, Math.floor(body.maxSpotifyUris ?? 150)));
+    const maxUris = Math.min(200, Math.max(1, Math.floor(body.maxSpotifyUris ?? 200)));
 
     const res = await getArtistsForMemberSetlist(member, { artistIds: body.artistIds });
     if (!res.ok) {
@@ -1998,7 +1999,12 @@ export function createFestivalApp(apiBasePath: string): Hono {
         400
       );
     }
-    const { uris, notFound } = await spotifyUrisForSetlistRows(preview.combined, maxUris);
+    const candidateCap = Math.min(preview.combined.length, Math.max(maxUris * 5, 300));
+    const rowsForSpotify = interleaveSetlistRowsByArtist(
+      preview.combined,
+      candidateCap
+    );
+    const { uris, notFound } = await spotifyUrisForSetlistRows(rowsForSpotify, maxUris);
     if (uris.length === 0) {
       return c.json(
         { error: "no_spotify_tracks", message: "Could not find matching tracks on Spotify for these song titles." },

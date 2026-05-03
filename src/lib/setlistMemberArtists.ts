@@ -12,11 +12,17 @@ export async function getArtistsForMemberSetlist(
 > {
   let artistIds: string[] = [];
   if (Array.isArray(body.artistIds) && body.artistIds.length) {
+    const deduped = [
+      ...new Set(
+        body.artistIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+      ),
+    ];
     const allowed = await prisma.artist.findMany({
-      where: { squadId: member.squadId, id: { in: body.artistIds } },
+      where: { squadId: member.squadId, id: { in: deduped } },
       select: { id: true },
     });
-    artistIds = allowed.map((a) => a.id);
+    const idOk = new Set(allowed.map((a) => a.id));
+    artistIds = deduped.filter((id) => idOk.has(id)).slice(0, 30);
   } else {
     const fromRatings = await prisma.rating.findMany({
       where: {
@@ -52,10 +58,14 @@ export async function getArtistsForMemberSetlist(
     return { ok: false, error: "too_many_artists" };
   }
 
-  const artists = await prisma.artist.findMany({
+  const rows = await prisma.artist.findMany({
     where: { id: { in: artistIds }, squadId: member.squadId },
     select: { id: true, name: true },
   });
+  const byId = new Map(rows.map((a) => [a.id, a]));
+  const artists = artistIds
+    .map((id) => byId.get(id))
+    .filter((a): a is { id: string; name: string } => Boolean(a));
 
   return { ok: true, artists };
 }
