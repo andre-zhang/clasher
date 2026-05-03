@@ -28,6 +28,7 @@ import {
   parseStageLabelsFromVision,
 } from "./mapStages";
 import { getArtistsForMemberSetlist } from "@/lib/setlistMemberArtists";
+import { maxSetlistsPerArtistForLineupSize } from "@/lib/setlistFmBudget";
 import { buildSetlistPreviewForArtists } from "@/lib/setlistPreview";
 import { interleaveSetlistRowsByArtist } from "@/lib/setlistRowFairOrder";
 import { spotifyUrisForSetlistRows } from "@/lib/spotifyResolveUris";
@@ -1805,11 +1806,6 @@ export function createFestivalApp(apiBasePath: string): Hono {
     } catch {
       body = {};
     }
-    const maxSetlists = Math.min(
-      8,
-      Math.max(1, Math.floor(body.maxSetlistsPerArtist ?? 4))
-    );
-
     const res = await getArtistsForMemberSetlist(member, { artistIds: body.artistIds });
     if (!res.ok) {
       return c.json(
@@ -1820,6 +1816,11 @@ export function createFestivalApp(apiBasePath: string): Hono {
         400
       );
     }
+
+    const maxSetlists = maxSetlistsPerArtistForLineupSize(
+      res.artists.length,
+      body.maxSetlistsPerArtist
+    );
 
     const preview = await buildSetlistPreviewForArtists(res.artists, {
       maxSetlistsPerArtist: maxSetlists,
@@ -1980,7 +1981,6 @@ export function createFestivalApp(apiBasePath: string): Hono {
     } catch {
       body = {};
     }
-    const maxSetlists = Math.min(8, Math.max(1, Math.floor(body.maxSetlistsPerArtist ?? 4)));
     const maxUris = Math.min(200, Math.max(1, Math.floor(body.maxSpotifyUris ?? 200)));
 
     const res = await getArtistsForMemberSetlist(member, { artistIds: body.artistIds });
@@ -1990,6 +1990,10 @@ export function createFestivalApp(apiBasePath: string): Hono {
         400
       );
     }
+    const maxSetlists = maxSetlistsPerArtistForLineupSize(
+      res.artists.length,
+      body.maxSetlistsPerArtist
+    );
     const preview = await buildSetlistPreviewForArtists(res.artists, {
       maxSetlistsPerArtist: maxSetlists,
     });

@@ -37,6 +37,10 @@ export async function buildSetlistPreviewForArtists(
   opts: { maxSetlistsPerArtist: number }
 ): Promise<SetlistPreviewResult> {
   const { maxSetlistsPerArtist } = opts;
+  const maxListPages = Math.min(
+    14,
+    Math.max(3, Math.ceil(maxSetlistsPerArtist / 18) + 2)
+  );
   const sfm = isSetlistFmConfigured();
   const spotifyClient = isSpotifySearchConfigured();
 
@@ -78,7 +82,11 @@ export async function buildSetlistPreviewForArtists(
       entry.mbid = hit.mbid;
 
       const collectedIds: string[] = [];
-      for (let page = 1; page <= 3 && collectedIds.length < maxSetlistsPerArtist; page++) {
+      for (
+        let page = 1;
+        page <= maxListPages && collectedIds.length < maxSetlistsPerArtist;
+        page++
+      ) {
         const { setlists } = await listSetlistPage(hit.mbid, page);
         await sleepMs(REQ_GAP_MS);
         for (const row of setlists) {
