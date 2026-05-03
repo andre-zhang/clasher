@@ -2,6 +2,8 @@ import { festivalApiFetch } from "@/server/festivalFetch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** Setlist preview walks setlist.fm sequentially (~1s between calls); large selections need minutes. */
+export const maxDuration = 300;
 
 export function GET(request: Request) {
   return festivalApiFetch(request);

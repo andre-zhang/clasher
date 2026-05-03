@@ -29,8 +29,9 @@ function youtubeSearch(artist: string, title: string): string {
   )}`;
 }
 
-/** Space requests so we stay under setlist.fm’s rate cap (retries still handle 429). */
-const REQ_GAP_MS = 1_000;
+/** Baseline spacing; can scale down when many artists are selected so the route finishes before serverless timeouts. */
+const REQ_GAP_MS_MAX = 1_000;
+const REQ_GAP_MS_MIN = 500;
 
 export async function buildSetlistPreviewForArtists(
   artists: { id: string; name: string }[],
@@ -40,6 +41,13 @@ export async function buildSetlistPreviewForArtists(
   const maxListPages = Math.min(
     14,
     Math.max(3, Math.ceil(maxSetlistsPerArtist / 18) + 2)
+  );
+  const approxSleepsPerArtist = 1 + maxListPages + maxSetlistsPerArtist;
+  const approxTotalSleeps = Math.max(1, artists.length * approxSleepsPerArtist);
+  /** Target ~4m total idle so `/api` can stay under typical `maxDuration` caps with network overhead. */
+  const reqGapMs = Math.min(
+    REQ_GAP_MS_MAX,
+    Math.max(REQ_GAP_MS_MIN, Math.floor(240_000 / approxTotalSleeps))
   );
   const sfm = isSetlistFmConfigured();
   const spotifyClient = isSpotifySearchConfigured();
@@ -73,7 +81,7 @@ export async function buildSetlistPreviewForArtists(
     };
     try {
       const hit = await searchArtistByName(a.name);
-      await sleepMs(REQ_GAP_MS);
+      await sleepMs(reqGapMs);
       if (!hit) {
         entry.error = "No setlist.fm artist match for this name.";
         outArtists.push(entry);
@@ -88,7 +96,7 @@ export async function buildSetlistPreviewForArtists(
         page++
       ) {
         const { setlists } = await listSetlistPage(hit.mbid, page);
-        await sleepMs(REQ_GAP_MS);
+        await sleepMs(reqGapMs);
         for (const row of setlists) {
           if (collectedIds.length >= maxSetlistsPerArtist) break;
           if (!collectedIds.includes(row.id)) collectedIds.push(row.id);
@@ -99,7 +107,7 @@ export async function buildSetlistPreviewForArtists(
       const perSong = new Map<string, number>();
       for (const sid of collectedIds) {
         const detail = await getSetlistById(sid);
-        await sleepMs(REQ_GAP_MS);
+        await sleepMs(reqGapMs);
         entry.setlistsFetched += 1;
         if (!detail) continue;
         const titles = extractSongTitlesFromSetlistDetail(detail);
