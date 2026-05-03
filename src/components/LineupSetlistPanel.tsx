@@ -34,16 +34,32 @@ export function LineupSetlistPanel() {
     spotifyConnected: boolean;
   } | null>(null);
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(null);
+  const [exportNote, setExportNote] = useState(false);
 
-  const artistsForPickUi = useMemo(
-    () =>
-      !group?.artists?.length
-        ? []
-        : [...group.artists].sort((a, b) =>
-            a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
-          ),
-    [group?.artists]
-  );
+  /** One row per artist id (lineup can contain duplicate names with different ids). */
+  const artistsForPickUi = useMemo(() => {
+    if (!group?.artists?.length) return [];
+    const byId = new Map<
+      string,
+      { id: string; name: string; sortOrder: number }
+    >();
+    for (const a of group.artists) {
+      if (!byId.has(a.id)) byId.set(a.id, a);
+    }
+    return [...byId.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+    );
+  }, [group?.artists]);
+
+  /** Same name can refer to two billing rows (different ids); disambiguate in the list. */
+  const disambigName = useCallback((a: (typeof artistsForPickUi)[number]) => {
+    const sameName = artistsForPickUi.filter(
+      (x) =>
+        x.name.toLowerCase() === a.name.toLowerCase()
+    );
+    if (sameName.length <= 1) return a.name;
+    return `${a.name} · ${a.id.slice(0, 4)}`;
+  }, [artistsForPickUi]);
 
   /** One-time init per squad+member: sessionStorage, else “My picks”. Refetching snapshot won’t wipe. */
   useEffect(() => {
@@ -224,6 +240,8 @@ export function LineupSetlistPanel() {
 
   const copyPlain = () => {
     if (!preview?.combined.length) return;
+    setExportNote(true);
+    window.setTimeout(() => setExportNote(false), 2500);
     const t = preview.combined
       .map((r) => `${r.artistName} — ${r.title}`)
       .join("\n");
@@ -232,6 +250,8 @@ export function LineupSetlistPanel() {
 
   const copyTsv = () => {
     if (!preview?.combined.length) return;
+    setExportNote(true);
+    window.setTimeout(() => setExportNote(false), 2500);
     const t = [
       "artist\ttitle\tweight",
       ...preview.combined.map(
@@ -257,11 +277,6 @@ export function LineupSetlistPanel() {
       return [...s];
     });
   };
-  const pickAllOnBill = () => {
-    setSetlistArtistIds(
-      group.artists.map((a) => a.id).slice(0, SETLIST_ARTIST_CAP)
-    );
-  };
   const pickMyPicks = () => {
     if (!group || !session) return;
     setSetlistArtistIds(
@@ -277,6 +292,7 @@ export function LineupSetlistPanel() {
     spotify?.clientConfigured &&
     spotify.spotifyConnected;
   const canShowConnect = spotify?.canSignIn && !spotify.spotifyConnected;
+  const showWaitNote = busy || playlistBusy || exportNote;
 
   return (
     <details className="border-2 border-zinc-900 bg-zinc-50 shadow-[2px_2px_0_0_#18181b]">
@@ -285,35 +301,25 @@ export function LineupSetlistPanel() {
       </summary>
       <div className="space-y-3 border-t-2 border-zinc-900 px-3 pb-3 pt-2">
         {artistsForPickUi.length > 0 && setlistArtistIds != null ? (
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-zinc-800">Artists in this setlist</p>
-            <div className="flex flex-wrap gap-2">
+          <div className="border-2 border-zinc-900 bg-white p-2 shadow-[2px_2px_0_0_#18181b]">
+            <p className="mb-2 text-xs font-semibold text-zinc-900">Artists</p>
+            <div className="mb-2 flex flex-wrap gap-1">
               <button
                 type="button"
                 onClick={pickMyPicks}
-                className="border-2 border-zinc-400 bg-white px-2 py-0.5 text-xs font-medium text-zinc-800"
+                className="border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium text-zinc-900"
               >
                 My picks
               </button>
               <button
                 type="button"
-                onClick={pickAllOnBill}
-                className="border-2 border-zinc-400 bg-white px-2 py-0.5 text-xs font-medium text-zinc-800"
-              >
-                All on bill
-              </button>
-              <button
-                type="button"
                 onClick={pickNone}
-                className="border-2 border-zinc-400 bg-white px-2 py-0.5 text-xs font-medium text-zinc-800"
+                className="border-2 border-zinc-900 bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-800"
               >
                 None
               </button>
             </div>
-            <p className="text-[11px] text-zinc-500">
-              Up to {SETLIST_ARTIST_CAP} · My picks = your must/want/maybe + plan. Tick anyone else.
-            </p>
-            <div className="max-h-40 space-y-1.5 overflow-y-auto border-2 border-zinc-200 bg-white px-2 py-1.5">
+            <div className="max-h-40 space-y-0.5 overflow-y-auto border-2 border-zinc-900 bg-zinc-50/80 px-2 py-1.5">
               {artistsForPickUi.map((a) => {
                 const on = selectedSet.has(a.id);
                 const onPlan = group.schedule.some(
@@ -323,22 +329,22 @@ export function LineupSetlistPanel() {
                 return (
                   <label
                     key={a.id}
-                    className="flex cursor-pointer items-center gap-2 text-xs"
+                    className="flex cursor-pointer items-center gap-2 py-0.5 text-xs text-zinc-900"
                   >
                     <input
                       type="checkbox"
                       checked={on}
                       onChange={() => void toggleArtist(a.id)}
-                      className="h-3.5 w-3.5 border-2 border-zinc-800"
+                      className="h-3.5 w-3.5 accent-zinc-900"
                     />
-                    <span className="w-4 shrink-0 text-center" aria-hidden>
+                    <span className="w-4 shrink-0 text-center text-sm" aria-hidden>
                       {myTierEmoji(group, a.id, session.memberId)}
                     </span>
-                    <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                      {a.name}
+                    <span className="min-w-0 flex-1 font-medium [overflow-wrap:anywhere]">
+                      {disambigName(a)}
                     </span>
                     {onPlan ? (
-                      <span className="shrink-0 text-[10px] font-medium text-zinc-500">
+                      <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
                         plan
                       </span>
                     ) : null}
@@ -347,7 +353,9 @@ export function LineupSetlistPanel() {
               })}
             </div>
             {setlistArtistIds.length > SETLIST_ARTIST_CAP ? (
-              <p className="text-xs text-amber-900">Too many selected; max {SETLIST_ARTIST_CAP}.</p>
+              <p className="mt-2 text-xs text-amber-900">
+                Max {SETLIST_ARTIST_CAP} artists.
+              </p>
             ) : null}
           </div>
         ) : null}
@@ -384,53 +392,26 @@ export function LineupSetlistPanel() {
           ) : null}
         </div>
 
+        {showWaitNote ? (
+          <p className="text-xs text-zinc-600">This could take a moment!</p>
+        ) : null}
+
         {err ? (
           <p className="border-2 border-red-800 bg-red-50 px-2 py-1.5 text-xs text-red-900">
             {err}
           </p>
         ) : null}
 
-        {spotify && !spotify.clientConfigured ? (
-          <p className="text-xs text-zinc-500">
-            Spotify playlist: add{" "}
-            <code className="rounded bg-zinc-200 px-1">SPOTIFY_CLIENT_ID</code>{" "}
-            and <code className="rounded bg-zinc-200 px-1">SPOTIFY_CLIENT_SECRET</code>{" "}
-            on the server, plus a redirect callback URL in env (see .env.example).
-          </p>
-        ) : null}
-        {spotify?.clientConfigured && !spotify.canSignIn && !spotify.redirectUriConfigured ? (
-          <p className="text-xs text-amber-950">
-            Set <code className="rounded bg-amber-100 px-1">SPOTIFY_REDIRECT_URI</code>{" "}
-            (must match the Spotify app&apos;s callback URL exactly).
-          </p>
-        ) : null}
-        {spotify?.clientConfigured &&
-        spotify.redirectUriConfigured &&
-        !spotify.canSignIn ? (
-          <p className="text-xs text-amber-950">
-            Set <code className="rounded bg-amber-100 px-1">SPOTIFY_STATE_SECRET</code>{" "}
-            (or rely on the client secret) to sign the OAuth state.
-          </p>
-        ) : null}
-
         {playlistUrl ? (
           <p className="text-xs text-zinc-900">
-            Open your playlist:{" "}
             <a
               href={playlistUrl}
-              className="text-indigo-700 underline"
+              className="font-medium text-indigo-700 underline"
               target="_blank"
               rel="noreferrer"
             >
               Open in Spotify
             </a>
-          </p>
-        ) : null}
-
-        {preview && !preview.setlistfmConfigured ? (
-          <p className="text-xs text-amber-950">
-            <code className="rounded bg-amber-100 px-1">SETLISTFM_API_KEY</code>{" "}
-            not set on server.
           </p>
         ) : null}
 
