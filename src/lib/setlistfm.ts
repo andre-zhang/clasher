@@ -55,17 +55,26 @@ type Json = Record<string, unknown>;
 
 export type SetlistfmArtistHit = { name: string; mbid: string; sortName?: string };
 
+const MBID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isMbid(s: string): boolean {
+  return MBID_RE.test(s.trim());
+}
+
 /**
- * @returns first matching artist for name search, or null
+ * Name search hits (same order as setlist.fm). Skips rows without a valid MusicBrainz id.
  */
-export async function searchArtistByName(
-  name: string
-): Promise<SetlistfmArtistHit | null> {
-  if (!apiKey()) return null;
+export async function searchArtistsByName(
+  name: string,
+  opts?: { maxResults?: number }
+): Promise<SetlistfmArtistHit[]> {
+  if (!apiKey()) return [];
+  const max = Math.min(15, Math.max(1, opts?.maxResults ?? 10));
   const q = new URLSearchParams({ artistName: name.trim(), p: "1" });
   const r = await fetchSetlistFm(`${BASE}/search/artists?${q}`);
   if (!r.ok) {
-    if (r.status === 404) return null;
+    if (r.status === 404) return [];
     const t = await r.text().catch(() => "");
     throw new Error(
       `setlist.fm search artists: HTTP ${r.status} ${t.slice(0, 200)}`
@@ -78,18 +87,40 @@ export async function searchArtistByName(
     : raw && typeof raw === "object"
       ? [raw as Json]
       : [];
-  if (!arr.length) return null;
-  const a = arr[0] as Json;
-  const mbid = String(a.mbid ?? "");
-  if (!mbid) return null;
-  return {
-    name: String(a.name ?? name),
-    mbid,
-    sortName: a.sortName ? String(a.sortName) : undefined,
-  };
+  const out: SetlistfmArtistHit[] = [];
+  for (const a of arr) {
+    if (out.length >= max) break;
+    const mbid = String((a as Json).mbid ?? "").trim();
+    if (!isMbid(mbid)) continue;
+    out.push({
+      name: String((a as Json).name ?? name),
+      mbid,
+      sortName: (a as Json).sortName ? String((a as Json).sortName) : undefined,
+    });
+  }
+  return out;
+}
+
+/**
+ * @returns first matching artist for name search, or null
+ */
+export async function searchArtistByName(
+  name: string
+): Promise<SetlistfmArtistHit | null> {
+  const hits = await searchArtistsByName(name, { maxResults: 1 });
+  return hits[0] ?? null;
 }
 
 export type SetlistIdRow = { id: string; eventDate?: string };
+
+/** setlist.fm uses `id`; older/XML-ish payloads sometimes omit it — parse from canonical `url`. */
+function setlistIdFromSummaryRow(o: Json): string {
+  const id = String(o.id ?? "").trim();
+  if (id) return id;
+  const url = String(o.url ?? "").trim();
+  const m = url.match(/-([0-9a-f]{8})\.html(?:[#?].*)?$/i);
+  return m?.[1] ?? "";
+}
 
 /** Page of setlist IDs for an artist (no full songs in list). */
 export async function listSetlistPage(
@@ -119,7 +150,7 @@ export async function listSetlistPage(
   const out: SetlistIdRow[] = [];
   for (const row of rows) {
     const o = row as Json;
-    const id = String(o.id ?? "");
+    const id = setlistIdFromSummaryRow(o);
     if (id) out.push({ id, eventDate: o.eventDate ? String(o.eventDate) : undefined });
   }
   const total = typeof j.total === "number" ? j.total : out.length;
@@ -143,9 +174,17 @@ function songsArray(song: unknown): Json[] {
   return [song as Json];
 }
 
+/** Full GET /setlist/{id} uses root `set` (array); some payloads use legacy `sets`. */
+function setBlocksFromDetail(json: Json): Json[] {
+  const direct = json.set;
+  if (Array.isArray(direct)) return direct as Json[];
+  if (direct && typeof direct === "object") return [direct as Json];
+  return setsArray(json.sets);
+}
+
 export function extractSongTitlesFromSetlistDetail(json: Json): string[] {
   const out: string[] = [];
-  for (const block of setsArray(json.sets)) {
+  for (const block of setBlocksFromDetail(json)) {
     for (const s of songsArray((block as Json).song)) {
       const song = s as Json;
       if (song.tape === true) continue;

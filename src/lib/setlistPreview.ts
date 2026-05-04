@@ -3,7 +3,7 @@ import {
   getSetlistById,
   isSetlistFmConfigured,
   listSetlistPage,
-  searchArtistByName,
+  searchArtistsByName,
   sleepMs,
 } from "@/lib/setlistfm";
 import type {
@@ -80,22 +80,54 @@ export async function buildSetlistPreviewForArtists(
       songs: [],
     };
     try {
-      const hit = await searchArtistByName(a.name);
-      await sleepMs(reqGapMs);
-      if (!hit) {
-        entry.error = "No setlist.fm artist match for this name.";
+      const nameTrim = a.name.trim();
+      const searchQueries = [nameTrim];
+      const collabHead = nameTrim.match(/^(.+?)\s+(?:x|×|\/|\+)\s+/i)?.[1]?.trim();
+      if (collabHead && collabHead.length >= 2 && !searchQueries.includes(collabHead)) {
+        searchQueries.push(collabHead);
+      }
+
+      let chosen: Awaited<ReturnType<typeof searchArtistsByName>>[number] | null = null;
+      let firstPageSetlists: Awaited<ReturnType<typeof listSetlistPage>>["setlists"] | null =
+        null;
+      let hadSearchHit = false;
+
+      outer: for (const q of searchQueries) {
+        const candidates = await searchArtistsByName(q);
+        await sleepMs(reqGapMs);
+        if (candidates.length) hadSearchHit = true;
+        else continue;
+        for (const cand of candidates) {
+          const { setlists } = await listSetlistPage(cand.mbid, 1);
+          await sleepMs(reqGapMs);
+          if (setlists.length > 0) {
+            chosen = cand;
+            firstPageSetlists = setlists;
+            break outer;
+          }
+        }
+      }
+
+      if (!chosen || !firstPageSetlists) {
+        entry.error = !hadSearchHit
+          ? "No setlist.fm artist match for this name."
+          : "No concert setlists on setlist.fm for any close name match (try the spelling setlist.fm uses).";
         outArtists.push(entry);
         continue;
       }
-      entry.mbid = hit.mbid;
+      entry.mbid = chosen.mbid;
 
       const collectedIds: string[] = [];
+      for (const row of firstPageSetlists) {
+        if (collectedIds.length >= maxSetlistsPerArtist) break;
+        if (!collectedIds.includes(row.id)) collectedIds.push(row.id);
+      }
       for (
-        let page = 1;
+        let page = 2;
         page <= maxListPages && collectedIds.length < maxSetlistsPerArtist;
         page++
       ) {
-        const { setlists } = await listSetlistPage(hit.mbid, page);
+        const { setlists } = await listSetlistPage(chosen.mbid, page);
         await sleepMs(reqGapMs);
         for (const row of setlists) {
           if (collectedIds.length >= maxSetlistsPerArtist) break;
