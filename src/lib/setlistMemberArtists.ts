@@ -8,8 +8,14 @@ export async function getArtistsForMemberSetlist(
   body: { artistIds?: string[] }
 ): Promise<
   | { ok: false; error: "too_many_artists" }
-  | { ok: true; artists: { id: string; name: string }[] }
+  | {
+      ok: true;
+      artists: { id: string; name: string }[];
+      /** Shown in UI when picks don’t all become setlist.fm rows (wrong squad, cap, etc.). */
+      selectionWarnings: string[];
+    }
 > {
+  const selectionWarnings: string[] = [];
   let artistIds: string[] = [];
   if (Array.isArray(body.artistIds) && body.artistIds.length) {
     const deduped = [
@@ -22,7 +28,19 @@ export async function getArtistsForMemberSetlist(
       select: { id: true },
     });
     const idOk = new Set(allowed.map((a) => a.id));
-    artistIds = deduped.filter((id) => idOk.has(id)).slice(0, 30);
+    const inSquad = deduped.filter((id) => idOk.has(id));
+    const dropped = deduped.length - inSquad.length;
+    if (dropped > 0) {
+      selectionWarnings.push(
+        `${dropped} selected pick(s) are not on this squad’s lineup and were skipped.`
+      );
+    }
+    if (inSquad.length > 30) {
+      selectionWarnings.push(
+        "Only the first 30 selected artists are processed in one build; the rest were skipped."
+      );
+    }
+    artistIds = inSquad.slice(0, 30);
   } else {
     const fromRatings = await prisma.rating.findMany({
       where: {
@@ -67,5 +85,5 @@ export async function getArtistsForMemberSetlist(
     .map((id) => byId.get(id))
     .filter((a): a is { id: string; name: string } => Boolean(a));
 
-  return { ok: true, artists };
+  return { ok: true, artists, selectionWarnings };
 }

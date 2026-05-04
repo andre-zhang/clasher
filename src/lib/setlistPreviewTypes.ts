@@ -28,4 +28,6 @@ export type SetlistPreviewResult = {
   spotifyClientConfigured: boolean;
   artists: SetlistPreviewArtist[];
   combined: SetlistPreviewRow[];
+  /** When some checked ids aren’t on this squad or exceed the per-build cap. */
+  selectionWarnings?: string[];
 };

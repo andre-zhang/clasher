@@ -124,6 +124,16 @@ export async function buildSetlistPreviewForArtists(
         .map(([title, count]) => ({ title, count }))
         .sort((x, y) => y.count - x.count || x.title.localeCompare(y.title));
 
+      if (entry.songs.length === 0) {
+        if (collectedIds.length === 0) {
+          entry.error =
+            "No concert setlists on setlist.fm for this match (new/local acts, or the lineup name doesn’t match setlist.fm spelling).";
+        } else {
+          entry.error =
+            "setlist.fm returned setlist pages but no songs could be extracted (empty sets or unexpected API shape).";
+        }
+      }
+
       for (const s of entry.songs) {
         const key = normKey(a.name, s.title);
         const cur = countMap.get(key);

@@ -1825,7 +1825,11 @@ export function createFestivalApp(apiBasePath: string): Hono {
     const preview = await buildSetlistPreviewForArtists(res.artists, {
       maxSetlistsPerArtist: maxSetlists,
     });
-    return c.json(preview);
+    return c.json({
+      ...preview,
+      selectionWarnings:
+        res.selectionWarnings.length > 0 ? res.selectionWarnings : undefined,
+    });
   });
 
   app.get("/squads/:squadId/spotify/status", async (c) => {

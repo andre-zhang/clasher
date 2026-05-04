@@ -402,6 +402,14 @@ export function LineupSetlistPanel() {
           </p>
         ) : null}
 
+        {preview?.selectionWarnings?.length ? (
+          <ul className="list-inside list-disc border-2 border-amber-800 bg-amber-50 px-2 py-1.5 text-xs text-amber-950">
+            {preview.selectionWarnings.map((w, i) => (
+              <li key={`${i}-${w}`}>{w}</li>
+            ))}
+          </ul>
+        ) : null}
+
         {playlistUrl ? (
           <p className="text-xs text-zinc-900">
             <a
@@ -473,15 +481,18 @@ export function LineupSetlistPanel() {
         ) : null}
 
         {preview?.artists.some((a) => a.error) ? (
-          <ul className="list-inside list-disc text-xs text-zinc-600">
-            {preview.artists
-              .filter((a) => a.error)
-              .map((a) => (
-                <li key={a.artistId}>
-                  {a.name}: {a.error}
-                </li>
-              ))}
-          </ul>
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-zinc-800">Per artist</p>
+            <ul className="list-inside list-disc text-xs text-zinc-600">
+              {preview.artists
+                .filter((a) => a.error)
+                .map((a) => (
+                  <li key={a.artistId}>
+                    {a.name}: {a.error}
+                  </li>
+                ))}
+            </ul>
+          </div>
         ) : null}
       </div>
     </details>

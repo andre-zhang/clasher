@@ -72,8 +72,13 @@ export async function searchArtistByName(
     );
   }
   const j = (await r.json()) as Json;
-  const arr = j.artist;
-  if (!Array.isArray(arr) || !arr.length) return null;
+  const raw = j.artist;
+  const arr: Json[] = Array.isArray(raw)
+    ? (raw as Json[])
+    : raw && typeof raw === "object"
+      ? [raw as Json]
+      : [];
+  if (!arr.length) return null;
   const a = arr[0] as Json;
   const mbid = String(a.mbid ?? "");
   if (!mbid) return null;
@@ -106,13 +111,16 @@ export async function listSetlistPage(
   }
   const j = (await r.json()) as Json;
   const raw = j.setlist;
+  const rows: Json[] = Array.isArray(raw)
+    ? (raw as Json[])
+    : raw && typeof raw === "object"
+      ? [raw as Json]
+      : [];
   const out: SetlistIdRow[] = [];
-  if (Array.isArray(raw)) {
-    for (const row of raw) {
-      const o = row as Json;
-      const id = String(o.id ?? "");
-      if (id) out.push({ id, eventDate: o.eventDate ? String(o.eventDate) : undefined });
-    }
+  for (const row of rows) {
+    const o = row as Json;
+    const id = String(o.id ?? "");
+    if (id) out.push({ id, eventDate: o.eventDate ? String(o.eventDate) : undefined });
   }
   const total = typeof j.total === "number" ? j.total : out.length;
   return { setlists: out, total };
