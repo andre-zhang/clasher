@@ -3,9 +3,9 @@ import {
   getSetlistById,
   isSetlistFmConfigured,
   listSetlistPage,
-  searchArtistsByName,
   sleepMs,
 } from "@/lib/setlistfm";
+import { resolveArtistWithSetlists } from "@/lib/setlistFmFuzzy";
 import type {
   SetlistPreviewArtist,
   SetlistPreviewResult,
@@ -49,6 +49,13 @@ export async function buildSetlistPreviewForArtists(
     REQ_GAP_MS_MAX,
     Math.max(REQ_GAP_MS_MIN, Math.floor(240_000 / approxTotalSleeps))
   );
+  /** Fuzzy search does extra queries per artist — tighten caps when the batch is huge. */
+  const fuzzyOpts =
+    artists.length > 24
+      ? { maxSearchVariants: 8, maxMbidProbePages: 14, hitsPerSearch: 14 }
+      : artists.length > 16
+        ? { maxSearchVariants: 10, maxMbidProbePages: 18, hitsPerSearch: 16 }
+        : {};
   const sfm = isSetlistFmConfigured();
   const spotifyClient = isSpotifySearchConfigured();
 
@@ -80,41 +87,17 @@ export async function buildSetlistPreviewForArtists(
       songs: [],
     };
     try {
-      const nameTrim = a.name.trim();
-      const searchQueries = [nameTrim];
-      const collabHead = nameTrim.match(/^(.+?)\s+(?:x|×|\/|\+)\s+/i)?.[1]?.trim();
-      if (collabHead && collabHead.length >= 2 && !searchQueries.includes(collabHead)) {
-        searchQueries.push(collabHead);
-      }
-
-      let chosen: Awaited<ReturnType<typeof searchArtistsByName>>[number] | null = null;
-      let firstPageSetlists: Awaited<ReturnType<typeof listSetlistPage>>["setlists"] | null =
-        null;
-      let hadSearchHit = false;
-
-      outer: for (const q of searchQueries) {
-        const candidates = await searchArtistsByName(q);
-        await sleepMs(reqGapMs);
-        if (candidates.length) hadSearchHit = true;
-        else continue;
-        for (const cand of candidates) {
-          const { setlists } = await listSetlistPage(cand.mbid, 1);
-          await sleepMs(reqGapMs);
-          if (setlists.length > 0) {
-            chosen = cand;
-            firstPageSetlists = setlists;
-            break outer;
-          }
-        }
-      }
-
-      if (!chosen || !firstPageSetlists) {
-        entry.error = !hadSearchHit
-          ? "No setlist.fm artist match for this name."
-          : "No concert setlists on setlist.fm for any close name match (try the spelling setlist.fm uses).";
+      const resolved = await resolveArtistWithSetlists(a.name, reqGapMs, fuzzyOpts);
+      if (!resolved.ok) {
+        entry.error =
+          resolved.reason === "no_search_hits"
+            ? "No setlist.fm artist match for this name (even with fuzzy search)."
+            : "No concert setlists on setlist.fm for any fuzzy-matched artist — try editing the lineup name to match setlist.fm.";
         outArtists.push(entry);
         continue;
       }
+      const chosen = resolved.hit;
+      const firstPageSetlists = resolved.firstPageSetlists;
       entry.mbid = chosen.mbid;
 
       const collectedIds: string[] = [];

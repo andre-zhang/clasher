@@ -70,7 +70,7 @@ export async function searchArtistsByName(
   opts?: { maxResults?: number }
 ): Promise<SetlistfmArtistHit[]> {
   if (!apiKey()) return [];
-  const max = Math.min(15, Math.max(1, opts?.maxResults ?? 10));
+  const max = Math.min(25, Math.max(1, opts?.maxResults ?? 10));
   const q = new URLSearchParams({ artistName: name.trim(), p: "1" });
   const r = await fetchSetlistFm(`${BASE}/search/artists?${q}`);
   if (!r.ok) {
