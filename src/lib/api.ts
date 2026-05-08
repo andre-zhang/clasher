@@ -4,6 +4,26 @@ import type { ClasherSession, FestivalSnapshot, RatingTier } from "@/lib/types";
 
 /** Smaller batches = shorter per-invocation wall time on Vercel (esp. Hobby / low maxDuration). */
 const SETLIST_PREVIEW_ARTIST_CHUNK = 3;
+/**
+ * How many preview chunks fetch at once. Each chunk is its own Lambda — parallelizes wall time vs
+ * risking setlist.fm 429 if this is pushed very high (~4 is a pragmatic default).
+ */
+const SETLIST_PREVIEW_CHUNK_CONCURRENCY = 4;
+
+async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (true) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i]!);
+    }
+  }
+  const n = Math.max(1, Math.min(concurrency, items.length));
+  await Promise.all(Array.from({ length: n }, () => worker()));
+  return results;
+}
 
 function apiUrl(resourcePath: string): string {
   const p = resourcePath.startsWith("/") ? resourcePath : `/${resourcePath}`;
@@ -549,16 +569,18 @@ export async function apiSetlistPreview(
     return fetchSetlistPreviewOnce(session, { ...body });
   }
 
-  const parts: SetlistPreviewResult[] = [];
+  const slices: string[][] = [];
   for (let i = 0; i < ids.length; i += SETLIST_PREVIEW_ARTIST_CHUNK) {
-    const slice = ids.slice(i, i + SETLIST_PREVIEW_ARTIST_CHUNK);
-    parts.push(
-      await fetchSetlistPreviewOnce(session, {
-        ...body,
-        artistIds: slice,
-      })
-    );
+    slices.push(ids.slice(i, i + SETLIST_PREVIEW_ARTIST_CHUNK));
   }
+
+  const parts = await mapPool(slices, SETLIST_PREVIEW_CHUNK_CONCURRENCY, (slice) =>
+    fetchSetlistPreviewOnce(session, {
+      ...body,
+      artistIds: slice,
+    })
+  );
+
   return mergeSetlistPreviewResults(parts);
 }
 
