@@ -1,5 +1,9 @@
-import type { SetlistPreviewResult } from "@/lib/setlistPreviewTypes";
+import type { SetlistPreviewResult, SetlistPreviewRow } from "@/lib/setlistPreviewTypes";
+import { mergeSetlistPreviewResults } from "@/lib/setlistMerge";
 import type { ClasherSession, FestivalSnapshot, RatingTier } from "@/lib/types";
+
+/** Smaller batches = shorter per-invocation wall time on Vercel (esp. Hobby / low maxDuration). */
+const SETLIST_PREVIEW_ARTIST_CHUNK = 3;
 
 function apiUrl(resourcePath: string): string {
   const p = resourcePath.startsWith("/") ? resourcePath : `/${resourcePath}`;
@@ -514,12 +518,9 @@ export async function apiParseLineupImage(file: File): Promise<string[]> {
   return Array.isArray(j.artists) ? j.artists : [];
 }
 
-export async function apiSetlistPreview(
+async function fetchSetlistPreviewOnce(
   session: ClasherSession,
-  body?: {
-    artistIds?: string[];
-    maxSetlistsPerArtist?: number;
-  }
+  body: { artistIds?: string[]; maxSetlistsPerArtist?: number }
 ): Promise<SetlistPreviewResult> {
   const r = await fetch(apiUrl(`/squads/${session.squadId}/setlist/preview`), {
     method: "POST",
@@ -527,10 +528,38 @@ export async function apiSetlistPreview(
       ...bearer(session.memberSecret),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body ?? {}),
+    body: JSON.stringify(body),
   });
   await ensureOk(r);
   return (await r.json()) as SetlistPreviewResult;
+}
+
+export async function apiSetlistPreview(
+  session: ClasherSession,
+  body?: {
+    artistIds?: string[];
+    maxSetlistsPerArtist?: number;
+  }
+): Promise<SetlistPreviewResult> {
+  const ids = body?.artistIds;
+  if (!ids?.length) {
+    return fetchSetlistPreviewOnce(session, body ?? {});
+  }
+  if (ids.length <= SETLIST_PREVIEW_ARTIST_CHUNK) {
+    return fetchSetlistPreviewOnce(session, { ...body });
+  }
+
+  const parts: SetlistPreviewResult[] = [];
+  for (let i = 0; i < ids.length; i += SETLIST_PREVIEW_ARTIST_CHUNK) {
+    const slice = ids.slice(i, i + SETLIST_PREVIEW_ARTIST_CHUNK);
+    parts.push(
+      await fetchSetlistPreviewOnce(session, {
+        ...body,
+        artistIds: slice,
+      })
+    );
+  }
+  return mergeSetlistPreviewResults(parts);
 }
 
 export async function apiSpotifyStatus(
@@ -577,6 +606,27 @@ export async function apiSetlistSpotifyPlaylist(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body ?? {}),
+  });
+  await ensureOk(r);
+  return (await r.json()) as {
+    playlistUrl: string;
+    trackCount: number;
+    notFound: number;
+  };
+}
+
+/** Playlist from an existing preview without re-fetching every setlist.fm page (avoids server timeouts). */
+export async function apiSetlistSpotifyFromRows(
+  session: ClasherSession,
+  body: { rows: SetlistPreviewRow[]; maxSpotifyUris?: number }
+): Promise<{ playlistUrl: string; trackCount: number; notFound: number }> {
+  const r = await fetch(apiUrl(`/squads/${session.squadId}/setlist/spotify-from-rows`), {
+    method: "POST",
+    headers: {
+      ...bearer(session.memberSecret),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
   });
   await ensureOk(r);
   return (await r.json()) as {

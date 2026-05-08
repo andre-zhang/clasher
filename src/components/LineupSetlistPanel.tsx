@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useClasher } from "@/context/ClasherContext";
 import {
   apiSetlistPreview,
-  apiSetlistSpotifyPlaylist,
+  apiSetlistSpotifyFromRows,
   apiSpotifyAuthorizeUrl,
   apiSpotifyStatus,
 } from "@/lib/api";
@@ -226,16 +226,18 @@ export function LineupSetlistPanel() {
     setErr(null);
     setPlaylistUrl(null);
     try {
-      const o = await apiSetlistSpotifyPlaylist(session, {
-        artistIds: setlistArtistIds,
-      });
+      if (!preview?.combined.length) {
+        setErr("Run Build first.");
+        return;
+      }
+      const o = await apiSetlistSpotifyFromRows(session, { rows: preview.combined });
       setPlaylistUrl(o.playlistUrl);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setPlaylistBusy(false);
     }
-  }, [session, setlistArtistIds]);
+  }, [session, setlistArtistIds, preview]);
 
   const copyPlain = () => {
     if (!preview?.combined.length) return;

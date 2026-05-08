@@ -8,6 +8,8 @@ import { prisma } from "@/lib/prisma";
 
 import { dbErrorHttpResponse } from "./dbErrors";
 import { getPublicRequestOrigin } from "./publicOrigin";
+import type { SetlistPreviewRow } from "@/lib/setlistPreviewTypes";
+
 import {
   DEMO_ARTIST_NAMES,
   DEMO_FRIEND_DISPLAY_NAMES,
@@ -67,6 +69,119 @@ async function authMember(c: Context, squadId: string) {
   const member = await prisma.member.findUnique({ where: { secret } });
   if (!member || member.squadId !== squadId) return null;
   return member;
+}
+
+type AuthMemberRecord = NonNullable<Awaited<ReturnType<typeof authMember>>>;
+
+async function spotifyPlaylistFromCombinedRows(
+  c: Context,
+  member: AuthMemberRecord,
+  combinedRows: SetlistPreviewRow[],
+  maxSpotifyUrisInput: number
+): Promise<Response> {
+  const rt = member.spotifyRefreshToken;
+  if (!rt) {
+    return c.json(
+      {
+        error: "need_spotify",
+        message: "Connect Spotify (green button) before creating a playlist.",
+      },
+      400,
+    );
+  }
+
+  const maxUris = Math.min(200, Math.max(1, Math.floor(maxSpotifyUrisInput)));
+  const combined = combinedRows.slice(0, 8_000);
+  if (!combined.length) {
+    return c.json(
+      { error: "empty_setlist", message: "No songs to add — run Build on the setlist first." },
+      400,
+    );
+  }
+
+  const candidateCap = Math.min(combined.length, Math.max(maxUris * 5, 300));
+  const rowsForSpotify = interleaveSetlistRowsByArtist(combined, candidateCap);
+  const { uris, notFound } = await spotifyUrisForSetlistRows(rowsForSpotify, maxUris);
+  if (uris.length === 0) {
+    return c.json(
+      {
+        error: "no_spotify_tracks",
+        message: "Could not find matching tracks on Spotify for these song titles.",
+      },
+      400,
+    );
+  }
+
+  const userTok = await spotifyRefreshUserAccess(rt);
+  if (!userTok?.access_token) {
+    return c.json(
+      { error: "need_spotify", message: "Spotify session expired — connect again from Lineup." },
+      401,
+    );
+  }
+  if (userTok.refresh_token) {
+    await prisma.member.update({
+      where: { id: member.id },
+      data: { spotifyRefreshToken: userTok.refresh_token },
+    });
+  }
+  const squad = await prisma.squad.findUnique({
+    where: { id: member.squadId },
+    select: { festivalName: true },
+  });
+  const festival = squad?.festivalName?.trim() || "Festival";
+  const pl = await spotifyCreatePlaylist(
+    userTok.access_token,
+    `${festival} (Clasher)`,
+    "From your Clasher festival setlist. github.com/andre-zhang/clasher"
+  );
+  if (!pl?.id) {
+    return c.json(
+      { error: "create_playlist", message: "Spotify refused to create the playlist." },
+      502,
+    );
+  }
+  const added = await spotifyAddTracks(pl.id, userTok.access_token, uris);
+  if (!added.ok) {
+    const baseMsg =
+      added.status === 403
+        ? `Spotify blocked adding songs (HTTP 403). If the app is in Development mode, add your Spotify account under the app’s User management in the developer dashboard, then use Connect Spotify again. Otherwise try again after redeploy. ${added.detail}`
+        : `Spotify would not add tracks (HTTP ${added.status}). Reconnect Spotify. ${added.detail}`;
+    return c.json({ error: "add_tracks", message: baseMsg.trim() }, 502);
+  }
+  const playlistUrl = pl.external_urls?.spotify ?? `https://open.spotify.com/playlist/${pl.id}`;
+  return c.json({ playlistUrl, trackCount: uris.length, notFound });
+}
+
+function isSetlistPreviewRowPayload(row: unknown): row is Record<string, unknown> {
+  if (!row || typeof row !== "object") return false;
+  const r = row as Record<string, unknown>;
+  return (
+    typeof r.artistName === "string" &&
+    r.artistName.trim().length > 0 &&
+    typeof r.title === "string" &&
+    r.title.trim().length > 0 &&
+    typeof r.count === "number" &&
+    Number.isFinite(r.count)
+  );
+}
+
+function normalizeClientPreviewRow(row: Record<string, unknown>): SetlistPreviewRow {
+  const artistName = String(row.artistName).trim();
+  const title = String(row.title).trim();
+  const count = Math.max(1, Math.floor(Number(row.count)));
+  const key =
+    typeof row.key === "string" && row.key.trim().length > 0
+      ? row.key
+      : `${artistName.toLowerCase()}\t${title.toLowerCase()}`;
+  const youtubeRaw = row.youtubeSearchUrl;
+  const youtubeSearchUrl =
+    typeof youtubeRaw === "string" && youtubeRaw.startsWith("http")
+      ? youtubeRaw
+      : `https://www.youtube.com/results?search_query=${encodeURIComponent(
+          `${artistName} ${title}`,
+        )}`;
+  return { key, artistName, title, count, youtubeSearchUrl };
 }
 
 async function visionJsonFromForm(
@@ -2001,61 +2116,39 @@ export function createFestivalApp(apiBasePath: string): Hono {
     const preview = await buildSetlistPreviewForArtists(res.artists, {
       maxSetlistsPerArtist: maxSetlists,
     });
-    if (!preview.combined.length) {
-      return c.json(
-        { error: "empty_setlist", message: "No songs to add — run Build on the setlist first or pick different artists." },
-        400
-      );
-    }
-    const candidateCap = Math.min(preview.combined.length, Math.max(maxUris * 5, 300));
-    const rowsForSpotify = interleaveSetlistRowsByArtist(
-      preview.combined,
-      candidateCap
-    );
-    const { uris, notFound } = await spotifyUrisForSetlistRows(rowsForSpotify, maxUris);
-    if (uris.length === 0) {
-      return c.json(
-        { error: "no_spotify_tracks", message: "Could not find matching tracks on Spotify for these song titles." },
-        400
-      );
-    }
+    return spotifyPlaylistFromCombinedRows(c, member, preview.combined, maxUris);
+  });
 
-    const userTok = await spotifyRefreshUserAccess(member.spotifyRefreshToken);
-    if (!userTok?.access_token) {
+  /** Same playlist output as `/setlist/spotify-playlist` but skips rebuilding from setlist.fm (client sends preview rows). */
+  app.post("/squads/:squadId/setlist/spotify-from-rows", async (c) => {
+    const squadId = c.req.param("squadId");
+    const member = await authMember(c, squadId);
+    if (!member) return c.json({ error: "unauthorized" }, 401);
+    if (!isSpotifySearchConfigured()) {
       return c.json(
-        { error: "need_spotify", message: "Spotify session expired — connect again from Lineup." },
-        401
+        { error: "spotify_not_configured", message: "Spotify is not configured on the server." },
+        503,
       );
     }
-    if (userTok.refresh_token) {
-      await prisma.member.update({
-        where: { id: member.id },
-        data: { spotifyRefreshToken: userTok.refresh_token },
-      });
+    if (!member.spotifyRefreshToken) {
+      return c.json(
+        {
+          error: "need_spotify",
+          message: "Connect Spotify (green button) before creating a playlist.",
+        },
+        400,
+      );
     }
-    const squad = await prisma.squad.findUnique({
-      where: { id: member.squadId },
-      select: { festivalName: true },
-    });
-    const festival = squad?.festivalName?.trim() || "Festival";
-    const pl = await spotifyCreatePlaylist(
-      userTok.access_token,
-      `${festival} (Clasher)`,
-      "From your Clasher festival setlist. github.com/andre-zhang/clasher"
-    );
-    if (!pl?.id) {
-      return c.json({ error: "create_playlist", message: "Spotify refused to create the playlist." }, 502);
+    let body: { rows?: unknown[]; maxSpotifyUris?: number };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "bad_json", message: "Expected JSON body with rows[]." }, 400);
     }
-    const added = await spotifyAddTracks(pl.id, userTok.access_token, uris);
-    if (!added.ok) {
-      const baseMsg =
-        added.status === 403
-          ? `Spotify blocked adding songs (HTTP 403). If the app is in Development mode, add your Spotify account under the app’s User management in the developer dashboard, then use Connect Spotify again. Otherwise try again after redeploy. ${added.detail}`
-          : `Spotify would not add tracks (HTTP ${added.status}). Reconnect Spotify. ${added.detail}`;
-      return c.json({ error: "add_tracks", message: baseMsg.trim() }, 502);
-    }
-    const playlistUrl = pl.external_urls?.spotify ?? `https://open.spotify.com/playlist/${pl.id}`;
-    return c.json({ playlistUrl, trackCount: uris.length, notFound });
+    const rowsIn = Array.isArray(body.rows) ? body.rows : [];
+    const rows = rowsIn.filter(isSetlistPreviewRowPayload).map(normalizeClientPreviewRow);
+    const maxUris = Math.min(200, Math.max(1, Math.floor(body.maxSpotifyUris ?? 200)));
+    return spotifyPlaylistFromCombinedRows(c, member, rows, maxUris);
   });
 
   return app;

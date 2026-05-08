@@ -155,9 +155,9 @@ export async function resolveArtistWithSetlists(
     hitsPerSearch?: number;
   }
 ): Promise<ResolveArtistResult> {
-  const maxVariants = Math.min(14, Math.max(4, opts?.maxSearchVariants ?? 12));
-  const maxProbe = Math.min(35, Math.max(8, opts?.maxMbidProbePages ?? 22));
-  const hitsPerSearch = Math.min(20, Math.max(8, opts?.hitsPerSearch ?? 18));
+  const maxVariants = Math.min(12, Math.max(3, opts?.maxSearchVariants ?? 8));
+  const maxProbe = Math.min(28, Math.max(5, opts?.maxMbidProbePages ?? 12));
+  const hitsPerSearch = Math.min(20, Math.max(6, opts?.hitsPerSearch ?? 14));
 
   const queries = lineupSearchQueryVariants(lineupDisplayName).slice(0, maxVariants);
   const byMbid = new Map<string, { hit: SetlistfmArtistHit; score: number }>();
