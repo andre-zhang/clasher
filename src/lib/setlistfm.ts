@@ -157,6 +157,51 @@ export async function listSetlistPage(
   return { setlists: out, total };
 }
 
+export type SetlistSearchRow = {
+  id: string;
+  eventDate?: string;
+  artistName?: string;
+  artistMbid?: string;
+};
+
+/** Name-based fallback when MBID search misses obvious artists. */
+export async function searchSetlistsByArtistName(
+  artistName: string,
+  page: number
+): Promise<{ setlists: SetlistSearchRow[]; total: number }> {
+  if (!apiKey()) return { setlists: [], total: 0 };
+  const q = new URLSearchParams({ artistName: artistName.trim(), p: String(Math.max(1, page)) });
+  const r = await fetchSetlistFm(`${BASE}/search/setlists?${q.toString()}`);
+  if (!r.ok) {
+    if (r.status === 404) return { setlists: [], total: 0 };
+    const t = await r.text().catch(() => "");
+    throw new Error(`setlist.fm search setlists: HTTP ${r.status} ${t.slice(0, 200)}`);
+  }
+  const j = (await r.json()) as Json;
+  const raw = j.setlist;
+  const rows: Json[] = Array.isArray(raw)
+    ? (raw as Json[])
+    : raw && typeof raw === "object"
+      ? [raw as Json]
+      : [];
+  const out: SetlistSearchRow[] = [];
+  for (const row of rows) {
+    const o = row as Json;
+    const id = setlistIdFromSummaryRow(o);
+    if (!id) continue;
+    const artist = (o.artist as Json | undefined) ?? {};
+    const mbidRaw = String(artist.mbid ?? "").trim();
+    out.push({
+      id,
+      eventDate: o.eventDate ? String(o.eventDate) : undefined,
+      artistName: artist.name ? String(artist.name) : undefined,
+      artistMbid: isMbid(mbidRaw) ? mbidRaw : undefined,
+    });
+  }
+  const total = typeof j.total === "number" ? j.total : out.length;
+  return { setlists: out, total };
+}
+
 function setsArray(sets: unknown): Json[] {
   if (!sets) return [];
   if (Array.isArray(sets)) return sets as Json[];

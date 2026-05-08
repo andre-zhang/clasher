@@ -34,7 +34,6 @@ export function LineupSetlistPanel() {
     spotifyConnected: boolean;
   } | null>(null);
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(null);
-  const [exportNote, setExportNote] = useState(false);
 
   /** One row per artist id (lineup can contain duplicate names with different ids). */
   const artistsForPickUi = useMemo(() => {
@@ -240,8 +239,6 @@ export function LineupSetlistPanel() {
 
   const copyPlain = () => {
     if (!preview?.combined.length) return;
-    setExportNote(true);
-    window.setTimeout(() => setExportNote(false), 2500);
     const t = preview.combined
       .map((r) => `${r.artistName} — ${r.title}`)
       .join("\n");
@@ -250,8 +247,6 @@ export function LineupSetlistPanel() {
 
   const copyTsv = () => {
     if (!preview?.combined.length) return;
-    setExportNote(true);
-    window.setTimeout(() => setExportNote(false), 2500);
     const t = [
       "artist\ttitle\tweight",
       ...preview.combined.map(
@@ -292,8 +287,6 @@ export function LineupSetlistPanel() {
     spotify?.clientConfigured &&
     spotify.spotifyConnected;
   const canShowConnect = spotify?.canSignIn && !spotify.spotifyConnected;
-  const showWaitNote = busy || playlistBusy || exportNote;
-
   return (
     <details className="border-2 border-zinc-900 bg-zinc-50 shadow-[2px_2px_0_0_#18181b]">
       <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-zinc-900">
@@ -392,10 +385,6 @@ export function LineupSetlistPanel() {
           ) : null}
         </div>
 
-        {showWaitNote ? (
-          <p className="text-xs text-zinc-600">This could take a moment!</p>
-        ) : null}
-
         {err ? (
           <p className="border-2 border-red-800 bg-red-50 px-2 py-1.5 text-xs text-red-900">
             {err}
@@ -481,18 +470,15 @@ export function LineupSetlistPanel() {
         ) : null}
 
         {preview?.artists.some((a) => a.error) ? (
-          <div className="space-y-1">
-            <p className="text-xs font-semibold text-zinc-800">Per artist</p>
-            <ul className="list-inside list-disc text-xs text-zinc-600">
-              {preview.artists
-                .filter((a) => a.error)
-                .map((a) => (
-                  <li key={a.artistId}>
-                    {a.name}: {a.error}
-                  </li>
-                ))}
-            </ul>
-          </div>
+          <ul className="list-inside list-disc text-xs text-zinc-600">
+            {preview.artists
+              .filter((a) => a.error)
+              .map((a) => (
+                <li key={a.artistId}>
+                  {a.name}: {a.error}
+                </li>
+              ))}
+          </ul>
         ) : null}
       </div>
     </details>

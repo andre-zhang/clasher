@@ -1,5 +1,10 @@
 import type { SetlistfmArtistHit, SetlistIdRow } from "@/lib/setlistfm";
-import { listSetlistPage, searchArtistsByName, sleepMs } from "@/lib/setlistfm";
+import {
+  listSetlistPage,
+  searchArtistsByName,
+  searchSetlistsByArtistName,
+  sleepMs,
+} from "@/lib/setlistfm";
 
 /** Accent-fold + lowercase + strip noise punctuation for overlap scores. */
 export function normalizeForFuzzy(s: string): string {
@@ -133,7 +138,7 @@ export function lineupSearchQueryVariants(primary: string): string[] {
 }
 
 export type ResolveArtistResult =
-  | { ok: true; hit: SetlistfmArtistHit; firstPageSetlists: SetlistIdRow[] }
+  | { ok: true; mbid: string | null; firstPageSetlists: SetlistIdRow[] }
   | { ok: false; reason: "no_search_hits" | "no_setlists" };
 
 /**
@@ -167,7 +172,17 @@ export async function resolveArtistWithSetlists(
     }
   }
 
-  if (!byMbid.size) return { ok: false, reason: "no_search_hits" };
+  if (!byMbid.size) {
+    const fallback = await searchSetlistsByArtistName(lineupDisplayName, 1);
+    await sleepMs(reqGapMs);
+    if (!fallback.setlists.length) return { ok: false, reason: "no_search_hits" };
+    const ids = [...new Set(fallback.setlists.map((r) => r.id))];
+    return {
+      ok: true,
+      mbid: fallback.setlists.find((r) => r.artistMbid)?.artistMbid ?? null,
+      firstPageSetlists: ids.map((id) => ({ id })),
+    };
+  }
 
   const ranked = [...byMbid.values()].sort((x, y) => y.score - x.score);
 
@@ -175,7 +190,18 @@ export async function resolveArtistWithSetlists(
     const { hit } = ranked[i]!;
     const { setlists } = await listSetlistPage(hit.mbid, 1);
     await sleepMs(reqGapMs);
-    if (setlists.length > 0) return { ok: true, hit, firstPageSetlists: setlists };
+    if (setlists.length > 0) return { ok: true, mbid: hit.mbid, firstPageSetlists: setlists };
+  }
+
+  const fallback = await searchSetlistsByArtistName(lineupDisplayName, 1);
+  await sleepMs(reqGapMs);
+  if (fallback.setlists.length > 0) {
+    const ids = [...new Set(fallback.setlists.map((r) => r.id))];
+    return {
+      ok: true,
+      mbid: fallback.setlists.find((r) => r.artistMbid)?.artistMbid ?? null,
+      firstPageSetlists: ids.map((id) => ({ id })),
+    };
   }
 
   return { ok: false, reason: "no_setlists" };

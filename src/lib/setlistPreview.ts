@@ -89,16 +89,12 @@ export async function buildSetlistPreviewForArtists(
     try {
       const resolved = await resolveArtistWithSetlists(a.name, reqGapMs, fuzzyOpts);
       if (!resolved.ok) {
-        entry.error =
-          resolved.reason === "no_search_hits"
-            ? "No setlist.fm artist match for this name (even with fuzzy search)."
-            : "No concert setlists on setlist.fm for any fuzzy-matched artist — try editing the lineup name to match setlist.fm.";
+        entry.error = resolved.reason === "no_search_hits" ? "No setlist.fm match." : "No setlists found.";
         outArtists.push(entry);
         continue;
       }
-      const chosen = resolved.hit;
       const firstPageSetlists = resolved.firstPageSetlists;
-      entry.mbid = chosen.mbid;
+      entry.mbid = resolved.mbid;
 
       const collectedIds: string[] = [];
       for (const row of firstPageSetlists) {
@@ -110,7 +106,8 @@ export async function buildSetlistPreviewForArtists(
         page <= maxListPages && collectedIds.length < maxSetlistsPerArtist;
         page++
       ) {
-        const { setlists } = await listSetlistPage(chosen.mbid, page);
+        if (!resolved.mbid) break;
+        const { setlists } = await listSetlistPage(resolved.mbid, page);
         await sleepMs(reqGapMs);
         for (const row of setlists) {
           if (collectedIds.length >= maxSetlistsPerArtist) break;
@@ -141,11 +138,9 @@ export async function buildSetlistPreviewForArtists(
 
       if (entry.songs.length === 0) {
         if (collectedIds.length === 0) {
-          entry.error =
-            "No concert setlists on setlist.fm for this match (new/local acts, or the lineup name doesn’t match setlist.fm spelling).";
+          entry.error = "No setlists found.";
         } else {
-          entry.error =
-            "setlist.fm returned setlist pages but no songs could be extracted (empty sets or unexpected API shape).";
+          entry.error = "No songs found in fetched setlists.";
         }
       }
 
