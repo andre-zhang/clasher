@@ -3,12 +3,11 @@ import { mergeSetlistPreviewResults } from "@/lib/setlistMerge";
 import type { ClasherSession, FestivalSnapshot, RatingTier } from "@/lib/types";
 
 /** Smaller batches = shorter per-invocation wall time on Vercel (esp. Hobby / low maxDuration). */
-const SETLIST_PREVIEW_ARTIST_CHUNK = 3;
+const SETLIST_PREVIEW_ARTIST_CHUNK = 2;
 /**
- * How many preview chunks fetch at once. Each chunk is its own Lambda — parallelizes wall time vs
- * risking setlist.fm 429 if this is pushed very high (~4 is a pragmatic default).
+ * Sequential chunks avoid hammering setlist.fm from one browser session (429 + long backoff → 300s timeouts).
  */
-const SETLIST_PREVIEW_CHUNK_CONCURRENCY = 4;
+const SETLIST_PREVIEW_CHUNK_CONCURRENCY = 1;
 
 async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);

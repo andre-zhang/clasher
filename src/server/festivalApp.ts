@@ -1943,10 +1943,12 @@ export function createFestivalApp(apiBasePath: string): Hono {
         : res.artists.length;
     const selectionCount = Math.min(30, Math.max(res.artists.length, rawCount));
 
-    const maxSetlists = maxSetlistsPerArtistForLineupSize(
+    const maxSetlistsBudget = maxSetlistsPerArtistForLineupSize(
       selectionCount,
       body.maxSetlistsPerArtist
     );
+    /** Hard cap: deep previews + fuzzy + 429 retries can hit Vercel maxDuration even with chunking. */
+    const maxSetlists = Math.min(maxSetlistsBudget, 8);
 
     const preview = await buildSetlistPreviewForArtists(res.artists, {
       maxSetlistsPerArtist: maxSetlists,

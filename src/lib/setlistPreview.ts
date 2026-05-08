@@ -32,6 +32,7 @@ function youtubeSearch(artist: string, title: string): string {
 /** Baseline spacing; can scale down when many artists are selected so the route finishes before serverless timeouts. */
 const REQ_GAP_MS_MAX = 1_000;
 const REQ_GAP_MS_MIN = 500;
+const REQ_GAP_MS_MIN_LARGE_LINEUP = 280;
 
 export async function buildSetlistPreviewForArtists(
   artists: { id: string; name: string }[],
@@ -45,19 +46,21 @@ export async function buildSetlistPreviewForArtists(
   );
   const approxSleepsPerArtist = 1 + maxListPages + maxSetlistsPerArtist;
   const approxTotalSleeps = Math.max(1, artists.length * approxSleepsPerArtist);
-  /** Target ~4m total idle so `/api` can stay under typical `maxDuration` caps with network overhead. */
+  const gapFloor =
+    fuzzyLineupSize > 12 ? REQ_GAP_MS_MIN_LARGE_LINEUP : REQ_GAP_MS_MIN;
+  /** Target ~3m total idle; large lineups allow slightly tighter gaps to finish under Vercel maxDuration. */
   const reqGapMs = Math.min(
     REQ_GAP_MS_MAX,
-    Math.max(REQ_GAP_MS_MIN, Math.floor(240_000 / approxTotalSleeps))
+    Math.max(gapFloor, Math.floor(180_000 / approxTotalSleeps))
   );
-  /** Fuzzy search cost scales with whole selection when chunked — use fuzzyLineupSize, not chunk length. */
+  /** Fuzzy only after fast path misses — keep probes small so chunked Lambdas stay << 300s. */
   const fuzzyOpts =
     fuzzyLineupSize > 24
-      ? { maxSearchVariants: 6, maxMbidProbePages: 10, hitsPerSearch: 12 }
+      ? { maxSearchVariants: 4, maxMbidProbePages: 5, hitsPerSearch: 8 }
       : fuzzyLineupSize > 16
-        ? { maxSearchVariants: 7, maxMbidProbePages: 12, hitsPerSearch: 12 }
+        ? { maxSearchVariants: 4, maxMbidProbePages: 5, hitsPerSearch: 8 }
         : fuzzyLineupSize > 8
-          ? { maxSearchVariants: 6, maxMbidProbePages: 10, hitsPerSearch: 12 }
+          ? { maxSearchVariants: 4, maxMbidProbePages: 5, hitsPerSearch: 8 }
           : {};
   const sfm = isSetlistFmConfigured();
   const spotifyClient = isSpotifySearchConfigured();

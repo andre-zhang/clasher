@@ -1,6 +1,7 @@
 import type { SetlistfmArtistHit, SetlistIdRow } from "@/lib/setlistfm";
 import {
   listSetlistPage,
+  searchArtistByName,
   searchArtistsByName,
   searchSetlistsByArtistName,
   sleepMs,
@@ -155,9 +156,20 @@ export async function resolveArtistWithSetlists(
     hitsPerSearch?: number;
   }
 ): Promise<ResolveArtistResult> {
-  const maxVariants = Math.min(12, Math.max(3, opts?.maxSearchVariants ?? 8));
-  const maxProbe = Math.min(28, Math.max(5, opts?.maxMbidProbePages ?? 12));
-  const hitsPerSearch = Math.min(20, Math.max(6, opts?.hitsPerSearch ?? 14));
+  /** Pre-fuzzy path (like early Clasher): one search + one list — covers most billing names in seconds. */
+  const quickHit = await searchArtistByName(lineupDisplayName);
+  await sleepMs(reqGapMs);
+  if (quickHit) {
+    const { setlists } = await listSetlistPage(quickHit.mbid, 1);
+    await sleepMs(reqGapMs);
+    if (setlists.length > 0) {
+      return { ok: true, mbid: quickHit.mbid, firstPageSetlists: setlists };
+    }
+  }
+
+  const maxVariants = Math.min(10, Math.max(3, opts?.maxSearchVariants ?? 6));
+  const maxProbe = Math.min(18, Math.max(4, opts?.maxMbidProbePages ?? 6));
+  const hitsPerSearch = Math.min(16, Math.max(5, opts?.hitsPerSearch ?? 10));
 
   const queries = lineupSearchQueryVariants(lineupDisplayName).slice(0, maxVariants);
   const byMbid = new Map<string, { hit: SetlistfmArtistHit; score: number }>();
