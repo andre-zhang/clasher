@@ -540,7 +540,11 @@ export async function apiParseLineupImage(file: File): Promise<string[]> {
 
 async function fetchSetlistPreviewOnce(
   session: ClasherSession,
-  body: { artistIds?: string[]; maxSetlistsPerArtist?: number }
+  body: {
+    artistIds?: string[];
+    maxSetlistsPerArtist?: number;
+    previewSelectionCount?: number;
+  }
 ): Promise<SetlistPreviewResult> {
   const r = await fetch(apiUrl(`/squads/${session.squadId}/setlist/preview`), {
     method: "POST",
@@ -565,8 +569,10 @@ export async function apiSetlistPreview(
   if (!ids?.length) {
     return fetchSetlistPreviewOnce(session, body ?? {});
   }
+  const previewSelectionCount = ids.length;
+  const payload = { ...body, previewSelectionCount };
   if (ids.length <= SETLIST_PREVIEW_ARTIST_CHUNK) {
-    return fetchSetlistPreviewOnce(session, { ...body });
+    return fetchSetlistPreviewOnce(session, payload);
   }
 
   const slices: string[][] = [];
@@ -576,7 +582,7 @@ export async function apiSetlistPreview(
 
   const parts = await mapPool(slices, SETLIST_PREVIEW_CHUNK_CONCURRENCY, (slice) =>
     fetchSetlistPreviewOnce(session, {
-      ...body,
+      ...payload,
       artistIds: slice,
     })
   );

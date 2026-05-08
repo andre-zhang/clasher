@@ -1915,7 +1915,12 @@ export function createFestivalApp(apiBasePath: string): Hono {
     const squadId = c.req.param("squadId");
     const member = await authMember(c, squadId);
     if (!member) return c.json({ error: "unauthorized" }, 401);
-    let body: { artistIds?: string[]; maxSetlistsPerArtist?: number };
+    let body: {
+      artistIds?: string[];
+      maxSetlistsPerArtist?: number;
+      /** Full Build selection size when the client chunks requests (must match total picked ids). */
+      previewSelectionCount?: number;
+    };
     try {
       body = await c.req.json();
     } catch {
@@ -1932,13 +1937,20 @@ export function createFestivalApp(apiBasePath: string): Hono {
       );
     }
 
+    const rawCount =
+      typeof body.previewSelectionCount === "number" && Number.isFinite(body.previewSelectionCount)
+        ? Math.floor(body.previewSelectionCount)
+        : res.artists.length;
+    const selectionCount = Math.min(30, Math.max(res.artists.length, rawCount));
+
     const maxSetlists = maxSetlistsPerArtistForLineupSize(
-      res.artists.length,
+      selectionCount,
       body.maxSetlistsPerArtist
     );
 
     const preview = await buildSetlistPreviewForArtists(res.artists, {
       maxSetlistsPerArtist: maxSetlists,
+      fuzzyLineupSize: selectionCount,
     });
     return c.json({
       ...preview,

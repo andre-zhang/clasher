@@ -35,9 +35,10 @@ const REQ_GAP_MS_MIN = 500;
 
 export async function buildSetlistPreviewForArtists(
   artists: { id: string; name: string }[],
-  opts: { maxSetlistsPerArtist: number }
+  opts: { maxSetlistsPerArtist: number; /** Whole Build selection size when this request is a chunk. */ fuzzyLineupSize?: number }
 ): Promise<SetlistPreviewResult> {
   const { maxSetlistsPerArtist } = opts;
+  const fuzzyLineupSize = Math.max(artists.length, opts.fuzzyLineupSize ?? artists.length);
   const maxListPages = Math.min(
     14,
     Math.max(3, Math.ceil(maxSetlistsPerArtist / 18) + 2)
@@ -49,13 +50,15 @@ export async function buildSetlistPreviewForArtists(
     REQ_GAP_MS_MAX,
     Math.max(REQ_GAP_MS_MIN, Math.floor(240_000 / approxTotalSleeps))
   );
-  /** Fuzzy search does extra queries per artist — tighten caps when the batch is huge. */
+  /** Fuzzy search cost scales with whole selection when chunked — use fuzzyLineupSize, not chunk length. */
   const fuzzyOpts =
-    artists.length > 24
-      ? { maxSearchVariants: 8, maxMbidProbePages: 14, hitsPerSearch: 14 }
-      : artists.length > 16
-        ? { maxSearchVariants: 10, maxMbidProbePages: 18, hitsPerSearch: 16 }
-        : {};
+    fuzzyLineupSize > 24
+      ? { maxSearchVariants: 6, maxMbidProbePages: 10, hitsPerSearch: 12 }
+      : fuzzyLineupSize > 16
+        ? { maxSearchVariants: 7, maxMbidProbePages: 12, hitsPerSearch: 12 }
+        : fuzzyLineupSize > 8
+          ? { maxSearchVariants: 6, maxMbidProbePages: 10, hitsPerSearch: 12 }
+          : {};
   const sfm = isSetlistFmConfigured();
   const spotifyClient = isSpotifySearchConfigured();
 
