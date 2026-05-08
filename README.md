@@ -1,5 +1,7 @@
 # Clasher
 
+***TRY IT: [https://clasher-three.vercel.app/](https://clasher-three.vercel.app/)***
+
 ## Inspiration
 
 I love music festivals. The lineup drop, the colour-coded timetable PDF, the group chat that turns into fifty screenshots - all of it. I tried spreadsheets, notes apps, shared Google Docs, and a bunch of one-off festival apps. Some were pretty, but none of them felt like they were built for **how a group actually plans**: who's in for which act, where the overlaps are, and how long it takes to get from one stage to another.
