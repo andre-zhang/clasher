@@ -17,6 +17,22 @@ import {
 } from "@/lib/setlistArtistSelection";
 import { myTierEmoji } from "@/lib/reactionsUi";
 import type { SetlistPreviewResult } from "@/lib/setlistPreviewTypes";
+import type { FestivalSnapshot } from "@/lib/types";
+
+/** When lineup has duplicate names (different ids), map any id to the single id we show in the picker. */
+function canonicalSetlistArtistIds(
+  group: FestivalSnapshot,
+  pickList: { id: string; name: string }[]
+): Map<string, string> {
+  const nameKey = (n: string) => n.trim().toLowerCase();
+  const canonicalByName = new Map(pickList.map((a) => [nameKey(a.name), a.id]));
+  const out = new Map<string, string>();
+  for (const a of group.artists) {
+    const canon = canonicalByName.get(nameKey(a.name));
+    if (canon) out.set(a.id, canon);
+  }
+  return out;
+}
 
 export function LineupSetlistPanel() {
   const pathname = usePathname();
@@ -35,30 +51,47 @@ export function LineupSetlistPanel() {
   } | null>(null);
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(null);
 
-  /** One row per artist id (lineup can contain duplicate names with different ids). */
+  /**
+   * One row per billing name: lineup imports sometimes duplicate the same act with different ids.
+   * Fuzzy matching still runs on the server; the picker only shows one checkbox per display name.
+   */
   const artistsForPickUi = useMemo(() => {
     if (!group?.artists?.length) return [];
-    const byId = new Map<
-      string,
-      { id: string; name: string; sortOrder: number }
-    >();
-    for (const a of group.artists) {
-      if (!byId.has(a.id)) byId.set(a.id, a);
+    const sorted = [...group.artists].sort(
+      (a, b) =>
+        a.sortOrder - b.sortOrder ||
+        a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+    );
+    const byNormName = new Map<string, { id: string; name: string; sortOrder: number }>();
+    for (const a of sorted) {
+      const k = a.name.trim().toLowerCase();
+      if (!byNormName.has(k)) byNormName.set(k, a);
     }
-    return [...byId.values()].sort((a, b) =>
+    return [...byNormName.values()].sort((a, b) =>
       a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
     );
   }, [group?.artists]);
 
-  /** Same name can refer to two billing rows (different ids); disambiguate in the list. */
-  const disambigName = useCallback((a: (typeof artistsForPickUi)[number]) => {
-    const sameName = artistsForPickUi.filter(
-      (x) =>
-        x.name.toLowerCase() === a.name.toLowerCase()
-    );
-    if (sameName.length <= 1) return a.name;
-    return `${a.name} · ${a.id.slice(0, 4)}`;
-  }, [artistsForPickUi]);
+  const collapseIdsToCanonical = useCallback(
+    (ids: string[]): string[] => {
+      if (!group?.artists.length) return ids;
+      const pick = artistsForPickUi;
+      if (!pick.length) return ids;
+      const idMap = canonicalSetlistArtistIds(group, pick);
+      const seen = new Set<string>();
+      const out: string[] = [];
+      for (const id of ids) {
+        const c = idMap.get(id) ?? id;
+        if (!pick.some((a) => a.id === c)) continue;
+        if (seen.has(c)) continue;
+        seen.add(c);
+        out.push(c);
+        if (out.length >= SETLIST_ARTIST_CAP) break;
+      }
+      return out;
+    },
+    [group, artistsForPickUi]
+  );
 
   /** One-time init per squad+member: sessionStorage, else “My picks”. Refetching snapshot won’t wipe. */
   useEffect(() => {
@@ -78,7 +111,9 @@ export function LineupSetlistPanel() {
             (id): id is string => typeof id === "string" && v.has(id)
           );
           if (filtered.length) {
-            setSetlistArtistIds(filtered.slice(0, SETLIST_ARTIST_CAP));
+            setSetlistArtistIds(
+              collapseIdsToCanonical(filtered).slice(0, SETLIST_ARTIST_CAP)
+            );
             return;
           }
         }
@@ -86,8 +121,8 @@ export function LineupSetlistPanel() {
     } catch {
       /* ignore */
     }
-    setSetlistArtistIds(sug.slice(0, SETLIST_ARTIST_CAP));
-  }, [group, session]);
+    setSetlistArtistIds(collapseIdsToCanonical(sug).slice(0, SETLIST_ARTIST_CAP));
+  }, [group, session, collapseIdsToCanonical]);
 
   useEffect(() => {
     if (!group || !session || setlistArtistIds == null) return;
@@ -277,7 +312,10 @@ export function LineupSetlistPanel() {
   const pickMyPicks = () => {
     if (!group || !session) return;
     setSetlistArtistIds(
-      suggestedSetlistArtistIds(group, session.memberId).slice(0, SETLIST_ARTIST_CAP)
+      collapseIdsToCanonical(suggestedSetlistArtistIds(group, session.memberId)).slice(
+        0,
+        SETLIST_ARTIST_CAP
+      )
     );
   };
   const pickNone = () => {
@@ -291,7 +329,7 @@ export function LineupSetlistPanel() {
   const canShowConnect = spotify?.canSignIn && !spotify.spotifyConnected;
   return (
     <details className="border-2 border-zinc-900 bg-zinc-50 shadow-[2px_2px_0_0_#18181b]">
-      <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-zinc-900">
+      <summary className="cursor-pointer select-none border-b-2 border-violet-200 bg-violet-50/90 px-3 py-2 text-sm font-semibold text-violet-950">
         Festival setlist
       </summary>
       <div className="space-y-3 border-t-2 border-zinc-900 px-3 pb-3 pt-2">
@@ -302,14 +340,14 @@ export function LineupSetlistPanel() {
               <button
                 type="button"
                 onClick={pickMyPicks}
-                className="border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium text-zinc-900"
+                className="touch-manipulation border-2 border-violet-700 bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-950 hover:bg-violet-200"
               >
                 My picks
               </button>
               <button
                 type="button"
                 onClick={pickNone}
-                className="border-2 border-zinc-900 bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-800"
+                className="touch-manipulation border-2 border-zinc-900 bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-800"
               >
                 None
               </button>
@@ -330,13 +368,13 @@ export function LineupSetlistPanel() {
                       type="checkbox"
                       checked={on}
                       onChange={() => void toggleArtist(a.id)}
-                      className="h-3.5 w-3.5 accent-zinc-900"
+                      className="h-3.5 w-3.5 accent-violet-700"
                     />
                     <span className="w-4 shrink-0 text-center text-sm" aria-hidden>
                       {myTierEmoji(group, a.id, session.memberId)}
                     </span>
                     <span className="min-w-0 flex-1 font-medium [overflow-wrap:anywhere]">
-                      {disambigName(a)}
+                      {a.name}
                     </span>
                     {onPlan ? (
                       <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
@@ -360,7 +398,7 @@ export function LineupSetlistPanel() {
             type="button"
             disabled={busy || !canRun}
             onClick={() => void run()}
-            className="touch-manipulation border-2 border-zinc-900 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+            className="touch-manipulation border-2 border-violet-900 bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#4c1d95] hover:bg-violet-700 disabled:opacity-40"
           >
             {busy ? "…" : "Build"}
           </button>
@@ -380,7 +418,7 @@ export function LineupSetlistPanel() {
               type="button"
               disabled={playlistBusy || !canPlaylist}
               onClick={() => void createPlaylist()}
-              className="touch-manipulation border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-900 disabled:opacity-40"
+              className="touch-manipulation border-2 border-violet-900 bg-violet-100 px-3 py-1.5 text-xs font-semibold text-violet-950 shadow-[2px_2px_0_0_#4c1d95] hover:bg-violet-200 disabled:opacity-40"
             >
               {playlistBusy ? "…" : "Add playlist in Spotify"}
             </button>
@@ -405,7 +443,7 @@ export function LineupSetlistPanel() {
           <p className="text-xs text-zinc-900">
             <a
               href={playlistUrl}
-              className="font-medium text-indigo-700 underline"
+              className="font-medium text-violet-800 underline decoration-violet-400"
               target="_blank"
               rel="noreferrer"
             >
@@ -420,27 +458,29 @@ export function LineupSetlistPanel() {
               <button
                 type="button"
                 onClick={copyPlain}
-                className="border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium"
+                className="touch-manipulation border-2 border-violet-800 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-950 hover:bg-violet-100"
               >
                 Copy
               </button>
               <button
                 type="button"
                 onClick={copyTsv}
-                className="border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium"
+                className="touch-manipulation border-2 border-violet-300 bg-white px-2 py-1 text-xs font-medium text-violet-900 hover:bg-violet-50"
               >
                 Copy TSV
               </button>
             </div>
 
             <div className="max-h-80 overflow-auto overflow-x-auto border-2 border-zinc-900 bg-white">
-              <table className="w-full min-w-[20rem] border-collapse text-left text-xs">
+              <table className="w-full min-w-[16rem] border-collapse text-left text-xs">
                 <thead>
-                  <tr className="bg-zinc-100">
-                    <th className="border-b border-zinc-400 px-2 py-1">Artist</th>
-                    <th className="border-b border-zinc-400 px-2 py-1">Song</th>
-                    <th className="border-b border-zinc-400 px-2 py-1">#</th>
-                    <th className="border-b border-zinc-400 px-2 py-1">YouTube</th>
+                  <tr className="bg-violet-100/80">
+                    <th className="border-b border-violet-300 px-2 py-1 font-semibold text-violet-950">
+                      Artist
+                    </th>
+                    <th className="border-b border-violet-300 px-2 py-1 font-semibold text-violet-950">
+                      Song
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -451,17 +491,6 @@ export function LineupSetlistPanel() {
                       </td>
                       <td className="px-2 py-0.5 align-top [overflow-wrap:anywhere]">
                         {r.title}
-                      </td>
-                      <td className="px-2 py-0.5 text-zinc-600">{r.count}</td>
-                      <td className="px-2 py-0.5">
-                        <a
-                          href={r.youtubeSearchUrl}
-                          className="text-indigo-700 underline"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Search
-                        </a>
                       </td>
                     </tr>
                   ))}
