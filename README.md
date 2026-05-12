@@ -4,7 +4,7 @@
 
 ## Inspiration
 
-I love music festivals. The lineup drop, the colour-coded timetable PDF, the group chat that turns into fifty screenshots - all of it. I tried spreadsheets, notes apps, shared Google Docs, and a bunch of one-off festival apps. Some were pretty, but none of them felt like they were built for **how a group actually plans**: who's in for which act, where the overlaps are, and how long it takes to get from one stage to another.
+I love music festivals. The lineup drop, the colour-coded timetable PDF, the group chat that turns into fifty screenshots, the walking from stage to stage... all of it. I tried spreadsheets, notes apps, shared Google Docs, and a bunch of one-off festival apps. Some were pretty, but none of them felt like they were built for **how a group actually plans.**
 
 ---
 
@@ -12,10 +12,10 @@ I love music festivals. The lineup drop, the colour-coded timetable PDF, the gro
 
 - **Lineup**: artists on the bill, tier ratings (must / want / meh / skip), quick reactions, and a path to sync "hot" picks into what you care about on the schedule
 - **Schedule**: multi-day, multi-stage timetable
-- **Clashes**: where intents collide: same time, or "you could make both if you run" vs "you genuinely can't" once **walk times** between stages are in play
+- **Clashes**: same time, splits, mixes, or "you could make both if you run" vs "you genuinely can't" once **walk times** between stages are in play
 - **Plans**: ordered plan strip, per-slot plan windows, optional **walk matrix** (defaults from stage order on a map, editable in Options), and a combined view of everyone's day
 - **Wallpaper export**: tall **9×16 PNG** day plans (optional "leave by …" when walk forces an early exit)
-- **Study playlist** — auto-generate a Spotify playlist from the recent setlists of artists you're planning to see, so you can "study" for the festival before you go
+- **Study playlist**: auto-generate a Spotify playlist from the recent setlists of artists you're planning to see, so you can "study" for the festival before you go
 - **Stack**: **Next.js**, **PostgreSQL**, **Prisma**, **Claude API** for squads, members, artists, ratings, schedule, intents, resolutions, comments; **setlist.fm** + **Spotify Web API** for study playlists
 
 ---
