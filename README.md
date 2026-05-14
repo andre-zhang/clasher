@@ -1,88 +1,71 @@
 # Clasher
 
-Live: [https://clasher-three.vercel.app/](https://clasher-three.vercel.app/)
+**Try it:** [https://clasher-three.vercel.app/](https://clasher-three.vercel.app/)
 
 ## Inspiration
 
-Group festival planning tends to scatter across screenshots, PDFs, and spreadsheets. This app keeps one squad, one schedule, and per-member intent in Postgres so the UI can show overlaps, travel constraints, and a merged view without everyone maintaining their own copy.
+I like music festivals, but the planning side is always chaos: PDF timetables, screenshots in the group chat, half a spreadsheet nobody updates. Plenty of apps look nice for a solo timetable, not many are built so a whole group can share one schedule, see where tastes collide, and agree what to do about it. Clasher is basically that: one squad, one source of truth in Postgres, and UI that stays honest once you turn on walk times between stages.
 
 ## What it does
 
-Data is organised around a **squad** (festival name, optional date, phase, invite token). Members join with a token and get a random **secret**; authenticated API calls use `Authorization: Bearer <secret>` for that member.
-
-**Lineup:** Artists are rows in the DB with sort order. Each member has **ratings** (must / want / maybe / skip) and optional **comments** on artists. There is logic to sync schedule interest from ratings when you want the shortlist to follow lineup tiers.
-
-**Schedule:** Slots are `{ dayLabel, stageName, start, end, artistId }` with string times stored as `HH:mm`. The API supports replace, append, patch single slots, merge duplicates, and demo seed endpoints for testing without vision.
-
-**Clashes:** The client works off a **snapshot** (`GET /api/squads/:squadId/snapshot`). Clash detection combines clock overlap with **walk feasibility**: two slots can be non-overlapping but still impossible back-to-back if the gap is smaller than the matrix walk time between stages (`walkFeasibility.ts`, `clash.ts`). Engaged pairs only surface when someone rates both artists as must/want so the list is not noise.
-
-**Resolutions:** `ConflictResolution` rows store per-member outcomes: pick one slot, split sequence with derived plan windows, custom per-slot windows, follow squad default, or group mode. `SquadClashDefault` stores squad-wide defaults for a slot pair (pick / split_seq / custom JSON). Saving a resolution runs **transactional intent patches** (`applyConflictIntents.ts`) so `MemberSlotIntent` rows stay consistent with the choice (including edge cases like pick keeping plan windows on the winner).
-
-**Plans:** Intents carry `wants`, optional `planFrom` / `planTo`, `personalPlanOnly`, and `scheduleKeep`. Effective windows for UI are **derived** in `effectiveIntents.ts` (personal splits, group lean, squad defaults). There is an endpoint to sync personal strip from group defaults.
-
-**Squad options:** Walk times on/off, optional festival map image, map-derived stage label order, alias map from vision labels to schedule stage names, and JSON walk matrix. Map upload can call vision to propose labels and label-to-stage matches (`mapStages.ts`, defaults in `walkMatrixDefaults.ts`).
-
-**Integrations:** Multipart **parse** routes for lineup or schedule images (`vision.ts`, OpenAI and/or Anthropic with `VISION_PROVIDER`). **setlist.fm** powers a weighted setlist preview on the lineup; **Spotify** uses OAuth per member (refresh token in DB), search-backed URI resolution with throttling, then playlist create + add tracks.
-
-**Exports:** Client-side tall PNG plan wallpaper (`planWallpaper.ts` and related components) using the same timeline and walk hints as the schedule views.
+- Start from the home screen: **Create a group** (new squad + invite token) or **Join with a code** (token in the URL path, then a display name). Your browser keeps a small session (`localStorage`) with squad id, member id, and a random secret; API calls send `Authorization: Bearer <secret>` so you do not log in with passwords.
+- **Lineup** is the artist list for that festival. Anyone can rate each artist must / want / maybe / skip, leave short comments, and use the emoji reactions. You can pull artists in from a lineup poster or screenshot through the vision parse endpoint, or use demo seed data if you just want to click around without keys.
+- **Schedule** is multi-day rows keyed by `dayLabel`, stage name, start/end as `HH:mm`, and a link to an artist row. You can replace the whole grid, append rows, patch one slot, merge duplicates, or again seed demo slots. Per-set **slot comments** (emoji or text) sit on individual slots, separate from lineup comments.
+- **Clashes** reads the same **snapshot** the rest of the app uses (`GET /api/squads/:squadId/snapshot`). A pair counts if two sets are impossible for one person to do back-to-back: either true time overlap, or no overlap but the gap is smaller than the walk minutes between stages when walk mode is on. The list only highlights pairs where at least one member rated **both** artists as must or want, so you are not drowning in every overlap on the poster.
+- **Resolving** a clash writes `ConflictResolution` plus updates `MemberSlotIntent` in a transaction. Modes include pick a winner, split the overlap into two ordered partial windows, custom windows per slot, follow a **squad default** for that slot pair (`SquadClashDefault` with pick / split_seq / custom JSON), or **group** mode where the squad default drives everyone until someone overrides. Pick mode keeps plan windows on the slot you keep so a later clash does not wipe half your day by accident.
+- **Plans** is the drag-to-order strip, optional `planFrom` / `planTo` windows inside a slot, flags for “only on my strip” vs merged **Everyone** view, and `scheduleKeep` so something stays visible on your calendar even when it came from a clash edge case. There is an action to sync your strip from the group default when you want to reset toward the squad.
+- **Options** holds squad-wide knobs: walk times on or off, optional festival map image, vision-assisted stage label extraction, a map-label to schedule-stage alias table, and the walk matrix (minutes between stages, capped, with defaults inferred from map stage order when you do not fill every cell).
+- **Study playlist** on the lineup: pull recent setlists from setlist.fm into a weighted preview table, then optionally connect Spotify (OAuth per member, refresh token stored on the member row), resolve titles to track URIs with throttled search, and create a playlist on that user’s account.
+- **Wallpaper export** renders a tall 9×16 PNG of your day plan in the browser, using the same festival timeline and walk hints as the schedule views, including an optional “leave by …” line when travel forces you out before the official set end.
 
 ## Tech stack
 
-- Next.js 15 (App Router), React 19, TypeScript
-- Tailwind CSS
-- PostgreSQL, Prisma 6
-- Hono app in `src/server/festivalApp.ts`, mounted at `/api` via `src/app/api/[[...route]]/route.ts`
-- Optional `@anthropic-ai/sdk` and `openai` for vision JSON extraction from lineup, timetable, or map images
-- setlist.fm + Spotify Web API for study playlist flow; Node 20+ for local dev and CI
+- Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS
+- Routes under `src/app/`: `/`, `/create`, `/join`, `/join/[token]`, `/join/[token]/[memberSlug]`, `/squad/[squadId]` with nested lineup, schedule, clashes, plans, options, invite
+- PostgreSQL + Prisma 6 (`prisma/schema.prisma`); Hono API in `src/server/festivalApp.ts` mounted at `/api` via `src/app/api/[[...route]]/route.ts`
+- Client session + snapshot wiring in `src/context/ClasherContext.tsx`, typed fetches in `src/lib/api.ts`
+- Time and calendar logic: `src/lib/timeHm.ts` (festival-day timeline with a 1pm wall-clock origin), `src/lib/scheduleTimeNormalize.ts` for imports and vision output, `src/lib/clash.ts` + `src/lib/walkFeasibility.ts` for overlap vs walk gaps
+- Intent derivation and conflict follow-through: `src/lib/effectiveIntents.ts`, `src/server/applyConflictIntents.ts`, `src/server/snapshot.ts` for the payload shape
+- Vision: `src/server/vision.ts` (OpenAI and/or Anthropic, `VISION_PROVIDER` auto routing), multipart handlers on `/api/parse/lineup` and `/api/parse/schedule`
+- Setlist and Spotify: `src/lib/setlistfm.ts`, `src/lib/setlistPreview.ts`, `src/lib/setlistFmBudget.ts`, `src/lib/spotifyResolveUris.ts`, `src/lib/spotifyUserPlaylist.ts`, `src/lib/spotifyState.ts`
+- Plan PNG: `src/lib/planWallpaper.ts` plus schedule UI components under `src/components/`
+- Node 20+; `npm run build` runs Prisma generate then `next build` (`scripts/vercel-build.mjs`)
 
-## Challenges
+## Challenges (implementation)
 
-### Festival timeline and imports
+**Festival timeline vs wall clock**
 
-All same-day ordering and overlap math use a **1pm wall-clock origin** mapped to a 0..1439 festival timeline (`timeHm.ts`: `wallMinutesToFestivalTimeline` / inverse). That keeps afternoon, evening, and post-midnight sets on one continuous axis for a given `dayLabel`.
+The app does not treat midnight as a hard day boundary for festival logic. Same `dayLabel` uses a single timeline where 13:00 wall maps to 0 and times after midnight continue forward (`wallMinutesToFestivalTimeline` and inverse in `timeHm.ts`). Sorting, overlap tests, calendar Y layout, and export all have to agree on that representation or clashes silently disagree with what people see on the grid.
 
-Imports and vision output hit `scheduleTimeNormalize.ts`: ambiguous 12-hour strings are disambiguated per day+stage scope, late-night starts after midnight can roll to the previous festival day label, and there are heuristics for common OCR mistakes (bad end time, wrong AM on afternoon starts). Getting this wrong breaks clash detection everywhere downstream.
+**Normalising pasted or scanned times**
 
-### Walk matrix and attendability
+Vision and OCR return messy strings. `scheduleTimeNormalize.ts` resolves bare 12-hour times with a per-day, per-stage alternation heuristic, moves 00:xx starts to the previous festival day when that matches how posters label “after midnight still Saturday”, and patches a few systematic misreads (wrong AM on an afternoon block, end time read an hour off). One bad normalisation poisons walk feasibility for the whole squad.
 
-Walk minutes are capped, symmetric lookup falls back to defaults, and the squad can disable walks entirely. `slotsInfeasibleTogether` compares timeline windows and sequential gaps with `walkMinutesBetweenStages`, so the code path for "overlap clash" and "tight changeover clash" stays shared. Stage names from the schedule have to line up with matrix keys; aliases from the map flow exist to reduce drift.
+**Walk matrix keys vs schedule stage names**
 
-### Intent state after conflict edits
+Walk minutes live in a sparse JSON matrix keyed by stage names as they appear on slots. Map vision proposes different strings than the timetable, so `stageMapAlias` and ordered labels from the image matter. `walkFeasibility.ts` caps values, mirrors missing direction pairs, and short-circuits when walk mode is disabled; `slotsInfeasibleTogether` must treat sequential slots with insufficient gap the same class of problem as overlapping slots for downstream UI.
 
-A member's visible plan is not just raw `MemberSlotIntent` rows. `effectiveIntents.ts` merges intents with active conflict resolutions and squad defaults, including split windows computed from slot times (`splitPriorityWindows` in `timeHm.ts`). Server-side `patchIntentsForConflict` must stay aligned with those rules or the snapshot and the next PATCH from the client disagree.
+**Effective intents vs raw rows**
 
-### Snapshot shape and scope
+The strip and calendars do not read `MemberSlotIntent` alone. `effectiveIntents.ts` folds in personal split resolutions, group mode + squad defaults, and custom JSON windows so the UI shows the window you actually get after a clash. `patchIntentsForConflict` on the server has to apply the same rules when persisting or the next snapshot disagrees with what the member just saved.
 
-`buildSnapshot` loads squad + schedule in one query, then parallel fetches for ratings, comments, slot comments, conflicts, intents (for the **viewing** member and for **all** members), and squad clash defaults. JSON fields (walk matrix, custom windows) are validated/parsed into typed structures before the response. Anything expensive or inconsistent here shows up as subtle bugs in the group calendar and clashes tabs.
+**Snapshot assembly**
 
-### Vision and multipart ingest
+`buildSnapshot` does one squad query with schedule and members, then parallel reads for ratings, both artist and slot comments, every member’s intents, conflicts, and squad defaults. JSON blobs get parsed into typed structures (walk matrix, custom windows). The response mixes “this member’s” intent slice with `allMemberSlotIntents` for group views, so a small shape bug shows up as wrong colours on Everyone’s calendar.
 
-Lineup, schedule, and map analysis share a small provider abstraction (auto / OpenAI / Claude), base64 packaging, and JSON parsing with fenced-code tolerance. Failures need to return structured JSON (`vision_unconfigured`, etc.) so the client does not misread an HTML error page as a bad scan.
+**Vision and error surfaces**
 
-### Setlist to Spotify
+Multipart uploads hit models that return JSON as text, sometimes fenced in markdown. Parsing tolerates that, but misconfigured keys must return JSON bodies with stable `error` codes (`vision_unconfigured`, etc.) so the client does not treat a Next HTML 404 as “the model failed to read your poster”.
 
-Preview rows are aggregated and budgeted across artists (`setlistFmBudget`, merge helpers). Turning titles into playlist URIs is sequential Spotify search with backoff (`spotifyResolveUris.ts`), deduping, and a cap on how many tracks get resolved. OAuth state is signed and validated on callback; refresh tokens rotate and are persisted on the member row.
+**Setlist titles to Spotify URIs**
+
+setlist.fm gives strings; Spotify search is fuzzy and rate sensitive. Preview aggregation dedupes and budgets calls across artists (`setlistFmBudget`, merge helpers). URI resolution runs sequentially with a small delay (`spotifyResolveUris.ts`), caps how many tracks you resolve per playlist, and skips uncertain matches rather than filling with wrong recordings. OAuth uses signed state on redirect and persists rotating refresh tokens.
 
 ## Running locally
 
-Requires Postgres and `DATABASE_URL`. Optional: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `VISION_PROVIDER`, `ANTHROPIC_MODEL` for parsing; `SETLISTFM_API_KEY`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` for setlist + Spotify. Copy `.env.example`.
+- Postgres and `DATABASE_URL` are required. Copy `.env.example` and add optional `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `VISION_PROVIDER` / `ANTHROPIC_MODEL` for scans, plus `SETLISTFM_API_KEY` and Spotify client id and secret for playlist flow.
+- `npm run dev`, `npm run build`, `npm run db:generate`, `npm run db:push`, `npm run db:migrate`.
 
-Scripts: `npm run dev`, `npm run build`, `npm run db:generate`, `npm run db:push`, `npm run db:migrate`.
+**Production checks:** API traffic should stay same-origin on `https://<host>/api/...`; `GET /api/health` returns `{ "ok": true }`; `POST /api/squads` and parse routes should return JSON errors, not an HTML 404 page.
 
-| Path | Role |
-|------|------|
-| `prisma/schema.prisma` | Squads, members, artists, ratings, schedule, intents, resolutions, squad defaults, comments |
-| `src/server/festivalApp.ts` | HTTP routes and handlers |
-| `src/server/snapshot.ts` | Snapshot assembly |
-| `src/context/ClasherContext.tsx` | Client session + snapshot consumption |
-| `src/lib/api.ts` | Typed fetch helpers |
-
-### Production checks
-
-1. API calls same-origin over HTTPS to `https://<host>/api/...`.
-2. `GET /api/health` returns `{ "ok": true }`.
-3. `POST /api/squads` and `POST /api/parse/lineup` or `/parse/schedule` return JSON or explicit error codes, not an HTML 404.
-
-### Deploy (e.g. Vercel)
-
-Point the project at this repo, set env vars, run `npm run build`, then `npx prisma db push` or migrations against the production database (or automate in CI).
+**Deploy (e.g. Vercel):** connect the repo, set env vars, `npm run build`, then `npx prisma db push` or migrations against prod (or automate in CI).
