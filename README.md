@@ -4,7 +4,7 @@
 
 ## Inspiration
 
-I like music festivals, but the planning side is always chaos: PDF timetables, screenshots in the group chat, half a spreadsheet nobody updates. Plenty of apps look nice for a solo timetable, not many are built so a whole group can share one schedule, see where tastes collide, and agree what to do about it. Clasher is basically that: one squad, one source of truth in Postgres, and UI that stays honest once you turn on walk times between stages.
+I love music festivals, but the planning side is always chaos: PDF timetables, screenshots in the group chat, half a spreadsheet nobody updates, and markup on a blurry screenshot. Plenty of apps look nice for a solo timetable, but not many are built so a whole group can share one schedule, see where tastes collide, make a realistic plan, and agree what to do about it. That's where clasher comes in.
 
 ## What it does
 
