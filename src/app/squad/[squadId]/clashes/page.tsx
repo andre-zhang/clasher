@@ -93,9 +93,7 @@ export default function ClashesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="border-l-4 border-violet-700 pl-3">
-        <h1 className="text-xl font-bold text-zinc-900">Clashes</h1>
-      </div>
+      <h1 className="text-xl font-bold text-zinc-900">Clashes</h1>
 
       <button
         type="button"
@@ -422,10 +420,10 @@ function ClashCard({
               setBranch("group");
               setSplitMode(null);
             }}
-            className={`border-2 px-2 py-1 text-xs font-medium ${
+            className={`border-2 px-2 py-1 text-xs font-semibold shadow-[2px_2px_0_0_#4c1d95] ${
               branch === "group"
-                ? "border-zinc-900 bg-zinc-900 text-white"
-                : "border-zinc-900 bg-white text-zinc-900"
+                ? "border-violet-900 bg-violet-800 text-white"
+                : "border-violet-900 bg-violet-600 text-white hover:bg-violet-700"
             }`}
           >
             Stay with group

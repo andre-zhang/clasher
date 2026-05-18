@@ -76,9 +76,7 @@ export default function LineupPage() {
 
   return (
     <div className="space-y-6">
-      <div className="border-l-4 border-violet-700 pl-3">
-        <h1 className="text-xl font-bold text-zinc-900">Lineup</h1>
-      </div>
+      <h1 className="text-xl font-bold text-zinc-900">Lineup</h1>
 
       <LineupSetlistPanel />
 
