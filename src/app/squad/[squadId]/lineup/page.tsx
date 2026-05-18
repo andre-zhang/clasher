@@ -76,7 +76,9 @@ export default function LineupPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-zinc-900">Lineup</h1>
+      <div className="border-l-4 border-violet-700 pl-3">
+        <h1 className="text-xl font-bold text-zinc-900">Lineup</h1>
+      </div>
 
       <LineupSetlistPanel />
 
@@ -135,7 +137,7 @@ export default function LineupPage() {
               type="button"
               onClick={() => void commitScan()}
               disabled={busy}
-              className="border-2 border-zinc-900 bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-50"
+              className="border-2 border-zinc-900 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-50"
             >
               Add to lineup
             </button>
@@ -337,7 +339,7 @@ function ArtistDetailDialog({
             <button
               type="submit"
               disabled={saving || !text.trim()}
-              className="border-2 border-zinc-900 bg-violet-600 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              className="border-2 border-zinc-900 bg-zinc-900 py-2 text-sm font-semibold text-white disabled:opacity-40"
             >
               Add note
             </button>

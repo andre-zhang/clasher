@@ -340,7 +340,7 @@ export function LineupSetlistPanel() {
               <button
                 type="button"
                 onClick={pickMyPicks}
-                className="touch-manipulation border-2 border-violet-900 bg-violet-700 px-2 py-1 text-xs font-semibold text-white hover:bg-violet-800"
+                className="touch-manipulation border-2 border-zinc-900 bg-zinc-900 px-2 py-1 text-xs font-semibold text-white hover:bg-zinc-800"
               >
                 My picks
               </button>
@@ -368,7 +368,7 @@ export function LineupSetlistPanel() {
                       type="checkbox"
                       checked={on}
                       onChange={() => void toggleArtist(a.id)}
-                      className="h-3.5 w-3.5 accent-violet-700"
+                      className="h-3.5 w-3.5 accent-zinc-900"
                     />
                     <span className="w-4 shrink-0 text-center text-sm" aria-hidden>
                       {myTierEmoji(group, a.id, session.memberId)}
@@ -398,7 +398,7 @@ export function LineupSetlistPanel() {
             type="button"
             disabled={busy || !canRun}
             onClick={() => void run()}
-            className="touch-manipulation border-2 border-violet-900 bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#4c1d95] hover:bg-violet-700 disabled:opacity-40"
+            className="touch-manipulation border-2 border-zinc-900 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-40"
           >
             {busy ? "…" : "Build"}
           </button>
@@ -418,7 +418,7 @@ export function LineupSetlistPanel() {
               type="button"
               disabled={playlistBusy || !canPlaylist}
               onClick={() => void createPlaylist()}
-              className="touch-manipulation border-2 border-violet-900 bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#4c1d95] hover:bg-violet-700 disabled:opacity-40"
+              className="touch-manipulation border-2 border-zinc-900 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-800 disabled:opacity-40"
             >
               {playlistBusy ? "…" : "Add playlist in Spotify"}
             </button>
@@ -443,7 +443,7 @@ export function LineupSetlistPanel() {
           <p className="text-xs text-zinc-900">
             <a
               href={playlistUrl}
-              className="font-medium text-violet-900 underline decoration-violet-700"
+              className="font-medium text-zinc-900 underline"
               target="_blank"
               rel="noreferrer"
             >
