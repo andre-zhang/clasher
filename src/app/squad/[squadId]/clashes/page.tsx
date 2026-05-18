@@ -377,10 +377,10 @@ function ClashCard({
       </div>
 
       {squadDef ? (
-        <p className="mt-2 rounded border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-xs text-indigo-950">
+        <p className="mt-2 rounded border border-violet-200 bg-violet-50 px-2 py-1.5 text-xs text-violet-950">
           <span className="font-semibold">Group default:</span>{" "}
           {describeSquadDefaultBanner(squadDef, a, b)}
-          <span className="text-indigo-700">
+          <span className="text-violet-700">
             {" "}
             (
             {group.members.find((m) => m.id === squadDef.setByMemberId)
@@ -653,7 +653,7 @@ function ClashCard({
               type="button"
               disabled={busy}
               onClick={() => openGroupSave()}
-              className="border-2 border-zinc-900 bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-[2px_2px_0_0_#18181b]"
+              className="border-2 border-zinc-900 bg-violet-600 px-3 py-2 text-sm font-semibold text-white shadow-[2px_2px_0_0_#18181b]"
             >
               Save
             </button>
@@ -745,7 +745,7 @@ function ClashCard({
                   const p = payloadForSplitChoice(splitMode);
                   if (p) void onSave(p);
                 }}
-                className="border-2 border-zinc-900 bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-[2px_2px_0_0_#18181b]"
+                className="border-2 border-zinc-900 bg-violet-600 px-3 py-2 text-sm font-semibold text-white shadow-[2px_2px_0_0_#18181b]"
               >
                 Save
               </button>
@@ -792,7 +792,7 @@ function ClashCard({
           </button>
           <button
             type="button"
-            className="border-2 border-zinc-900 bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white"
+            className="border-2 border-zinc-900 bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white"
             onClick={() => {
               if (pendingGroupSave) void onSave(pendingGroupSave);
               confirmRef.current?.close();

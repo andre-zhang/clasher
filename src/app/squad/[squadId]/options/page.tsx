@@ -217,7 +217,7 @@ export default function OptionsPage() {
         <button
           type="button"
           onClick={() => void copyInvite()}
-          className="border-2 border-zinc-900 bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-[3px_3px_0_0_#18181b]"
+          className="border-2 border-zinc-900 bg-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-[3px_3px_0_0_#18181b]"
         >
           Copy link
         </button>
@@ -250,7 +250,7 @@ export default function OptionsPage() {
           type="button"
           disabled={lineupScanBusy}
           onClick={() => lineupFileRef.current?.click()}
-          className="touch-manipulation block w-full max-w-xs border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:w-auto sm:py-1.5"
+          className="touch-manipulation block w-full max-w-xs border-2 border-zinc-900 bg-violet-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:w-auto sm:py-1.5"
         >
           {lineupScanBusy ? "Working…" : "Upload lineup image"}
         </button>
@@ -272,7 +272,7 @@ export default function OptionsPage() {
           type="button"
           disabled={scheduleScanBusy}
           onClick={() => scheduleFileRef.current?.click()}
-          className="touch-manipulation block w-full max-w-xs border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:w-auto sm:py-1.5"
+          className="touch-manipulation block w-full max-w-xs border-2 border-zinc-900 bg-violet-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:w-auto sm:py-1.5"
         >
           {scheduleScanBusy ? "Working…" : "Upload schedule images"}
         </button>
@@ -293,7 +293,7 @@ export default function OptionsPage() {
           type="button"
           disabled={mapBusy}
           onClick={() => mapFileRef.current?.click()}
-          className="touch-manipulation block w-full max-w-xs border-2 border-zinc-900 bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:w-auto sm:py-1.5"
+          className="touch-manipulation block w-full max-w-xs border-2 border-zinc-900 bg-violet-600 px-3 py-2.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-40 min-h-11 min-w-[11rem] sm:min-h-0 sm:w-auto sm:py-1.5"
         >
           {mapBusy ? "Working…" : "Upload map image"}
         </button>

@@ -90,7 +90,7 @@ export function PlanWallpaperExport({
   }
 
   return (
-    <details className="rounded border-2 border-zinc-900 bg-indigo-50/30">
+    <details className="rounded border-2 border-zinc-900 bg-violet-50/40">
       <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-zinc-900">
         Wallpaper PNG (9×16)
       </summary>
@@ -159,7 +159,7 @@ export function PlanWallpaperExport({
           type="button"
           disabled={busy || !group.schedule.length}
           onClick={() => void download()}
-          className="border-2 border-zinc-900 bg-indigo-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
+          className="border-2 border-zinc-900 bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40"
         >
           {busy ? "Rendering…" : "Download"}
         </button>

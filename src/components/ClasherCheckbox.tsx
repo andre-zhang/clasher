@@ -52,7 +52,7 @@ export function ClasherCheckbox({
       />
       <span
         aria-hidden
-        className={`flex shrink-0 items-center justify-center border-2 border-zinc-900 bg-white transition-colors group-hover:bg-zinc-50 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-indigo-500 peer-checked:border-zinc-900 peer-checked:bg-indigo-600 peer-checked:group-hover:bg-indigo-600 peer-checked:[&_svg]:opacity-100 peer-disabled:bg-zinc-100 ${box}`}
+        className={`flex shrink-0 items-center justify-center border-2 border-zinc-900 bg-white transition-colors group-hover:bg-zinc-50 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-violet-500 peer-checked:border-violet-900 peer-checked:bg-violet-600 peer-checked:group-hover:bg-violet-600 peer-checked:[&_svg]:opacity-100 peer-disabled:bg-zinc-100 ${box}`}
       >
         <svg
           viewBox="0 0 12 10"

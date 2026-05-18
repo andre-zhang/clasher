@@ -728,7 +728,7 @@ export function SchedulePlannerStrip({
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => void onDropStrip(e)}
     >
-      <div className="sticky top-0 z-50 flex h-8 shrink-0 items-center gap-0.5 border-b-2 border-zinc-900 bg-zinc-100 px-0.5">
+      <div className="sticky top-0 z-50 flex h-8 shrink-0 items-center gap-0.5 border-b-2 border-zinc-900 bg-violet-100/80 px-0.5">
         {onStripPinnedChange ? (
           <button
             type="button"
@@ -739,7 +739,7 @@ export function SchedulePlannerStrip({
             }
             className={`touch-manipulation shrink-0 border px-1 py-0.5 text-[8px] font-semibold leading-none ${
               stripPinned
-                ? "border-zinc-900 bg-zinc-900 text-white"
+                ? "border-violet-900 bg-violet-700 text-white"
                 : "border-zinc-500 bg-white text-zinc-700"
             }`}
             onClick={() => onStripPinnedChange(!stripPinned)}
@@ -757,8 +757,8 @@ export function SchedulePlannerStrip({
             title="Your plan only"
             className={`touch-manipulation flex min-w-0 flex-1 items-center justify-center border-r border-zinc-900 px-0.5 text-[9px] font-semibold leading-none ${
               stripScope === "mine"
-                ? "bg-zinc-900 text-white"
-                : "bg-white text-zinc-700 hover:bg-zinc-50"
+                ? "bg-violet-700 text-white"
+                : "bg-white text-zinc-700 hover:bg-violet-50/60"
             }`}
             onClick={() => setStripScope("mine")}
           >
@@ -769,8 +769,8 @@ export function SchedulePlannerStrip({
             title="Everyone — combined squad acts"
             className={`touch-manipulation flex min-w-0 flex-1 items-center justify-center px-0.5 text-[9px] font-semibold leading-none ${
               stripScope === "group"
-                ? "bg-zinc-900 text-white"
-                : "bg-white text-zinc-700 hover:bg-zinc-50"
+                ? "bg-violet-700 text-white"
+                : "bg-white text-zinc-700 hover:bg-violet-50/60"
             }`}
             onClick={() => setStripScope("group")}
           >

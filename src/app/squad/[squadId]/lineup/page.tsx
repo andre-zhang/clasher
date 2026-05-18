@@ -87,7 +87,7 @@ export default function LineupPage() {
       ) : null}
 
       {draftNames && draftNames.length > 0 ? (
-        <div className="border-2 border-zinc-900 bg-indigo-50 p-4 shadow-[3px_3px_0_0_#18181b]">
+        <div className="border-2 border-zinc-900 bg-violet-50 p-4 shadow-[3px_3px_0_0_#18181b]">
           <p className="text-sm font-semibold text-zinc-900">
             Draft ({draftNames.length})
           </p>
@@ -135,7 +135,7 @@ export default function LineupPage() {
               type="button"
               onClick={() => void commitScan()}
               disabled={busy}
-              className="border-2 border-zinc-900 bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-50"
+              className="border-2 border-zinc-900 bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#18181b] disabled:opacity-50"
             >
               Add to lineup
             </button>
@@ -337,7 +337,7 @@ function ArtistDetailDialog({
             <button
               type="submit"
               disabled={saving || !text.trim()}
-              className="border-2 border-zinc-900 bg-indigo-600 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              className="border-2 border-zinc-900 bg-violet-600 py-2 text-sm font-semibold text-white disabled:opacity-40"
             >
               Add note
             </button>

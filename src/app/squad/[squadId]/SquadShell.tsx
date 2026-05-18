@@ -51,11 +51,11 @@ export function SquadShell({
         onClose={() => setLeaveDialogOpen(false)}
         onConfirmLeave={leave}
       />
-      <header className="sticky top-0 z-50 border-b-2 border-zinc-900 bg-zinc-100">
+      <header className="sticky top-0 z-50 border-b-2 border-zinc-900 bg-violet-50/90">
         <div className="mx-auto flex max-w-[min(100%,80rem)] flex-wrap items-center justify-between gap-2 px-4 py-3">
           <Link
             href="/"
-            className="text-sm font-bold tracking-tight text-zinc-900"
+            className="text-sm font-bold tracking-tight text-violet-950"
           >
             Clasher
           </Link>
@@ -69,8 +69,8 @@ export function SquadShell({
                   href={href}
                   className={`border-2 px-2 py-1 text-xs font-semibold ${
                     active
-                      ? "border-zinc-900 bg-zinc-900 text-white"
-                      : "border-transparent bg-white text-zinc-800 hover:border-zinc-900"
+                      ? "border-violet-900 bg-violet-700 text-white shadow-[2px_2px_0_0_#4c1d95]"
+                      : "border-transparent bg-white text-zinc-800 hover:border-violet-400 hover:bg-violet-50/80"
                   }`}
                 >
                   {t.label}
@@ -82,7 +82,7 @@ export function SquadShell({
             <button
               type="button"
               onClick={() => void refresh()}
-              className="text-xs text-zinc-600 underline"
+              className="text-xs font-medium text-violet-800 underline decoration-violet-400"
             >
               Sync
             </button>

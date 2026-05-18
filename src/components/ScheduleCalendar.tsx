@@ -686,8 +686,8 @@ export function ScheduleCalendar({
                   onClick={() => setDay(d)}
                   className={`border-2 px-2 py-1 text-xs font-medium ${
                     activeDay === d
-                      ? "border-zinc-900 bg-zinc-900 text-white"
-                      : "border-zinc-900 bg-white text-zinc-900 hover:bg-zinc-100"
+                      ? "border-violet-900 bg-violet-700 text-white shadow-[2px_2px_0_0_#4c1d95]"
+                      : "border-zinc-900 bg-white text-zinc-900 hover:bg-violet-50/60"
                   }`}
                 >
                   {d}
@@ -829,7 +829,7 @@ export function ScheduleCalendar({
               }
               style={{ minHeight: timelineHRender }}
             >
-              <div className="sticky top-0 z-[25] flex h-8 shrink-0 items-center justify-center border-b-2 border-zinc-900 bg-zinc-100 px-1 text-center text-[11px] font-semibold leading-tight text-zinc-900 shadow-[0_4px_8px_-2px_rgba(0,0,0,0.18)] [overflow-wrap:anywhere]">
+              <div className="sticky top-0 z-[25] flex h-8 shrink-0 items-center justify-center border-b-2 border-zinc-900 bg-violet-100/90 px-1 text-center text-[11px] font-semibold leading-tight text-violet-950 shadow-[0_4px_8px_-2px_rgba(0,0,0,0.18)] [overflow-wrap:anywhere]">
                 <span className="line-clamp-2">{singleCol ? "Plan" : stage}</span>
               </div>
               <div

@@ -31,7 +31,7 @@ export default function JoinEntryPage() {
         <button
           type="button"
           onClick={go}
-          className="border-2 border-zinc-900 bg-indigo-600 py-3 text-sm font-semibold text-white shadow-[3px_3px_0_0_#18181b]"
+          className="border-2 border-violet-900 bg-violet-600 py-3 text-sm font-semibold text-white shadow-[3px_3px_0_0_#4c1d95]"
         >
           Continue
         </button>
