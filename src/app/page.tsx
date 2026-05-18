@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-8 px-6 py-16">
-      <h1 className="text-3xl font-bold tracking-tight text-violet-950">
+      <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
         Clasher
       </h1>
       <div className="flex flex-col gap-3">
@@ -15,7 +15,7 @@ export default function HomePage() {
         </Link>
         <Link
           href="/join"
-          className="border-2 border-zinc-900 bg-white px-4 py-3 text-center text-sm font-semibold text-violet-950 shadow-[4px_4px_0_0_#18181b] hover:border-violet-700 hover:bg-violet-50/60"
+          className="border-2 border-zinc-900 bg-white px-4 py-3 text-center text-sm font-semibold text-zinc-900 shadow-[4px_4px_0_0_#18181b] hover:bg-zinc-50"
         >
           Join with a code
         </Link>

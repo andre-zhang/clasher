@@ -11,7 +11,7 @@ export function ScanningOverlay({ label = "Scanning…" }: { label?: string }) {
         <p className="text-sm font-semibold tracking-wide text-zinc-900">
           {label}
         </p>
-        <div className="mt-3 h-1 w-48 overflow-hidden border border-violet-800 bg-violet-100">
+        <div className="mt-3 h-1 w-48 overflow-hidden border border-zinc-800 bg-zinc-100">
           <div className="clasher-scan-bar h-full w-1/3 bg-violet-600" />
         </div>
       </div>

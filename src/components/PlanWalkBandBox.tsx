@@ -3,7 +3,7 @@
 import type { PlanWalkBand } from "@/lib/planWalkBands";
 
 /**
- * Walk / travel gap: very light purple band (no icon). Shown only when the gap
+ * Walk / travel gap band (no icon). Shown only when the gap
  * between acts is tight enough that a dedicated walk buffer is meaningful.
  */
 export function PlanWalkBandBox({
@@ -26,11 +26,11 @@ export function PlanWalkBandBox({
   const stripeBg = `repeating-linear-gradient(
     -52deg,
     rgba(255, 255, 255, 0.5) 0 6px,
-    rgba(167, 139, 250, 0.2) 6px 7px
+    rgba(113, 113, 122, 0.25) 6px 7px
   )`;
   return (
     <div
-      className={`pointer-events-none absolute z-[3] box-border rounded-sm border border-violet-400/45 ${insetCls} ${
+      className={`pointer-events-none absolute z-[3] box-border rounded-sm border border-zinc-400/60 ${insetCls} ${
         className ?? ""
       }`}
       style={{

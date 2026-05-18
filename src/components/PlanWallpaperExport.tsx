@@ -90,7 +90,7 @@ export function PlanWallpaperExport({
   }
 
   return (
-    <details className="rounded border-2 border-zinc-900 bg-violet-50/40">
+    <details className="rounded border-2 border-zinc-900 bg-white">
       <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-zinc-900">
         Wallpaper PNG (9×16)
       </summary>

@@ -133,7 +133,7 @@ export default function PlansPage() {
               className={`border-2 px-2 py-1 text-xs font-medium ${
                 activeDay === d
                   ? "border-violet-900 bg-violet-700 text-white shadow-[2px_2px_0_0_#4c1d95]"
-                  : "border-zinc-900 bg-white hover:bg-violet-50/60"
+                  : "border-zinc-900 bg-white hover:bg-zinc-100"
               }`}
             >
               {d}

@@ -87,7 +87,7 @@ export default function LineupPage() {
       ) : null}
 
       {draftNames && draftNames.length > 0 ? (
-        <div className="border-2 border-zinc-900 bg-violet-50 p-4 shadow-[3px_3px_0_0_#18181b]">
+        <div className="border-2 border-zinc-900 bg-white p-4 shadow-[3px_3px_0_0_#18181b]">
           <p className="text-sm font-semibold text-zinc-900">
             Draft ({draftNames.length})
           </p>

@@ -377,10 +377,10 @@ function ClashCard({
       </div>
 
       {squadDef ? (
-        <p className="mt-2 rounded border border-violet-200 bg-violet-50 px-2 py-1.5 text-xs text-violet-950">
+        <p className="mt-2 rounded border border-zinc-300 bg-zinc-50 px-2 py-1.5 text-xs text-zinc-800">
           <span className="font-semibold">Group default:</span>{" "}
           {describeSquadDefaultBanner(squadDef, a, b)}
-          <span className="text-violet-700">
+          <span className="text-zinc-600">
             {" "}
             (
             {group.members.find((m) => m.id === squadDef.setByMemberId)

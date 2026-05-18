@@ -329,7 +329,7 @@ export function LineupSetlistPanel() {
   const canShowConnect = spotify?.canSignIn && !spotify.spotifyConnected;
   return (
     <details className="border-2 border-zinc-900 bg-zinc-50 shadow-[2px_2px_0_0_#18181b]">
-      <summary className="cursor-pointer select-none border-b-2 border-violet-200 bg-violet-50/90 px-3 py-2 text-sm font-semibold text-violet-950">
+      <summary className="cursor-pointer select-none border-b-2 border-zinc-900 bg-zinc-100 px-3 py-2 text-sm font-semibold text-zinc-900">
         Festival setlist
       </summary>
       <div className="space-y-3 border-t-2 border-zinc-900 px-3 pb-3 pt-2">
@@ -340,7 +340,7 @@ export function LineupSetlistPanel() {
               <button
                 type="button"
                 onClick={pickMyPicks}
-                className="touch-manipulation border-2 border-violet-700 bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-950 hover:bg-violet-200"
+                className="touch-manipulation border-2 border-violet-900 bg-violet-700 px-2 py-1 text-xs font-semibold text-white hover:bg-violet-800"
               >
                 My picks
               </button>
@@ -418,7 +418,7 @@ export function LineupSetlistPanel() {
               type="button"
               disabled={playlistBusy || !canPlaylist}
               onClick={() => void createPlaylist()}
-              className="touch-manipulation border-2 border-violet-900 bg-violet-100 px-3 py-1.5 text-xs font-semibold text-violet-950 shadow-[2px_2px_0_0_#4c1d95] hover:bg-violet-200 disabled:opacity-40"
+              className="touch-manipulation border-2 border-violet-900 bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-[2px_2px_0_0_#4c1d95] hover:bg-violet-700 disabled:opacity-40"
             >
               {playlistBusy ? "…" : "Add playlist in Spotify"}
             </button>
@@ -443,7 +443,7 @@ export function LineupSetlistPanel() {
           <p className="text-xs text-zinc-900">
             <a
               href={playlistUrl}
-              className="font-medium text-violet-800 underline decoration-violet-400"
+              className="font-medium text-violet-900 underline decoration-violet-700"
               target="_blank"
               rel="noreferrer"
             >
@@ -458,14 +458,14 @@ export function LineupSetlistPanel() {
               <button
                 type="button"
                 onClick={copyPlain}
-                className="touch-manipulation border-2 border-violet-800 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-950 hover:bg-violet-100"
+                className="touch-manipulation border-2 border-zinc-900 bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-900 hover:bg-zinc-200"
               >
                 Copy
               </button>
               <button
                 type="button"
                 onClick={copyTsv}
-                className="touch-manipulation border-2 border-violet-300 bg-white px-2 py-1 text-xs font-medium text-violet-900 hover:bg-violet-50"
+                className="touch-manipulation border-2 border-zinc-900 bg-white px-2 py-1 text-xs font-medium text-zinc-900 hover:bg-zinc-50"
               >
                 Copy TSV
               </button>
@@ -474,11 +474,11 @@ export function LineupSetlistPanel() {
             <div className="max-h-80 overflow-auto overflow-x-auto border-2 border-zinc-900 bg-white">
               <table className="w-full min-w-[16rem] border-collapse text-left text-xs">
                 <thead>
-                  <tr className="bg-violet-100/80">
-                    <th className="border-b border-violet-300 px-2 py-1 font-semibold text-violet-950">
+                  <tr className="bg-zinc-100">
+                    <th className="border-b border-zinc-300 px-2 py-1 font-semibold text-zinc-900">
                       Artist
                     </th>
-                    <th className="border-b border-violet-300 px-2 py-1 font-semibold text-violet-950">
+                    <th className="border-b border-zinc-300 px-2 py-1 font-semibold text-zinc-900">
                       Song
                     </th>
                   </tr>
