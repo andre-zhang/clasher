@@ -99,7 +99,7 @@ export default function ClashesPage() {
         type="button"
         disabled={busy || !group.schedule.length}
         onClick={() => void syncHotFlags()}
-        title="Pins acts whose artists are must/want on Lineup. Does not change plan acts or times."
+        title="Sync from Lineup"
         className="border-2 border-zinc-900 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 shadow-[2px_2px_0_0_#18181b] hover:bg-zinc-100 disabled:opacity-40"
       >
         Sync from Lineup
@@ -334,19 +334,6 @@ function ClashCard({
     confirmRef.current?.showModal();
   }
 
-  const squadDefaultSummary =
-    squadDefaultMode === "none"
-      ? "Won’t change the group default"
-      : squadDefaultMode === "set_a"
-        ? `Set pick: ${a.artistName}`
-        : squadDefaultMode === "set_b"
-          ? `Set pick: ${b.artistName}`
-          : squadDefaultMode === "split_ab"
-            ? `${a.artistName} first, then ${b.artistName}`
-            : squadDefaultMode === "split_ba"
-              ? `${b.artistName} first, then ${a.artistName}`
-              : "Set custom times for the group";
-
   const walkOnlyListing = pairListingConflictWalkOnly(group, a, b);
 
   return (
@@ -444,10 +431,6 @@ function ClashCard({
 
         {branch === "group" ? (
           <div className="space-y-3 border-2 border-zinc-200 p-3">
-            <p className="text-xs text-zinc-700">
-              You follow the group’s call. Optionally say which set you’d join if
-              the group splits (doesn’t override the group—just your preference).
-            </p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -499,17 +482,8 @@ function ClashCard({
                   {squadDefaultOpen ? "−" : "+"}
                 </span>
               </button>
-              {!squadDefaultOpen ? (
-                <p className="px-0.5 text-[10px] text-zinc-600">
-                  {squadDefaultSummary}
-                </p>
-              ) : (
+              {squadDefaultOpen ? (
                 <>
-                  <p className="text-[11px] text-zinc-600">
-                    Optional: set how the whole group resolves this clash for
-                    anyone on “stay with group.” Otherwise only your follow-group
-                    choice is saved.
-                  </p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -627,7 +601,7 @@ function ClashCard({
                     </div>
                   ) : null}
                 </>
-              )}
+              ) : null}
             </div>
 
             {localErr ? (
@@ -777,11 +751,7 @@ function ClashCard({
         className="max-w-md border-2 border-zinc-900 bg-white p-4 shadow-[4px_4px_0_0_#18181b] backdrop:bg-black/40"
         onClose={() => setPendingGroupSave(null)}
       >
-        <p className="text-sm text-zinc-800">
-          This updates the group default for this clash: everyone on “stay with
-          group” follows this plan (pick, split, or custom times) until someone
-          changes it.
-        </p>
+        <p className="text-sm font-semibold text-zinc-900">Update group default?</p>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
             type="button"
