@@ -6,7 +6,7 @@
 
 I like music festivals. I like them less when the plan lives in fifty screenshots and nobody agrees which set we are actually running to. Spreadsheets and shared docs help a little, but they rarely show where the group disagrees, and they almost never say whether two back-to-back sets are realistic once you factor in walking between stages.
 
-Clasher is one shared festival: lineup, schedule, clashes, and plans in one place, so you are not re-explaining the same overlap in chat every hour.
+Clasher is one shared festival: lineup, schedule, clashes, and plans in one place. The only collaborative festival planning program.
 
 ## What it does
 
@@ -14,11 +14,11 @@ Clasher is one shared festival: lineup, schedule, clashes, and plans in one plac
 - **Lineup:** rate artists (must / want / maybe / skip), leave comments, use reactions. Type the bill or scan a lineup poster and tidy what comes back.
 - **Schedule:** multi-day timetable by stage, tied to artists on the lineup. Type it in or scan a timetable image. Each set can have its own notes, separate from lineup chat.
 - **Clashes:** sets that fight each other, either because they overlap or because the gap is too short once walk times are on. The list sticks to pairs where someone in the group rated both acts strongly enough to care.
-- **Resolve:** pick one set, split time across both, set your own "only here for this slice" windows, or use a squad default for that pair. Group mode can align everyone until someone opts out. Resolving updates your plan, not just a checkbox.
+- **Resolve:** pick one set, split time across both, set your own "only here for this slice" windows, or use a squad default for that pair. Group mode can align everyone until someone opts out. 
 - **Plans:** reorder your day on a strip, trim how long you stay at a set, keep something on your personal calendar when clash logic gets fiddly. Personal strip or shared "everyone" view; you can reset toward what the group agreed.
 - **Options:** walk times on or off, upload a festival map, tune minutes between stages (or start from map order), match map labels to timetable stage names when they differ.
 - **Study playlist:** pull recent setlists for artists you are planning to see, preview tracks, connect Spotify, create a playlist on your account.
-- **Wallpaper:** tall phone-shaped PNG of a day plan, with leave-early hints when you need to move before a set ends.
+- **Wallpaper:** phone-shaped PNG of a day plan, with leave-early hints when you need to move before a set ends.
 
 ## Tech stack
 
